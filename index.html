@@ -458,6 +458,13 @@ tr:hover td { background: var(--gray-100); }
       </div>
 
       <div class="card">
+        <div class="card-header"><div class="card-title">🎨 Estoque por Cor (kg disponíveis)</div></div>
+        <div class="card-body">
+          <div class="chart-container-lg"><canvas id="chartFilCores"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-header">
           <div class="card-title">📚 Biblioteca de Códigos de Barras</div>
           <span class="text-muted" id="barcodeCount">0 códigos memorizados</span>
@@ -854,6 +861,108 @@ tr:hover td { background: var(--gray-100); }
 </div>
 
 
+<!-- ═══════ MODAL EDITAR FILAMENTO ═══════ -->
+<div class="modal-overlay" id="modalEditFilamento">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Filamento</div>
+    <input type="hidden" id="editFilId">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="editFilTipo" onchange="updateEditFilVariacao()">
+          <option value="PLA">PLA</option>
+          <option value="PETG">PETG</option>
+          <option value="TPU">TPU</option>
+        </select>
+      </div>
+      <div class="form-group" id="editFilVariacaoGroup">
+        <label>Variação (PLA)</label>
+        <select id="editFilVariacao">
+          <option>Normal</option><option>Matte</option><option>Silk</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Marca</label>
+        <select id="editFilMarca">
+          <option>STLFLIX</option><option>Creality</option><option>Bambu Lab</option>
+          <option>Elegoo</option><option>Voolt3D</option><option>3n3</option><option>Dynalabs</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cor / Nome</label>
+        <input type="text" id="editFilCor">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Variação de Cor</label>
+        <select id="editFilCorTipo">
+          <option>Cor Única</option><option>Dual Color</option><option>Tri Color</option><option>Rainbow</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="editFilStatus" onchange="toggleEditPct()">
+          <option value="Fechado">Rolo Fechado</option>
+          <option value="Aberto">Rolo Aberto</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" id="editFilQtdGroup">
+        <label>Quantidade (rolos fechados)</label>
+        <input type="number" id="editFilQtd" min="0">
+      </div>
+      <div class="form-group" id="editFilPctGroup" style="display:none">
+        <label>Restante no rolo aberto (%)</label>
+        <input type="number" id="editFilPct" min="0" max="100">
+      </div>
+      <div class="form-group">
+        <label>Custo do Rolo (R$)</label>
+        <input type="number" id="editFilCusto" step="0.01">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditFilamento')">Cancelar</button>
+      <button class="btn btn-gold" onclick="saveEditFilamento()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL AJUSTE DE QUANTIDADE ═══════ -->
+<div class="modal-overlay" id="modalAjuste">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">⚖️ Ajustar Estoque</div>
+    <input type="hidden" id="ajusteFilId">
+    <div id="ajusteFilInfo" style="background:var(--gray-100);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px"></div>
+
+    <div class="cat-tabs" style="margin-bottom:16px">
+      <div class="cat-tab active" id="ajusteBtnAdd" onclick="setAjusteTipo('add',this)">➕ Adicionar kg</div>
+      <div class="cat-tab" id="ajusteBtnSub" onclick="setAjusteTipo('sub',this)">➖ Subtrair kg</div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group" id="ajusteRolosGroup">
+        <label>Rolos inteiros (1kg cada)</label>
+        <input type="number" id="ajusteRolos" value="1" min="0" step="1">
+      </div>
+      <div class="form-group" id="ajustePctGroup" style="display:none">
+        <label>Novo percentual restante (%)</label>
+        <input type="number" id="ajustePct" value="100" min="0" max="100">
+      </div>
+    </div>
+
+    <div id="ajustePreview" style="margin-top:8px;font-size:12px;color:var(--gray-400)"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAjuste')">Cancelar</button>
+      <button class="btn btn-gold" onclick="aplicarAjuste()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ DEDUP MODAL ═══════ -->
 <div class="modal-overlay" id="modalDedup">
   <div class="modal" style="max-width:640px">
@@ -918,6 +1027,10 @@ tr:hover td { background: var(--gray-100); }
     <div class="scanner-footer">
       <button class="btn btn-ghost btn-sm" onclick="closeScanner()" style="color:rgba(255,255,255,0.6);border-color:rgba(255,255,255,0.15)">Cancelar</button>
       <button class="btn btn-gold btn-sm" id="scannerUseBtn" onclick="useScanResult()" style="display:none">Usar este código →</button>
+      <div id="scannerActions" style="display:none;gap:8px;align-items:center">
+        <button class="btn btn-sm" style="background:#27AE60;color:#fff" onclick="scannerAjustar()">⚖️ Ajustar Estoque</button>
+        <button class="btn btn-sm btn-gold" onclick="scannerCadastrarNovo()">+ Novo Cadastro</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1207,11 +1320,27 @@ function setStatus(msg, scanning) {
 
 function resetScannerUI() {
   document.getElementById('scannerResult').classList.remove('show');
-  document.getElementById('scannerUseBtn').style.display = 'none';
-  document.getElementById('manualEntry').style.display   = 'none';
+  document.getElementById('scannerUseBtn').style.display  = 'none';
+  document.getElementById('scannerActions').style.display = 'none';
+  document.getElementById('manualEntry').style.display    = 'none';
   if (document.getElementById('manualBarcodeInput'))
     document.getElementById('manualBarcodeInput').value = '';
   lastScannedCode = null; lastScannedData = null;
+}
+
+function scannerAjustar() {
+  const filId = parseInt(document.getElementById('scannerActions').dataset.filId);
+  closeScanner();
+  if (filId) {
+    openAjusteModal(filId);
+  } else {
+    showToast('⚠️ Filamento não encontrado no estoque. Cadastre primeiro.','warning');
+    useScanResult();
+  }
+}
+
+function scannerCadastrarNovo() {
+  useScanResult();
 }
 
 function onCodeDetected(code) {
@@ -1220,26 +1349,49 @@ function onCodeDetected(code) {
   if (scannerStopFn) { scannerStopFn(); scannerStopFn = null; }
 
   const known = DB.barcodes[code];
-  document.getElementById('scannedCode').textContent = code;
 
   if (known) {
+    // Código já cadastrado — oferece opção de ajustar quantidade OU usar no formulário
     lastScannedData = known;
+    document.getElementById('scannedCode').textContent = code;
+    // Procura o filamento cadastrado para mostrar info
+    const fil = DB.filamentos.find(f =>
+      f.marca===known.marca && f.cor===known.cor && f.tipo===known.tipo
+    );
+    const estoqueInfo = fil
+      ? (fil.status==='Fechado' ? `${fil.qtd} rolo(s) em estoque` : `${fil.pct}% no rolo aberto`)
+      : 'não encontrado no estoque atual';
     document.getElementById('scannedInfo').textContent =
-      `✅ Reconhecido: ${known.tipo}${known.variacao!=='—'?' '+known.variacao:''} · ${known.cor} · ${known.marca}`;
-    setStatus('🎉 Produto reconhecido da biblioteca! Clique em "Usar →"', false);
+      `✅ ${known.tipo}${known.variacao!=='—'?' '+known.variacao:''} · ${known.cor} · ${known.marca} — ${estoqueInfo}`;
+    setStatus('Código reconhecido! O que deseja fazer?', false);
+    // Troca botão "Usar →" por dois botões de ação
+    const btn = document.getElementById('scannerUseBtn');
+    btn.style.display = 'none';
+    document.getElementById('scannerActions').style.display = 'flex';
+    // Guarda id do filamento para ajuste
+    document.getElementById('scannerActions').dataset.filId = fil ? fil.id : '';
+    document.getElementById('scannerResult').classList.add('show');
   } else {
+    // Código novo — fecha scanner e abre formulário automaticamente
     lastScannedData = null;
-    document.getElementById('scannedInfo').textContent = '🆕 Código novo — preencha os dados para memorizar.';
-    setStatus('✅ Código lido! Clique em "Usar →" para cadastrar.', false);
-  }
+    closeScanner();
+    openModal('modalFilamento');
+    document.getElementById('modalFilamento').dataset.scannedCode = code;
 
-  document.getElementById('scannerResult').classList.add('show');
-  document.getElementById('scannerUseBtn').style.display = 'inline-block';
+    // Remove alerta antigo se existir
+    document.getElementById('scannerFillAlert')?.remove();
+    const info = document.createElement('div');
+    info.id = 'scannerFillAlert';
+    info.className = 'alert alert-warning';
+    info.textContent = `🆕 Código ${code} lido — preencha os dados e salve para memorizar.`;
+    const firstRow = document.querySelector('#modalFilamento .form-row');
+    if (firstRow) firstRow.parentNode.insertBefore(info, firstRow);
+  }
 }
 
 function useScanResult() {
+  // Só chamado para códigos JÁ CONHECIDOS — novos abrem o form direto
   closeScanner();
-  // Remove old alert if any
   document.getElementById('scannerFillAlert')?.remove();
   openModal('modalFilamento');
   document.getElementById('modalFilamento').dataset.scannedCode = lastScannedCode;
@@ -1249,7 +1401,8 @@ function useScanResult() {
 
   if (lastScannedData) {
     const d = lastScannedData;
-    document.getElementById('filTipo').value    = d.tipo;    updateFilVariacao();
+    document.getElementById('filTipo').value    = d.tipo;
+    updateFilVariacao();
     if (d.tipo==='PLA') document.getElementById('filVariacao').value = d.variacao;
     document.getElementById('filMarca').value   = d.marca;
     document.getElementById('filCor').value     = d.cor;
@@ -1404,7 +1557,11 @@ function renderFilamentos() {
         <div class="progress-bar"><div class="progress-fill" style="width:${nivel}%;background:${color}"></div></div>
         <div class="text-muted">${nivel}%</div>
       </td>
-      <td><button class="btn btn-sm btn-danger" onclick="delFilamento(${f.id})">✕</button></td>
+      <td>
+        <button class="btn btn-sm btn-ghost" onclick="editFilamento(${f.id})" title="Editar">✏️</button>
+        <button class="btn btn-sm" style="background:var(--success);color:#fff;margin:0 2px" onclick="openAjusteModal(${f.id})" title="Ajustar quantidade">⚖️</button>
+        <button class="btn btn-sm btn-danger" onclick="delFilamento(${f.id})" title="Remover">✕</button>
+      </td>
     </tr>`;
   }).join('');
   renderFilCharts();
@@ -1436,26 +1593,231 @@ function delBarcode(code) {
   delete DB.barcodes[code]; saveDB(); renderBarcodeLibrary();
 }
 
-let chartFilTipo=null, chartFilMarca=null;
+let chartFilTipo=null, chartFilMarca=null, chartFilCores=null;
 function renderFilCharts() {
-  const tipoCount={}, marcaCount={};
+  const tipoCount={}, marcaCount={}, coresMap={};
   DB.filamentos.forEach(f => {
+    // kg disponíveis: rolo fechado = qtd kg, aberto = pct/100 kg
+    const kg = f.status==='Fechado' ? (f.qtd||0) : ((f.pct||0)/100);
     tipoCount[f.tipo]   = (tipoCount[f.tipo]  ||0) + (f.status==='Fechado'?f.qtd:1);
     marcaCount[f.marca] = (marcaCount[f.marca]||0) + 1;
+    const corKey = f.cor || 'Sem cor';
+    coresMap[corKey]    = (coresMap[corKey]   ||0) + kg;
   });
-  const COLORS = ['#1B2A4A','#C9940A','#27AE60','#2980B9','#8E44AD','#E67E22','#C0392B'];
+
+  const COLORS = ['#1B2A4A','#C9940A','#27AE60','#2980B9','#8E44AD','#E67E22','#C0392B','#16A085','#E74C3C','#F39C12','#1ABC9C','#9B59B6'];
+
   if(chartFilTipo)  chartFilTipo.destroy();
   if(chartFilMarca) chartFilMarca.destroy();
+  if(chartFilCores) chartFilCores.destroy();
+
   chartFilTipo = new Chart(document.getElementById('chartFilTipo'), {
     type:'doughnut',
     data:{labels:Object.keys(tipoCount), datasets:[{data:Object.values(tipoCount),backgroundColor:COLORS,borderWidth:2,borderColor:'#fff'}]},
     options:{plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},cutout:'60%'}
   });
+
   chartFilMarca = new Chart(document.getElementById('chartFilMarca'), {
     type:'bar',
     data:{labels:Object.keys(marcaCount), datasets:[{label:'Qtd',data:Object.values(marcaCount),backgroundColor:'#C9940A',borderRadius:6}]},
     options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0ebe3'}},x:{grid:{display:false}}}}
   });
+
+  // Cores ordenadas por kg desc
+  const coresSorted = Object.entries(coresMap).sort((a,b)=>b[1]-a[1]);
+  const coresLabels = coresSorted.map(([k])=>k);
+  const coresVals   = coresSorted.map(([,v])=>+v.toFixed(2));
+  // Generate colors dynamically based on color name hints
+  const coresBg = coresLabels.map((nome,i) => {
+    const n = nome.toLowerCase();
+    if(n.includes('bran') || n.includes('white')) return '#E8E8E8';
+    if(n.includes('pret') || n.includes('black')) return '#333333';
+    if(n.includes('verm') || n.includes('red'))   return '#E74C3C';
+    if(n.includes('azul') || n.includes('blue'))  return '#2980B9';
+    if(n.includes('verd') || n.includes('green')) return '#27AE60';
+    if(n.includes('amar') || n.includes('yell'))  return '#F1C40F';
+    if(n.includes('laran') || n.includes('orang'))return '#E67E22';
+    if(n.includes('rosa') || n.includes('pink'))  return '#E91E8C';
+    if(n.includes('roxo') || n.includes('purp') || n.includes('violet')) return '#8E44AD';
+    if(n.includes('cinz') || n.includes('grey') || n.includes('gray'))   return '#95A5A6';
+    if(n.includes('marr') || n.includes('brown')) return '#795548';
+    if(n.includes('silk'))  return '#C9940A';
+    if(n.includes('rainbow') || n.includes('arco')) return '#FF6B9D';
+    return COLORS[i % COLORS.length];
+  });
+
+  chartFilCores = new Chart(document.getElementById('chartFilCores'), {
+    type:'bar',
+    data:{
+      labels: coresLabels,
+      datasets:[{
+        label:'kg disponíveis',
+        data: coresVals,
+        backgroundColor: coresBg,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: coresBg.map(c => c+'CC')
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>`${ctx.parsed.x.toFixed(2)} kg`}}
+      },
+      scales:{
+        x:{beginAtZero:true, grid:{color:'#f0ebe3'}, title:{display:true,text:'kg',font:{size:11}}},
+        y:{grid:{display:false}, ticks:{font:{size:11}}}
+      }
+    }
+  });
+}
+
+// ════════════════════════════════════════════════════
+// EDITAR FILAMENTO
+// ════════════════════════════════════════════════════
+function editFilamento(id) {
+  const f = DB.filamentos.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('editFilId').value      = id;
+  document.getElementById('editFilTipo').value    = f.tipo;
+  updateEditFilVariacao();
+  if (f.tipo==='PLA') document.getElementById('editFilVariacao').value = f.variacao;
+  document.getElementById('editFilMarca').value   = f.marca;
+  document.getElementById('editFilCor').value     = f.cor;
+  document.getElementById('editFilCorTipo').value = f.corTipo;
+  document.getElementById('editFilStatus').value  = f.status;
+  document.getElementById('editFilQtd').value     = f.qtd||0;
+  document.getElementById('editFilPct').value     = f.pct||100;
+  document.getElementById('editFilCusto').value   = f.custo||0;
+  toggleEditPct();
+  openModal('modalEditFilamento');
+}
+
+function updateEditFilVariacao() {
+  const t = document.getElementById('editFilTipo').value;
+  document.getElementById('editFilVariacaoGroup').style.display = t==='PLA' ? '' : 'none';
+}
+
+function toggleEditPct() {
+  const s = document.getElementById('editFilStatus').value;
+  document.getElementById('editFilQtdGroup').style.display  = s==='Fechado' ? '' : 'none';
+  document.getElementById('editFilPctGroup').style.display  = s==='Aberto'  ? '' : 'none';
+}
+
+function saveEditFilamento() {
+  const id = parseInt(document.getElementById('editFilId').value);
+  const f  = DB.filamentos.find(x => x.id === id);
+  if (!f) return;
+  const tipo = document.getElementById('editFilTipo').value;
+  f.tipo     = tipo;
+  f.variacao = tipo==='PLA' ? document.getElementById('editFilVariacao').value : '—';
+  f.marca    = document.getElementById('editFilMarca').value;
+  f.cor      = document.getElementById('editFilCor').value;
+  f.corTipo  = document.getElementById('editFilCorTipo').value;
+  f.status   = document.getElementById('editFilStatus').value;
+  f.qtd      = parseInt(document.getElementById('editFilQtd').value)||0;
+  f.pct      = parseInt(document.getElementById('editFilPct').value)||100;
+  f.custo    = parseFloat(document.getElementById('editFilCusto').value)||0;
+  saveDB(); closeModal('modalEditFilamento'); renderAll();
+  showToast('✅ Filamento atualizado!');
+}
+
+// ════════════════════════════════════════════════════
+// AJUSTE DE QUANTIDADE (+ / - kg por scanner ou manual)
+// ════════════════════════════════════════════════════
+let ajusteTipo = 'add'; // 'add' ou 'sub'
+
+function openAjusteModal(id) {
+  const f = DB.filamentos.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('ajusteFilId').value = id;
+  ajusteTipo = 'add';
+  document.getElementById('ajusteBtnAdd').classList.add('active');
+  document.getElementById('ajusteBtnSub').classList.remove('active');
+
+  // Info do filamento
+  document.getElementById('ajusteFilInfo').innerHTML =
+    `<strong>${f.tipo} ${f.variacao!=='—'?f.variacao:''} ${f.cor}</strong> · ${f.marca}<br>
+     <span class="text-muted">Status atual: ${f.status==='Fechado'?f.qtd+' rolo(s) fechado(s)':f.pct+'% no rolo aberto'}</span>`;
+
+  // Mostra campos corretos para o status
+  updateAjusteCampos(f);
+  updateAjustePreview(f);
+  openModal('modalAjuste');
+}
+
+function setAjusteTipo(tipo, el) {
+  ajusteTipo = tipo;
+  document.querySelectorAll('#modalAjuste .cat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const id = parseInt(document.getElementById('ajusteFilId').value);
+  const f  = DB.filamentos.find(x => x.id === id);
+  if (f) { updateAjusteCampos(f); updateAjustePreview(f); }
+}
+
+function updateAjusteCampos(f) {
+  const rolosGroup = document.getElementById('ajusteRolosGroup');
+  const pctGroup   = document.getElementById('ajustePctGroup');
+  if (f.status === 'Fechado') {
+    rolosGroup.style.display = '';
+    pctGroup.style.display   = 'none';
+    document.querySelector('#ajusteRolosGroup label').textContent =
+      ajusteTipo === 'add' ? 'Rolos a adicionar (1kg cada)' : 'Rolos a remover';
+    document.getElementById('ajusteRolos').value = 1;
+  } else {
+    // Rolo aberto — ajusta por percentual
+    rolosGroup.style.display = 'none';
+    pctGroup.style.display   = '';
+    document.getElementById('ajustePct').value = f.pct;
+  }
+}
+
+function updateAjustePreview(f) {
+  const preview = document.getElementById('ajustePreview');
+  if (f.status === 'Fechado') {
+    const delta = parseInt(document.getElementById('ajusteRolos').value)||0;
+    const novo  = ajusteTipo==='add' ? f.qtd+delta : Math.max(0, f.qtd-delta);
+    preview.innerHTML = `Resultado: <strong>${f.qtd} → ${novo} rolo(s)</strong>`;
+  } else {
+    const novoPct = parseInt(document.getElementById('ajustePct').value)||0;
+    preview.innerHTML = `Resultado: <strong>${f.pct}% → ${novoPct}%</strong>`;
+  }
+}
+
+// Chama preview ao mudar inputs
+document.addEventListener('input', e => {
+  if (e.target.id==='ajusteRolos' || e.target.id==='ajustePct') {
+    const id = parseInt(document.getElementById('ajusteFilId').value);
+    const f  = DB.filamentos.find(x => x.id === id);
+    if (f) updateAjustePreview(f);
+  }
+});
+
+function aplicarAjuste() {
+  const id = parseInt(document.getElementById('ajusteFilId').value);
+  const f  = DB.filamentos.find(x => x.id === id);
+  if (!f) return;
+
+  if (f.status === 'Fechado') {
+    const delta = parseInt(document.getElementById('ajusteRolos').value)||0;
+    f.qtd = ajusteTipo==='add' ? f.qtd+delta : Math.max(0, f.qtd-delta);
+    // Se subtraiu tudo, muda para aberto
+    if (f.qtd === 0 && ajusteTipo==='sub') {
+      f.status = 'Aberto'; f.pct = 0;
+    }
+  } else {
+    f.pct = parseInt(document.getElementById('ajustePct').value)||0;
+    if (f.pct <= 0) { f.pct = 0; }
+  }
+
+  saveDB(); closeModal('modalAjuste'); renderAll();
+  showToast(`✅ Estoque de ${f.cor} atualizado!`);
+}
+
+// Abre ajuste após scanner (chamado por onCodeDetected para código conhecido)
+function openAjusteFromScan(id) {
+  openAjusteModal(id);
 }
 
 // ════════════════════════════════════════════════════
