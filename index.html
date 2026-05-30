@@ -433,6 +433,7 @@ tr:hover td { background: var(--gray-100); }
 
     <!-- ═══════════════ FILAMENTOS ═══════════════ -->
     <div class="tab" id="tab-filamentos">
+      <div id="kpiFilamentos" class="kpi-grid" style="margin-bottom:20px"></div>
       <div class="card">
         <div class="card-header">
           <div class="card-title">Estoque de Filamentos</div>
@@ -478,6 +479,7 @@ tr:hover td { background: var(--gray-100); }
 
     <!-- ═══════════════ PRODUTOS ACABADOS ═══════════════ -->
     <div class="tab" id="tab-produtos">
+      <div id="kpiProdutos" class="kpi-grid" style="margin-bottom:20px"></div>
       <div class="card">
         <div class="card-header">
           <div class="card-title">Produtos em Estoque</div>
@@ -1532,6 +1534,31 @@ function delFilamento(id) {
 }
 
 function renderFilamentos() {
+  // KPI de valor do estoque
+  const valFil   = calcValorEstoqueFilamentos();
+  const totalKg  = DB.filamentos.reduce((s,f) => s + (f.status==='Fechado'?(f.qtd||0):((f.pct||0)/100)), 0);
+  const emAlerta = DB.filamentos.filter(f=>(f.status==='Aberto'&&f.pct<=20)||(f.status==='Fechado'&&f.qtd===0)).length;
+  const kpiEl = document.getElementById('kpiFilamentos');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid #2980B9">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Valor do Estoque</div>
+      <div class="kpi-value">R$ ${valFil.toFixed(2)}</div>
+      <div class="kpi-sub">Custo de aquisição dos rolos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">⚖️</div>
+      <div class="kpi-label">Total em kg</div>
+      <div class="kpi-value">${totalKg.toFixed(2)} kg</div>
+      <div class="kpi-sub">${DB.filamentos.length} tipo(s) cadastrado(s)</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid ${emAlerta>0?'var(--danger)':'var(--success)'}">
+      <div class="kpi-icon">${emAlerta>0?'⚠️':'✅'}</div>
+      <div class="kpi-label">Alertas de Estoque</div>
+      <div class="kpi-value" style="color:${emAlerta>0?'var(--danger)':'var(--success)'}">${emAlerta}</div>
+      <div class="kpi-sub">${emAlerta>0?emAlerta+' item(s) abaixo do mínimo':'Todos os níveis OK'}</div>
+    </div>
+  `;
   const types  = ['Todos','PLA','PETG','TPU'];
   document.getElementById('filCatTabs').innerHTML = types.map(t =>
     `<div class="cat-tab ${t===filCatFilter?'active':''}" onclick="setFilCat('${t}',this)">${t}</div>`
@@ -1844,6 +1871,33 @@ function addProduto() {
 }
 
 function renderProdutos() {
+  // KPI de valor do estoque de produtos acabados
+  const valProd    = calcValorEstoqueProdutos();
+  const totalUnids = DB.produtos.reduce((s,p)=>s+(p.qtd||0),0);
+  const margem     = valProd.venda > 0
+    ? ((valProd.venda - valProd.custo) / valProd.venda * 100).toFixed(1)
+    : '0.0';
+  const kpiEl = document.getElementById('kpiProdutos');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid #8E44AD">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Valor a Preço de Venda</div>
+      <div class="kpi-value">R$ ${valProd.venda.toFixed(2)}</div>
+      <div class="kpi-sub">Potencial de receita do estoque</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #2980B9">
+      <div class="kpi-icon">🏷️</div>
+      <div class="kpi-label">Valor a Custo</div>
+      <div class="kpi-value">R$ ${valProd.custo.toFixed(2)}</div>
+      <div class="kpi-sub">Capital investido em produtos</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #27AE60">
+      <div class="kpi-icon">📦</div>
+      <div class="kpi-label">Unidades em Estoque</div>
+      <div class="kpi-value">${totalUnids}</div>
+      <div class="kpi-sub">Margem média: ${margem}%</div>
+    </div>
+  `;
   document.getElementById('prodCatTabs').innerHTML = PROD_CATS.map(c =>
     `<div class="cat-tab ${c===prodCatFilter?'active':''}" onclick="setProdCat('${c}',this)">${c}</div>`
   ).join('');
@@ -2170,6 +2224,21 @@ function renderAbcTable(tbodyId,data,unit){
 // OVERVIEW
 // ════════════════════════════════════════════════════
 let chartFat=null,chartRes=null;
+function calcValorEstoqueFilamentos() {
+  return DB.filamentos.reduce((s, f) => {
+    const kg = f.status === 'Fechado' ? (f.qtd || 0) : ((f.pct || 0) / 100);
+    return s + kg * (f.custo || 0);
+  }, 0);
+}
+
+function calcValorEstoqueProdutos() {
+  // Valor a custo
+  const custo = DB.produtos.reduce((s, p) => s + (p.qtd || 0) * (p.custo || 0), 0);
+  // Valor a preço de venda
+  const venda = DB.produtos.reduce((s, p) => s + (p.qtd || 0) * (p.preco || 0), 0);
+  return { custo, venda };
+}
+
 function renderOverview(){
   const now=new Date(),mes=now.getMonth(),ano=now.getFullYear();
   const semIni=new Date(now);semIni.setDate(now.getDate()-7);
@@ -2178,13 +2247,26 @@ function renderOverview(){
   const recAno =DB.pedidos.filter(p=>new Date(p.data).getFullYear()===ano).reduce((s,p)=>s+p.valor,0);
   const despMes=DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
 
+  const valFil  = calcValorEstoqueFilamentos();
+  const valProd = calcValorEstoqueProdutos();
+
   document.getElementById('kpiGrid').innerHTML=`
     <div class="kpi-card"><div class="kpi-icon">📅</div><div class="kpi-label">Receita Semanal</div><div class="kpi-value">R$ ${recSem.toFixed(2)}</div></div>
     <div class="kpi-card"><div class="kpi-icon">📆</div><div class="kpi-label">Receita Mensal</div><div class="kpi-value">R$ ${recMes.toFixed(2)}</div></div>
     <div class="kpi-card"><div class="kpi-icon">🗓️</div><div class="kpi-label">Receita Anual</div><div class="kpi-value">R$ ${recAno.toFixed(2)}</div></div>
     <div class="kpi-card"><div class="kpi-icon">🛒</div><div class="kpi-label">Pedidos Totais</div><div class="kpi-value">${DB.pedidos.length}</div></div>
-    <div class="kpi-card"><div class="kpi-icon">🏪</div><div class="kpi-label">Clientes</div><div class="kpi-value">${DB.clientes.length}</div></div>
-    <div class="kpi-card"><div class="kpi-icon">🧵</div><div class="kpi-label">Tipos Filamento</div><div class="kpi-value">${DB.filamentos.length}</div></div>
+    <div class="kpi-card" style="border-top:3px solid #2980B9">
+      <div class="kpi-icon">🧵</div>
+      <div class="kpi-label">Estoque Filamentos</div>
+      <div class="kpi-value" style="font-size:20px">R$ ${valFil.toFixed(2)}</div>
+      <div class="kpi-sub">${DB.filamentos.length} tipo(s) cadastrado(s)</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #8E44AD">
+      <div class="kpi-icon">📦</div>
+      <div class="kpi-label">Estoque Produtos</div>
+      <div class="kpi-value" style="font-size:20px">R$ ${valProd.venda.toFixed(2)}</div>
+      <div class="kpi-sub">Custo: R$ ${valProd.custo.toFixed(2)}</div>
+    </div>
   `;
 
   const labels6=[],vals6=[];
