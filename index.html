@@ -1,0 +1,2535 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vangardis Expertise — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<style>
+:root {
+  --navy: #1B2A4A;
+  --navy-dark: #0F1A30;
+  --navy-mid: #243357;
+  --gold: #C9940A;
+  --gold-light: #E8C96A;
+  --gold-pale: #F5E8B8;
+  --cream: #FAF7F2;
+  --white: #FFFFFF;
+  --gray-100: #F2EDE6;
+  --gray-200: #E0D8CC;
+  --gray-400: #9A8F82;
+  --gray-600: #5C5249;
+  --danger: #C0392B;
+  --warning: #E67E22;
+  --success: #27AE60;
+  --info: #2980B9;
+  --shadow: 0 4px 24px rgba(27,42,74,0.10);
+  --shadow-lg: 0 8px 40px rgba(27,42,74,0.16);
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--cream);
+  color: var(--navy-dark);
+  min-height: 100vh;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  position: fixed; top: 0; left: 0;
+  width: 240px; height: 100vh;
+  background: var(--navy-dark);
+  display: flex; flex-direction: column;
+  z-index: 100;
+  transition: transform 0.3s ease;
+}
+
+.sidebar-logo {
+  padding: 28px 24px 20px;
+  border-bottom: 1px solid rgba(201,148,10,0.2);
+}
+.sidebar-logo .brand { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--gold-light); letter-spacing: 0.5px; }
+.sidebar-logo .sub { font-size: 10px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px; }
+
+.sidebar-nav { flex: 1; padding: 16px 0; overflow-y: auto; }
+
+.nav-section { padding: 8px 16px 4px; font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--gray-400); }
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 20px;
+  font-size: 13px; font-weight: 500;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 3px solid transparent;
+}
+.nav-item:hover { background: rgba(201,148,10,0.08); color: var(--gold-light); }
+.nav-item.active { background: rgba(201,148,10,0.12); color: var(--gold); border-left-color: var(--gold); }
+.nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+
+.sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.06); }
+.export-btn, .import-btn {
+  width: 100%; padding: 9px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  border: none; margin-bottom: 6px; transition: all 0.2s;
+}
+.export-btn { background: var(--gold); color: var(--navy-dark); }
+.export-btn:hover { background: var(--gold-light); }
+.import-btn { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.15); }
+.import-btn:hover { background: rgba(255,255,255,0.14); }
+
+/* ── MAIN ── */
+.main {
+  margin-left: 240px;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+}
+
+.topbar {
+  background: var(--white);
+  padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--gray-200);
+  position: sticky; top: 0; z-index: 50;
+}
+.topbar-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--navy); }
+.topbar-date { font-size: 12px; color: var(--gray-400); }
+.menu-toggle { display: none; background: none; border: none; font-size: 22px; cursor: pointer; color: var(--navy); }
+
+.content { padding: 28px 32px; flex: 1; }
+
+/* ── TABS ── */
+.tab { display: none; }
+.tab.active { display: block; }
+
+/* ── CARDS ── */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+
+.kpi-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  position: relative; overflow: hidden;
+}
+.kpi-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--gold);
+}
+.kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-400); margin-bottom: 8px; }
+.kpi-value { font-family: 'Playfair Display', serif; font-size: 26px; color: var(--navy); font-weight: 700; }
+.kpi-sub { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
+.kpi-icon { position: absolute; right: 16px; top: 16px; font-size: 24px; opacity: 0.15; }
+
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.card-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--gray-100);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
+}
+.card-title { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--navy); }
+.card-body { padding: 24px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+/* ── BUTTONS ── */
+.btn {
+  padding: 9px 18px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  border: none; transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+}
+.btn-primary { background: var(--navy); color: var(--white); }
+.btn-primary:hover { background: var(--navy-mid); }
+.btn-gold { background: var(--gold); color: var(--navy-dark); }
+.btn-gold:hover { background: var(--gold-light); }
+.btn-danger { background: var(--danger); color: var(--white); }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+.btn-ghost { background: transparent; border: 1px solid var(--gray-200); color: var(--gray-600); }
+.btn-ghost:hover { background: var(--gray-100); }
+
+/* ── FORMS ── */
+.form-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 140px; }
+.form-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--gray-600); }
+.form-group input, .form-group select, .form-group textarea {
+  padding: 10px 12px; border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm); font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  background: var(--white); color: var(--navy-dark);
+  transition: border 0.2s;
+}
+.form-group input:focus, .form-group select:focus {
+  outline: none; border-color: var(--gold);
+}
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: var(--navy-dark); color: var(--gold-light); padding: 11px 14px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; }
+td { padding: 11px 14px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--gray-100); }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-block; padding: 3px 10px;
+  border-radius: 20px; font-size: 11px; font-weight: 600;
+}
+.badge-gold { background: var(--gold-pale); color: var(--gold); }
+.badge-navy { background: rgba(27,42,74,0.1); color: var(--navy); }
+.badge-danger { background: #FDECEA; color: var(--danger); }
+.badge-success { background: #E8F8EE; color: var(--success); }
+.badge-warning { background: #FEF3E2; color: var(--warning); }
+.badge-info { background: #E3F0FA; color: var(--info); }
+
+/* ── PROGRESS ── */
+.progress-bar { background: var(--gray-100); border-radius: 20px; height: 8px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 20px; transition: width 0.5s ease; }
+
+/* ── ALERT ── */
+.alert {
+  padding: 12px 16px; border-radius: var(--radius-sm);
+  font-size: 13px; margin-bottom: 16px;
+  border-left: 4px solid;
+}
+.alert-danger { background: #FDECEA; border-color: var(--danger); color: var(--danger); }
+.alert-warning { background: #FEF3E2; border-color: var(--warning); color: var(--warning); }
+.alert-success { background: #E8F8EE; border-color: var(--success); color: var(--success); }
+
+/* ── ABC ── */
+.abc-a { background: #E8F8EE; color: var(--success); font-weight: 700; }
+.abc-b { background: #FEF3E2; color: var(--warning); font-weight: 700; }
+.abc-c { background: #FDECEA; color: var(--danger); font-weight: 700; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,26,48,0.6); z-index: 200;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--white); border-radius: var(--radius);
+  padding: 28px; width: 90%; max-width: 560px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+.modal-title { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--navy); margin-bottom: 20px; }
+.modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* ── CHART CONTAINERS ── */
+.chart-container { position: relative; height: 240px; }
+.chart-container-lg { position: relative; height: 320px; }
+
+/* ── FILAMENT SUBCATEGORY NAV ── */
+.cat-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.cat-tab {
+  padding: 7px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  cursor: pointer; border: 1.5px solid var(--gray-200); background: var(--white);
+  color: var(--gray-600); transition: all 0.2s;
+}
+.cat-tab.active { background: var(--navy); color: var(--gold-light); border-color: var(--navy); }
+.cat-tab:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .main { margin-left: 0; }
+  .menu-toggle { display: block; }
+  .content { padding: 16px; }
+  .topbar { padding: 14px 16px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .form-row { flex-direction: column; }
+}
+
+.divider { height: 1px; background: var(--gray-200); margin: 20px 0; }
+.text-muted { color: var(--gray-400); font-size: 12px; }
+.text-right { text-align: right; }
+.mt-4 { margin-top: 16px; }
+.flex { display: flex; align-items: center; gap: 10px; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+
+/* ── SCANNER ── */
+.scanner-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(10,16,30,0.92); z-index: 300;
+  flex-direction: column; align-items: center; justify-content: center;
+}
+.scanner-overlay.open { display: flex; }
+.scanner-box {
+  width: 320px; max-width: 92vw;
+  background: var(--navy-dark);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+.scanner-header {
+  padding: 16px 20px;
+  background: var(--navy);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.scanner-title { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--gold-light); }
+.scanner-video-wrap {
+  position: relative; width: 100%;
+  background: #000;
+}
+#scannerVideo { width: 100%; display: block; max-height: 260px; object-fit: cover; }
+.scanner-aim {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.scanner-aim-inner {
+  width: 200px; height: 80px;
+  border: 2px solid var(--gold);
+  border-radius: 6px;
+  box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+  animation: pulse-aim 1.5s ease-in-out infinite;
+}
+@keyframes pulse-aim {
+  0%,100% { border-color: var(--gold); box-shadow: 0 0 0 2000px rgba(0,0,0,0.35), 0 0 12px rgba(201,148,10,0.4); }
+  50% { border-color: var(--gold-light); box-shadow: 0 0 0 2000px rgba(0,0,0,0.35), 0 0 24px rgba(232,201,106,0.7); }
+}
+.scanner-status {
+  padding: 14px 20px; text-align: center;
+  font-size: 13px; color: rgba(255,255,255,0.7);
+  min-height: 50px;
+}
+.scanner-result {
+  padding: 0 20px 16px;
+  display: none;
+}
+.scanner-result.show { display: block; }
+.scanner-footer { padding: 14px 20px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.06); }
+
+/* Biblioteca de códigos */
+.barcode-library-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  background: var(--gray-100); margin-bottom: 8px; font-size: 13px;
+}
+.barcode-code { font-family: monospace; font-size: 11px; color: var(--gray-400); }
+
+/* ── AUTOCOMPLETE ── */
+.autocomplete-wrap { position: relative; }
+.autocomplete-list {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
+  background: var(--white); border: 1.5px solid var(--gold);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-lg);
+  max-height: 200px; overflow-y: auto; display: none;
+}
+.autocomplete-list.open { display: block; }
+.autocomplete-item {
+  padding: 10px 14px; font-size: 13px; cursor: pointer;
+  border-bottom: 1px solid var(--gray-100);
+  display: flex; align-items: center; gap: 8px;
+}
+.autocomplete-item:last-child { border-bottom: none; }
+.autocomplete-item:hover, .autocomplete-item.selected { background: var(--gold-pale); }
+.autocomplete-item .ac-main { font-weight: 600; color: var(--navy); }
+.autocomplete-item .ac-sub { font-size: 11px; color: var(--gray-400); }
+.autocomplete-match { color: var(--gold); font-weight: 700; }
+.autocomplete-item .ac-sim { font-size: 10px; color: var(--warning); margin-left: auto; }
+
+/* ── DEDUP MODAL ── */
+.dedup-group {
+  background: var(--gray-100); border-radius: var(--radius-sm);
+  padding: 14px; margin-bottom: 12px;
+}
+.dedup-group-title { font-weight: 700; font-size: 13px; color: var(--navy); margin-bottom: 8px; }
+.dedup-option {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; background: var(--white); border-radius: 6px;
+  margin-bottom: 6px; font-size: 12px; cursor: pointer;
+  border: 1.5px solid transparent; transition: border 0.15s;
+}
+.dedup-option:hover { border-color: var(--gold); }
+.dedup-option input[type=radio] { accent-color: var(--gold); }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="brand">Vangardis Expertise</div>
+    <div class="sub">Gestão · Capimania & Ícones</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-section">Principal</div>
+    <div class="nav-item active" onclick="goTab('overview')"><span class="icon">📊</span> Visão Geral</div>
+    <div class="nav-section">Estoque</div>
+    <div class="nav-item" onclick="goTab('filamentos')"><span class="icon">🧵</span> Filamentos</div>
+    <div class="nav-item" onclick="goTab('produtos')"><span class="icon">📦</span> Produtos Acabados</div>
+    <div class="nav-section">Comercial</div>
+    <div class="nav-item" onclick="goTab('pedidos')"><span class="icon">🛒</span> Pedidos</div>
+    <div class="nav-item" onclick="goTab('clientes')"><span class="icon">🏪</span> Clientes</div>
+    <div class="nav-section">Financeiro</div>
+    <div class="nav-item" onclick="goTab('financeiro')"><span class="icon">💰</span> Receitas & Despesas</div>
+    <div class="nav-item" onclick="goTab('abc')"><span class="icon">📈</span> Curva ABC</div>
+  </div>
+  <div class="sidebar-footer">
+    <div id="syncStatus" style="font-size:11px;text-align:center;margin-bottom:10px;color:#E67E22;min-height:16px">🔄 Carregando…</div>
+    <button class="export-btn" onclick="forceSyncFromCloud()" style="margin-bottom:6px">🔄 Sincronizar Agora</button>
+    <button class="export-btn" onclick="exportData()" style="background:rgba(201,148,10,0.3);margin-bottom:6px">⬇ Exportar JSON</button>
+    <button class="import-btn" onclick="document.getElementById('importFile').click()">⬆ Importar JSON</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-title" id="topbarTitle">Visão Geral</div>
+    <div class="topbar-date" id="topbarDate"></div>
+  </div>
+
+  <div class="content">
+
+    <!-- ═══════════════ VISÃO GERAL ═══════════════ -->
+    <div class="tab active" id="tab-overview">
+      <div class="kpi-grid" id="kpiGrid"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Faturamento Mensal</div></div>
+          <div class="card-body"><div class="chart-container"><canvas id="chartFaturamento"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Resultado do Mês Atual</div></div>
+          <div class="card-body"><div class="chart-container"><canvas id="chartResultado"></canvas></div></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><div class="card-title">⚠️ Alertas de Estoque</div></div>
+          <div class="card-body" id="alertasEstoque"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Pedidos Recentes</div></div>
+          <div class="card-body" id="pedidosRecentes"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ FILAMENTOS ═══════════════ -->
+    <div class="tab" id="tab-filamentos">
+      <div id="kpiFilamentos" class="kpi-grid" style="margin-bottom:20px"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Estoque de Filamentos</div>
+          <div class="flex">
+            <button class="btn btn-ghost" onclick="openScanner()" title="Ler código de barras">📷 Ler Código</button>
+            <button class="btn btn-gold" onclick="openModal('modalFilamento')">+ Adicionar</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="cat-tabs" id="filCatTabs"></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Tipo</th><th>Variação</th><th>Marca</th><th>Cor</th><th>Status</th><th>Qtd/Restante</th><th>Nível</th><th>Ações</th></tr></thead>
+            <tbody id="filamentosTbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Distribuição por Tipo</div></div>
+        <div class="card-body grid-2">
+          <div class="chart-container"><canvas id="chartFilTipo"></canvas></div>
+          <div class="chart-container"><canvas id="chartFilMarca"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">🎨 Estoque por Cor (kg disponíveis)</div></div>
+        <div class="card-body">
+          <div class="chart-container-lg"><canvas id="chartFilCores"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📚 Biblioteca de Códigos de Barras</div>
+          <span class="text-muted" id="barcodeCount">0 códigos memorizados</span>
+        </div>
+        <div class="card-body">
+          <p class="text-muted" style="margin-bottom:14px">Cada código lido e cadastrado é memorizado aqui. Nas próximas leituras, o sistema preenche tudo automaticamente.</p>
+          <div id="barcodeLibraryList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PRODUTOS ACABADOS ═══════════════ -->
+    <div class="tab" id="tab-produtos">
+      <div id="kpiProdutos" class="kpi-grid" style="margin-bottom:20px"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Produtos em Estoque</div>
+          <button class="btn btn-gold" onclick="openModal('modalProduto')">+ Adicionar</button>
+        </div>
+        <div class="card-body">
+          <div class="cat-tabs" id="prodCatTabs"></div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Categoria</th><th>Produto</th><th>Variação</th><th>Qtd</th><th>Filamento Usado</th><th>Custo Unit.</th><th>Ações</th></tr></thead>
+            <tbody id="produtosTbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PEDIDOS ═══════════════ -->
+    <div class="tab" id="tab-pedidos">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Gestão de Pedidos</div>
+          <button class="btn btn-gold" onclick="openModal('modalPedido')">+ Novo Pedido</button>
+        </div>
+        <div class="card-body">
+          <div class="cat-tabs">
+            <div class="cat-tab active" onclick="filterPedidos('todos',this)">Todos</div>
+            <div class="cat-tab" onclick="filterPedidos('Em produção',this)">Em Produção</div>
+            <div class="cat-tab" onclick="filterPedidos('Pronto',this)">Pronto</div>
+            <div class="cat-tab" onclick="filterPedidos('Entregue',this)">Entregue</div>
+            <div class="cat-tab" onclick="filterPedidos('Recebido',this)">Recebido</div>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>#</th><th>Cliente</th><th>Cidade</th><th>Produto</th><th>Qtd</th><th>Valor</th><th>Pagamento</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
+            <tbody id="pedidosTbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Pedidos por Status</div></div>
+        <div class="card-body"><div class="chart-container"><canvas id="chartPedidosStatus"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ CLIENTES ═══════════════ -->
+    <div class="tab" id="tab-clientes">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Base de Clientes</div>
+          <div class="flex">
+            <button class="btn btn-ghost" onclick="openDedupModal()" title="Detectar e mesclar duplicatas">🔀 Corrigir Duplicatas</button>
+            <button class="btn btn-gold" onclick="openModal('modalCliente')">+ Novo Cliente</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-wrap"><table>
+            <thead><tr><th>Cliente</th><th>Cidade</th><th>Pedidos</th><th>Total Comprado</th><th>Último Pedido</th><th>Classificação</th></tr></thead>
+            <tbody id="clientesTbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ FINANCEIRO ═══════════════ -->
+    <div class="tab" id="tab-financeiro">
+      <div class="kpi-grid" id="kpiFinanceiro"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Registrar Despesa</div>
+        </div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Categoria</label>
+              <select id="despCat">
+                <option>Filamento</option>
+                <option>Embalagem</option>
+                <option>Frete</option>
+                <option>Manutenção</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Impressora (se manutenção)</label>
+              <select id="despImpressora">
+                <option value="">— Nenhuma —</option>
+                <option>Alícia (A1 Mini)</option>
+                <option>Letícia (A1 Combo)</option>
+                <option>Jaime (A1 Combo)</option>
+                <option>Arruda (A1 Combo)</option>
+                <option>Nantes (A1 Combo)</option>
+                <option>Rosalina (A1)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Descrição</label>
+              <input type="text" id="despDesc" placeholder="Ex: 2 rolos PLA Bambu Lab">
+            </div>
+            <div class="form-group">
+              <label>Valor (R$)</label>
+              <input type="number" id="despValor" placeholder="0,00" step="0.01">
+            </div>
+            <div class="form-group">
+              <label>Data</label>
+              <input type="date" id="despData">
+            </div>
+          </div>
+          <button class="btn btn-gold" onclick="addDespesa()">Registrar Despesa</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Histórico de Despesas</div></div>
+        <div class="card-body">
+          <div class="table-wrap"><table>
+            <thead><tr><th>Data</th><th>Categoria</th><th>Impressora</th><th>Descrição</th><th>Valor</th><th></th></tr></thead>
+            <tbody id="despesasTbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Despesas por Categoria</div></div>
+          <div class="card-body"><div class="chart-container"><canvas id="chartDespCat"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Receita vs Despesa (6 meses)</div></div>
+          <div class="card-body"><div class="chart-container"><canvas id="chartRecDesp"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ CURVA ABC ═══════════════ -->
+    <div class="tab" id="tab-abc">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><div class="card-title">ABC — Clientes por Receita</div></div>
+          <div class="card-body">
+            <div class="chart-container" style="height:200px"><canvas id="chartAbcClientes"></canvas></div>
+            <div class="mt-4 table-wrap"><table>
+              <thead><tr><th>Classe</th><th>Cliente</th><th>Receita</th><th>% Acum.</th></tr></thead>
+              <tbody id="abcClientesTbody"></tbody>
+            </table></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">ABC — Clientes por Qtd. Pedidos</div></div>
+          <div class="card-body">
+            <div class="table-wrap"><table>
+              <thead><tr><th>Classe</th><th>Cliente</th><th>Pedidos</th><th>% Acum.</th></tr></thead>
+              <tbody id="abcClientesQtdTbody"></tbody>
+            </table></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">ABC — Produtos por Receita</div>
+            <button class="btn btn-ghost btn-sm" onclick="openDedupProdModal()">🔀 Corrigir Duplicatas</button>
+          </div>
+          <div class="card-body">
+            <div class="chart-container" style="height:200px"><canvas id="chartAbcProdutos"></canvas></div>
+            <div class="mt-4 table-wrap"><table>
+              <thead><tr><th>Classe</th><th>Produto</th><th>Receita</th><th>% Acum.</th></tr></thead>
+              <tbody id="abcProdutosTbody"></tbody>
+            </table></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">ABC — Produtos por Quantidade</div></div>
+          <div class="card-body">
+            <div class="table-wrap"><table>
+              <thead><tr><th>Classe</th><th>Produto</th><th>Qtd</th><th>% Acum.</th></tr></thead>
+              <tbody id="abcProdutosQtdTbody"></tbody>
+            </table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ═══════ MODALS ═══════ -->
+
+<!-- Modal Filamento -->
+<div class="modal-overlay" id="modalFilamento">
+  <div class="modal">
+    <div class="modal-title">🧵 Adicionar Filamento</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="filTipo" onchange="updateFilVariacao()">
+          <option value="PLA">PLA</option>
+          <option value="PETG">PETG</option>
+          <option value="TPU">TPU</option>
+        </select>
+      </div>
+      <div class="form-group" id="filVariacaoGroup">
+        <label>Variação (PLA)</label>
+        <select id="filVariacao">
+          <option>Normal</option><option>Matte</option><option>Silk</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Marca</label>
+        <select id="filMarca">
+          <option>STLFLIX</option><option>Creality</option><option>Bambu Lab</option>
+          <option>Elegoo</option><option>Voolt3D</option><option>3n3</option><option>Dynalabs</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cor / Padrão</label>
+        <input type="text" id="filCor" placeholder="Ex: Branco, Silk Rainbow...">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Variação de Cor</label>
+        <select id="filCorTipo">
+          <option>Cor Única</option><option>Dual Color</option><option>Tri Color</option><option>Rainbow</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="filStatus" onchange="togglePct()">
+          <option value="Fechado">Rolo Fechado (1kg)</option>
+          <option value="Aberto">Rolo Aberto</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" id="filQtdGroup">
+        <label>Quantidade (rolos fechados)</label>
+        <input type="number" id="filQtd" value="1" min="0">
+      </div>
+      <div class="form-group" id="filPctGroup" style="display:none">
+        <label>Restante no rolo aberto (%)</label>
+        <input type="number" id="filPct" value="100" min="0" max="100">
+      </div>
+      <div class="form-group">
+        <label>Custo do Rolo (R$)</label>
+        <input type="number" id="filCusto" placeholder="0,00" step="0.01">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalFilamento')">Cancelar</button>
+      <button class="btn btn-gold" onclick="addFilamento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Produto -->
+<div class="modal-overlay" id="modalProduto">
+  <div class="modal">
+    <div class="modal-title">📦 Adicionar Produto Acabado</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Categoria</label>
+        <select id="prodCat">
+          <option>Ímãs — Capivara</option><option>Ímãs — Turismo</option><option>Ímãs — Religioso</option>
+          <option>Chaveiros — Simples</option><option>Chaveiros — Boné</option><option>Chaveiros — Natalino</option>
+          <option>Lápis</option><option>Régua</option><option>Clips</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Variação / Cor</label>
+        <input type="text" id="prodVar" placeholder="Ex: Rainbow, Azul, Curitiba...">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" id="prodQtd" value="1" min="0">
+      </div>
+      <div class="form-group">
+        <label>Custo Unitário (R$)</label>
+        <input type="number" id="prodCusto" placeholder="0,00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Preço de Venda (R$)</label>
+        <input type="number" id="prodPreco" placeholder="0,00" step="0.01">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Filamento(s) Utilizado(s)</label>
+        <input type="text" id="prodFilamento" placeholder="Ex: PLA Silk Rainbow — Bambu Lab">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalProduto')">Cancelar</button>
+      <button class="btn btn-gold" onclick="addProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Pedido -->
+<div class="modal-overlay" id="modalPedido">
+  <div class="modal">
+    <div class="modal-title">🛒 Novo Pedido</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Cliente</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="pedCliente" placeholder="Nome do lojista" autocomplete="off"
+            oninput="acShow('pedCliente','acClientes',getClienteNames())"
+            onkeydown="acKeyNav(event,'acClientes')">
+          <div class="autocomplete-list" id="acClientes"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Cidade</label>
+        <input type="text" id="pedCidade" placeholder="Ex: Curitiba">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Produto / Descrição</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="pedProduto" placeholder="Ex: Capivara Gamer, 10 unid." autocomplete="off"
+            oninput="acShow('pedProduto','acProdutos',getProdutoNames())"
+            onkeydown="acKeyNav(event,'acProdutos')">
+          <div class="autocomplete-list" id="acProdutos"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" id="pedQtd" value="1" min="1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Valor Total (R$)</label>
+        <input type="number" id="pedValor" placeholder="0,00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Forma de Pagamento</label>
+        <select id="pedPgto">
+          <option>Pix</option><option>Cartão</option><option>Dinheiro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="pedStatus">
+          <option>Em produção</option><option>Pronto</option><option>Entregue</option><option>Recebido</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data do Pedido</label>
+        <input type="date" id="pedData">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalPedido')">Cancelar</button>
+      <button class="btn btn-gold" onclick="addPedido()">Salvar Pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Cliente -->
+<div class="modal-overlay" id="modalCliente">
+  <div class="modal">
+    <div class="modal-title">🏪 Novo Cliente</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nome / Loja</label>
+        <input type="text" id="cliNome" placeholder="Nome do cliente ou loja">
+      </div>
+      <div class="form-group">
+        <label>Cidade</label>
+        <input type="text" id="cliCidade" placeholder="Ex: Curitiba">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalCliente')">Cancelar</button>
+      <button class="btn btn-gold" onclick="addCliente()">Salvar Cliente</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════ MODAL EDITAR FILAMENTO ═══════ -->
+<div class="modal-overlay" id="modalEditFilamento">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Filamento</div>
+    <input type="hidden" id="editFilId">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="editFilTipo" onchange="updateEditFilVariacao()">
+          <option value="PLA">PLA</option>
+          <option value="PETG">PETG</option>
+          <option value="TPU">TPU</option>
+        </select>
+      </div>
+      <div class="form-group" id="editFilVariacaoGroup">
+        <label>Variação (PLA)</label>
+        <select id="editFilVariacao">
+          <option>Normal</option><option>Matte</option><option>Silk</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Marca</label>
+        <select id="editFilMarca">
+          <option>STLFLIX</option><option>Creality</option><option>Bambu Lab</option>
+          <option>Elegoo</option><option>Voolt3D</option><option>3n3</option><option>Dynalabs</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cor / Nome</label>
+        <input type="text" id="editFilCor">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Variação de Cor</label>
+        <select id="editFilCorTipo">
+          <option>Cor Única</option><option>Dual Color</option><option>Tri Color</option><option>Rainbow</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="editFilStatus" onchange="toggleEditPct()">
+          <option value="Fechado">Rolo Fechado</option>
+          <option value="Aberto">Rolo Aberto</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" id="editFilQtdGroup">
+        <label>Quantidade (rolos fechados)</label>
+        <input type="number" id="editFilQtd" min="0">
+      </div>
+      <div class="form-group" id="editFilPctGroup" style="display:none">
+        <label>Restante no rolo aberto (%)</label>
+        <input type="number" id="editFilPct" min="0" max="100">
+      </div>
+      <div class="form-group">
+        <label>Custo do Rolo (R$)</label>
+        <input type="number" id="editFilCusto" step="0.01">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditFilamento')">Cancelar</button>
+      <button class="btn btn-gold" onclick="saveEditFilamento()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL AJUSTE DE QUANTIDADE ═══════ -->
+<div class="modal-overlay" id="modalAjuste">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">⚖️ Ajustar Estoque</div>
+    <input type="hidden" id="ajusteFilId">
+    <div id="ajusteFilInfo" style="background:var(--gray-100);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px"></div>
+
+    <div class="cat-tabs" style="margin-bottom:16px">
+      <div class="cat-tab active" id="ajusteBtnAdd" onclick="setAjusteTipo('add',this)">➕ Adicionar kg</div>
+      <div class="cat-tab" id="ajusteBtnSub" onclick="setAjusteTipo('sub',this)">➖ Subtrair kg</div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group" id="ajusteRolosGroup">
+        <label>Rolos inteiros (1kg cada)</label>
+        <input type="number" id="ajusteRolos" value="1" min="0" step="1">
+      </div>
+      <div class="form-group" id="ajustePctGroup" style="display:none">
+        <label>Novo percentual restante (%)</label>
+        <input type="number" id="ajustePct" value="100" min="0" max="100">
+      </div>
+    </div>
+
+    <div id="ajustePreview" style="margin-top:8px;font-size:12px;color:var(--gray-400)"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAjuste')">Cancelar</button>
+      <button class="btn btn-gold" onclick="aplicarAjuste()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ DEDUP MODAL ═══════ -->
+<div class="modal-overlay" id="modalDedup">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">🔀 Corrigir Duplicatas</div>
+    <p class="text-muted" style="margin-bottom:16px">O sistema detectou nomes parecidos. Para cada grupo, escolha o nome correto — todos os pedidos serão agrupados sob ele.</p>
+    <div id="dedupGroups"></div>
+    <div id="dedupEmpty" style="display:none" class="alert alert-success">✅ Nenhuma duplicata detectada. Base de clientes limpa!</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalDedup')">Fechar</button>
+      <button class="btn btn-gold" id="dedupApplyBtn" onclick="applyDedup()">Aplicar Correções</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ DEDUP PRODUTOS MODAL ═══════ -->
+<div class="modal-overlay" id="modalDedupProd">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">🔀 Corrigir Duplicatas — Produtos</div>
+    <p class="text-muted" style="margin-bottom:16px">Nomes de produtos parecidos encontrados. Escolha o nome canônico para cada grupo.</p>
+    <div id="dedupProdGroups"></div>
+    <div id="dedupProdEmpty" style="display:none" class="alert alert-success">✅ Nenhuma duplicata de produto detectada.</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalDedupProd')">Fechar</button>
+      <button class="btn btn-gold" onclick="applyDedupProd()">Aplicar Correções</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ SCANNER MODAL ═══════ -->
+<div class="scanner-overlay" id="scannerOverlay">
+  <div class="scanner-box">
+    <div class="scanner-header">
+      <div class="scanner-title">📷 Leitor de Código / QR Code</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeScanner()" style="color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.2)">✕ Fechar</button>
+    </div>
+    <div class="scanner-video-wrap">
+      <video id="scannerVideo" autoplay playsinline muted></video>
+      <div class="scanner-aim" id="scannerAim" style="display:none">
+        <div class="scanner-aim-inner"></div>
+      </div>
+    </div>
+    <div class="scanner-status" id="scannerStatus">Iniciando câmera…</div>
+
+    <!-- Manual entry fallback -->
+    <div id="manualEntry" style="display:none;padding:0 20px 14px">
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Digitar código manualmente</div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="manualBarcodeInput" placeholder="Ex: 7898357410023"
+          style="flex:1;padding:9px 12px;border-radius:6px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;font-size:14px;font-family:monospace"
+          onkeydown="if(event.key==='Enter')submitManualBarcode()">
+        <button class="btn btn-gold btn-sm" onclick="submitManualBarcode()">OK</button>
+      </div>
+    </div>
+
+    <div class="scanner-result" id="scannerResult">
+      <div style="background:rgba(201,148,10,0.1);border:1px solid var(--gold);border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--gold-light);margin-bottom:4px">CÓDIGO DETECTADO</div>
+        <div id="scannedCode" style="font-family:monospace;font-size:14px;color:#fff;font-weight:600"></div>
+        <div id="scannedInfo" style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:4px"></div>
+      </div>
+    </div>
+    <div class="scanner-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeScanner()" style="color:rgba(255,255,255,0.6);border-color:rgba(255,255,255,0.15)">Cancelar</button>
+      <button class="btn btn-gold btn-sm" id="scannerUseBtn" onclick="useScanResult()" style="display:none">Usar este código →</button>
+      <div id="scannerActions" style="display:none;gap:8px;align-items:center">
+        <button class="btn btn-sm" style="background:#27AE60;color:#fff" onclick="scannerAjustar()">⚖️ Ajustar Estoque</button>
+        <button class="btn btn-sm btn-gold" onclick="scannerCadastrarNovo()">+ Novo Cadastro</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// TOAST NOTIFICATION
+// ════════════════════════════════════════════════════
+function showToast(msg, type='success') {
+  let toast = document.getElementById('toastMsg');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toastMsg';
+    toast.style.cssText = `
+      position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+      padding:12px 24px; border-radius:30px; font-size:13px; font-weight:600;
+      z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.25);
+      transition:opacity 0.4s; pointer-events:none; white-space:nowrap;
+    `;
+    document.body.appendChild(toast);
+  }
+  toast.style.background = type === 'success' ? '#27AE60' : type === 'warning' ? '#E67E22' : '#C0392B';
+  toast.style.color = '#fff';
+  toast.style.opacity = '1';
+  toast.textContent = msg;
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 2800);
+}
+
+// ════════════════════════════════════════════════════
+// DATA STORE
+// ════════════════════════════════════════════════════
+let DB = {
+  filamentos: [],
+  produtos: [],
+  pedidos: [],
+  clientes: [],
+  despesas: [],
+  barcodes: {}
+};
+
+// ════════════════════════════════════════════════════
+// GOOGLE SHEETS SYNC
+// ════════════════════════════════════════════════════
+const GS_URL = 'https://script.google.com/macros/s/AKfycbwzH3r748SH-FdPn_iJPbu91l4OaUCNCcXmwrCR5SfXaYZsWBeEcOvcsxtvHuy8HHkJ/exec';
+
+let syncPending   = false;
+let syncTimer     = null;
+let lastSyncTime  = null;
+
+// Salva localmente SEMPRE (instantâneo) e agenda sync na nuvem
+function saveDB() {
+  localStorage.setItem('vangardis_db', JSON.stringify(DB));
+  scheduleSyncToCloud();
+}
+
+// Agenda o envio para a nuvem com debounce de 2s
+// (evita múltiplas chamadas em sequência)
+function scheduleSyncToCloud() {
+  syncPending = true;
+  setSyncStatus('⏳ Salvando…', 'warning');
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncToCloud(), 2000);
+}
+
+async function syncToCloud() {
+  try {
+    const res = await fetch(GS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'save', data: DB })
+    });
+    const json = await res.json();
+    if (json.ok) {
+      lastSyncTime = new Date();
+      setSyncStatus('☁️ Sincronizado ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), 'success');
+      syncPending = false;
+    } else {
+      setSyncStatus('⚠️ Erro ao sincronizar', 'danger');
+    }
+  } catch(e) {
+    setSyncStatus('⚠️ Sem conexão — dados salvos localmente', 'warning');
+  }
+}
+
+// Carrega da nuvem; usa localStorage como fallback offline
+async function loadDB() {
+  // Primeiro carrega local para mostrar algo imediatamente
+  const local = localStorage.getItem('vangardis_db');
+  if (local) { try { DB = { barcodes:{}, ...JSON.parse(local) }; } catch(_){} }
+
+  setSyncStatus('🔄 Carregando da nuvem…', 'warning');
+  try {
+    const res  = await fetch(GS_URL + '?action=load');
+    const json = await res.json();
+    if (json && json.pedidos !== undefined) {
+      DB = { barcodes:{}, ...json };
+      localStorage.setItem('vangardis_db', JSON.stringify(DB));
+      lastSyncTime = new Date();
+      setSyncStatus('☁️ Sincronizado ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), 'success');
+    } else {
+      setSyncStatus('⚠️ Usando dados locais', 'warning');
+    }
+  } catch(e) {
+    setSyncStatus('📴 Offline — usando dados locais', 'warning');
+  }
+  renderAll();
+}
+
+function setSyncStatus(msg, type) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const colors = { success:'#27AE60', warning:'#E67E22', danger:'#C0392B' };
+  el.textContent = msg;
+  el.style.color = colors[type] || '#999';
+}
+
+// Força sincronização manual
+async function forceSyncFromCloud() {
+  setSyncStatus('🔄 Sincronizando…', 'warning');
+  try {
+    const res  = await fetch(GS_URL + '?action=load');
+    const json = await res.json();
+    if (json && json.pedidos !== undefined) {
+      DB = { barcodes:{}, ...json };
+      localStorage.setItem('vangardis_db', JSON.stringify(DB));
+      lastSyncTime = new Date();
+      setSyncStatus('☁️ Sincronizado ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), 'success');
+      renderAll();
+      showToast('✅ Dados atualizados da nuvem!');
+    }
+  } catch(e) {
+    setSyncStatus('⚠️ Sem conexão', 'danger');
+    showToast('⚠️ Sem conexão com a nuvem.', 'warning');
+  }
+}
+
+// ════════════════════════════════════════════════════
+// NAV
+// ════════════════════════════════════════════════════
+const TAB_TITLES = {
+  overview:'Visão Geral', filamentos:'Filamentos', produtos:'Produtos Acabados',
+  pedidos:'Pedidos', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
+};
+function goTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick')?.includes("'"+id+"'")) n.classList.add('active');
+  });
+  document.getElementById('topbarTitle').textContent = TAB_TITLES[id];
+  renderAll();
+  if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+}
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+
+// ════════════════════════════════════════════════════
+// MODALS
+// ════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ════════════════════════════════════════════════════
+// BARCODE / QR SCANNER
+// ════════════════════════════════════════════════════
+let scannerStream   = null;
+let scannerStopFn   = null;
+let lastScannedCode = null;
+let lastScannedData = null;
+
+async function openScanner() {
+  document.getElementById('scannerOverlay').classList.add('open');
+  setStatus('Solicitando acesso à câmera…', false);
+  resetScannerUI();
+
+  // Prefer rear camera on mobile
+  const constraints = [
+    { video: { facingMode: { exact: 'environment' }, width:{ideal:1280}, height:{ideal:720} } },
+    { video: { facingMode: 'environment' } },
+    { video: true }
+  ];
+
+  for (const c of constraints) {
+    try { scannerStream = await navigator.mediaDevices.getUserMedia(c); break; }
+    catch (_) {}
+  }
+
+  if (!scannerStream) {
+    setStatus('⚠️ Câmera bloqueada. Permita o acesso à câmera nas configurações do navegador.', false);
+    showManualEntry();
+    return;
+  }
+
+  const video = document.getElementById('scannerVideo');
+  video.srcObject = scannerStream;
+  try { await video.play(); } catch(_) {}
+  setStatus('📷 Aponte para o código de barras ou QR Code…', true);
+
+  // Try native BarcodeDetector first (Chrome Android, Safari 17.4+)
+  if ('BarcodeDetector' in window) {
+    startBarcodeDetector(video);
+  } else {
+    startZXingFallback(video);
+  }
+}
+
+function startBarcodeDetector(video) {
+  let running = true;
+  const formats = ['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e','data_matrix','itf','pdf_417'];
+  const supported = BarcodeDetector.getSupportedFormats ? BarcodeDetector.getSupportedFormats() : Promise.resolve(formats);
+
+  supported.then(fmts => {
+    const detector = new BarcodeDetector({ formats: fmts.filter(f => formats.includes(f)) });
+    scannerStopFn = () => { running = false; };
+
+    async function tick() {
+      if (!running) return;
+      if (video.readyState >= 2) {
+        try {
+          const codes = await detector.detect(video);
+          if (codes.length > 0) { running = false; onCodeDetected(codes[0].rawValue); return; }
+        } catch (_) {}
+      }
+      requestAnimationFrame(tick);
+    }
+    tick();
+  }).catch(() => startZXingFallback(video));
+}
+
+function startZXingFallback(video) {
+  // Try ZXing library
+  const ZX = window.ZXing || window['@zxing/library'];
+  if (ZX && ZX.MultiFormatReader) {
+    try {
+      const hints = new Map();
+      hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [
+        ZX.BarcodeFormat.QR_CODE, ZX.BarcodeFormat.DATA_MATRIX,
+        ZX.BarcodeFormat.EAN_13,  ZX.BarcodeFormat.EAN_8,
+        ZX.BarcodeFormat.CODE_128,ZX.BarcodeFormat.CODE_39,
+        ZX.BarcodeFormat.UPC_A,   ZX.BarcodeFormat.UPC_E,
+        ZX.BarcodeFormat.ITF,
+      ]);
+      hints.set(ZX.DecodeHintType.TRY_HARDER, true);
+      const reader = new ZX.MultiFormatReader();
+      reader.setHints(hints);
+
+      const canvas = document.createElement('canvas');
+      const ctx    = canvas.getContext('2d', { willReadFrequently: true });
+      let running  = true;
+      scannerStopFn = () => { running = false; };
+
+      function tick() {
+        if (!running) return;
+        if (video.readyState >= 2) {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+          try {
+            const lum = new ZX.HTMLCanvasElementLuminanceSource(canvas);
+            const bw  = new ZX.BinaryBitmap(new ZX.HybridBinarizer(lum));
+            const res = reader.decode(bw);
+            running = false; onCodeDetected(res.getText()); return;
+          } catch (_) {}
+        }
+        requestAnimationFrame(tick);
+      }
+      tick(); return;
+    } catch (_) {}
+  }
+
+  // Last resort: manual input only
+  setStatus('⚠️ Scanner automático não suportado neste navegador. Use a entrada manual abaixo.', false);
+  showManualEntry();
+}
+
+function showManualEntry() {
+  document.getElementById('manualEntry').style.display = 'block';
+}
+
+function setStatus(msg, scanning) {
+  document.getElementById('scannerStatus').textContent = msg;
+  const aim = document.getElementById('scannerAim');
+  if (aim) aim.style.display = scanning ? 'flex' : 'none';
+}
+
+function resetScannerUI() {
+  document.getElementById('scannerResult').classList.remove('show');
+  document.getElementById('scannerUseBtn').style.display  = 'none';
+  document.getElementById('scannerActions').style.display = 'none';
+  document.getElementById('manualEntry').style.display    = 'none';
+  if (document.getElementById('manualBarcodeInput'))
+    document.getElementById('manualBarcodeInput').value = '';
+  lastScannedCode = null; lastScannedData = null;
+}
+
+function scannerAjustar() {
+  const filId = parseInt(document.getElementById('scannerActions').dataset.filId);
+  closeScanner();
+  if (filId) {
+    openAjusteModal(filId);
+  } else {
+    showToast('⚠️ Filamento não encontrado no estoque. Cadastre primeiro.','warning');
+    useScanResult();
+  }
+}
+
+function scannerCadastrarNovo() {
+  useScanResult();
+}
+
+function onCodeDetected(code) {
+  if (!code) return;
+  lastScannedCode = code;
+  if (scannerStopFn) { scannerStopFn(); scannerStopFn = null; }
+
+  const known = DB.barcodes[code];
+
+  if (known) {
+    // Código já cadastrado — oferece opção de ajustar quantidade OU usar no formulário
+    lastScannedData = known;
+    document.getElementById('scannedCode').textContent = code;
+    // Procura o filamento cadastrado para mostrar info
+    const fil = DB.filamentos.find(f =>
+      f.marca===known.marca && f.cor===known.cor && f.tipo===known.tipo
+    );
+    const estoqueInfo = fil
+      ? (fil.status==='Fechado' ? `${fil.qtd} rolo(s) em estoque` : `${fil.pct}% no rolo aberto`)
+      : 'não encontrado no estoque atual';
+    document.getElementById('scannedInfo').textContent =
+      `✅ ${known.tipo}${known.variacao!=='—'?' '+known.variacao:''} · ${known.cor} · ${known.marca} — ${estoqueInfo}`;
+    setStatus('Código reconhecido! O que deseja fazer?', false);
+    // Troca botão "Usar →" por dois botões de ação
+    const btn = document.getElementById('scannerUseBtn');
+    btn.style.display = 'none';
+    document.getElementById('scannerActions').style.display = 'flex';
+    // Guarda id do filamento para ajuste
+    document.getElementById('scannerActions').dataset.filId = fil ? fil.id : '';
+    document.getElementById('scannerResult').classList.add('show');
+  } else {
+    // Código novo — fecha scanner e abre formulário automaticamente
+    lastScannedData = null;
+    closeScanner();
+    openModal('modalFilamento');
+    document.getElementById('modalFilamento').dataset.scannedCode = code;
+
+    // Remove alerta antigo se existir
+    document.getElementById('scannerFillAlert')?.remove();
+    const info = document.createElement('div');
+    info.id = 'scannerFillAlert';
+    info.className = 'alert alert-warning';
+    info.textContent = `🆕 Código ${code} lido — preencha os dados e salve para memorizar.`;
+    const firstRow = document.querySelector('#modalFilamento .form-row');
+    if (firstRow) firstRow.parentNode.insertBefore(info, firstRow);
+  }
+}
+
+function useScanResult() {
+  // Só chamado para códigos JÁ CONHECIDOS — novos abrem o form direto
+  closeScanner();
+  document.getElementById('scannerFillAlert')?.remove();
+  openModal('modalFilamento');
+  document.getElementById('modalFilamento').dataset.scannedCode = lastScannedCode;
+
+  const info = document.createElement('div');
+  info.id = 'scannerFillAlert';
+
+  if (lastScannedData) {
+    const d = lastScannedData;
+    document.getElementById('filTipo').value    = d.tipo;
+    updateFilVariacao();
+    if (d.tipo==='PLA') document.getElementById('filVariacao').value = d.variacao;
+    document.getElementById('filMarca').value   = d.marca;
+    document.getElementById('filCor').value     = d.cor;
+    document.getElementById('filCorTipo').value = d.corTipo;
+    if (d.custo) document.getElementById('filCusto').value = d.custo;
+    info.className = 'alert alert-success';
+    info.textContent = `✅ Campos preenchidos automaticamente (código ${lastScannedCode})`;
+  } else {
+    info.className = 'alert alert-warning';
+    info.textContent = `🆕 Código ${lastScannedCode} — preencha e salve para memorizar.`;
+  }
+
+  const firstRow = document.querySelector('#modalFilamento .form-row');
+  if (firstRow && !document.getElementById('scannerFillAlert'))
+    firstRow.parentNode.insertBefore(info, firstRow);
+}
+
+function closeScanner() {
+  document.getElementById('scannerOverlay').classList.remove('open');
+  if (scannerStopFn) { scannerStopFn(); scannerStopFn = null; }
+  if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; }
+  document.getElementById('scannerVideo').srcObject = null;
+}
+
+// Manual barcode entry inside scanner
+function submitManualBarcode() {
+  const val = document.getElementById('manualBarcodeInput').value.trim();
+  if (val) onCodeDetected(val);
+}
+
+// ════════════════════════════════════════════════════
+// FORM RESET HELPERS
+// ════════════════════════════════════════════════════
+function clearFilamentoForm() {
+  document.getElementById('filTipo').value    = 'PLA';
+  updateFilVariacao();
+  document.getElementById('filVariacao').value = 'Normal';
+  document.getElementById('filMarca').value   = 'STLFLIX';
+  document.getElementById('filCor').value     = '';
+  document.getElementById('filCorTipo').value = 'Cor Única';
+  document.getElementById('filStatus').value  = 'Fechado';
+  document.getElementById('filQtd').value     = '1';
+  document.getElementById('filPct').value     = '100';
+  document.getElementById('filCusto').value   = '';
+  togglePct();
+  document.getElementById('scannerFillAlert')?.remove();
+  delete document.getElementById('modalFilamento').dataset.scannedCode;
+}
+
+function clearProdutoForm() {
+  document.getElementById('prodCat').value      = document.getElementById('prodCat').options[0].value;
+  document.getElementById('prodVar').value      = '';
+  document.getElementById('prodQtd').value      = '1';
+  document.getElementById('prodCusto').value    = '';
+  document.getElementById('prodPreco').value    = '';
+  document.getElementById('prodFilamento').value = '';
+}
+
+function clearPedidoForm() {
+  document.getElementById('pedCliente').value = '';
+  document.getElementById('pedCidade').value  = '';
+  document.getElementById('pedProduto').value = '';
+  document.getElementById('pedQtd').value     = '1';
+  document.getElementById('pedValor').value   = '';
+  document.getElementById('pedPgto').value    = 'Pix';
+  document.getElementById('pedStatus').value  = 'Em produção';
+  document.getElementById('pedData').value    = new Date().toISOString().slice(0,10);
+}
+
+function clearClienteForm() {
+  document.getElementById('cliNome').value   = '';
+  document.getElementById('cliCidade').value = '';
+}
+
+// ════════════════════════════════════════════════════
+// FILAMENTOS
+// ════════════════════════════════════════════════════
+function updateFilVariacao() {
+  document.getElementById('filVariacaoGroup').style.display =
+    document.getElementById('filTipo').value === 'PLA' ? '' : 'none';
+}
+function togglePct() {
+  const s = document.getElementById('filStatus').value;
+  document.getElementById('filQtdGroup').style.display = s === 'Fechado' ? '' : 'none';
+  document.getElementById('filPctGroup').style.display = s === 'Aberto'  ? '' : 'none';
+}
+
+function addFilamento() {
+  const tipo    = document.getElementById('filTipo').value;
+  const variacao= tipo === 'PLA' ? document.getElementById('filVariacao').value : '—';
+  const status  = document.getElementById('filStatus').value;
+  const marca   = document.getElementById('filMarca').value;
+  const cor     = document.getElementById('filCor').value.trim();
+  const corTipo = document.getElementById('filCorTipo').value;
+  const custo   = parseFloat(document.getElementById('filCusto').value) || 0;
+
+  if (!cor) { showToast('⚠️ Informe a cor do filamento.', 'warning'); return; }
+
+  DB.filamentos.push({
+    id: Date.now(), tipo, variacao, marca, cor, corTipo, status,
+    qtd: status === 'Fechado' ? parseInt(document.getElementById('filQtd').value) || 1 : 0,
+    pct: status === 'Aberto'  ? parseInt(document.getElementById('filPct').value) || 100 : 100,
+    custo
+  });
+
+  const code = document.getElementById('modalFilamento').dataset.scannedCode;
+  if (code) DB.barcodes[code] = { tipo, variacao, marca, cor, corTipo, custo };
+
+  saveDB();
+  showToast('✅ Filamento salvo! Pronto para próximo cadastro.');
+  clearFilamentoForm();
+  renderAll();
+  // Modal stays open for next entry — user clicks Fechar when done
+}
+
+let filCatFilter = 'Todos';
+function setFilCat(cat, el) {
+  filCatFilter = cat;
+  document.querySelectorAll('#filCatTabs .cat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderFilamentos();
+}
+function delFilamento(id) {
+  if (!confirm('Remover este filamento?')) return;
+  DB.filamentos = DB.filamentos.filter(f => f.id !== id);
+  saveDB(); renderAll();
+}
+
+function renderFilamentos() {
+  // KPI de valor do estoque
+  const valFil   = calcValorEstoqueFilamentos();
+  const totalKg  = DB.filamentos.reduce((s,f) => s + (f.status==='Fechado'?(f.qtd||0):((f.pct||0)/100)), 0);
+  const emAlerta = DB.filamentos.filter(f=>(f.status==='Aberto'&&f.pct<=20)||(f.status==='Fechado'&&f.qtd===0)).length;
+  const kpiEl = document.getElementById('kpiFilamentos');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid #2980B9">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Valor do Estoque</div>
+      <div class="kpi-value">R$ ${valFil.toFixed(2)}</div>
+      <div class="kpi-sub">Custo de aquisição dos rolos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">⚖️</div>
+      <div class="kpi-label">Total em kg</div>
+      <div class="kpi-value">${totalKg.toFixed(2)} kg</div>
+      <div class="kpi-sub">${DB.filamentos.length} tipo(s) cadastrado(s)</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid ${emAlerta>0?'var(--danger)':'var(--success)'}">
+      <div class="kpi-icon">${emAlerta>0?'⚠️':'✅'}</div>
+      <div class="kpi-label">Alertas de Estoque</div>
+      <div class="kpi-value" style="color:${emAlerta>0?'var(--danger)':'var(--success)'}">${emAlerta}</div>
+      <div class="kpi-sub">${emAlerta>0?emAlerta+' item(s) abaixo do mínimo':'Todos os níveis OK'}</div>
+    </div>
+  `;
+  const types  = ['Todos','PLA','PETG','TPU'];
+  document.getElementById('filCatTabs').innerHTML = types.map(t =>
+    `<div class="cat-tab ${t===filCatFilter?'active':''}" onclick="setFilCat('${t}',this)">${t}</div>`
+  ).join('');
+
+  const data  = filCatFilter === 'Todos' ? DB.filamentos : DB.filamentos.filter(f => f.tipo === filCatFilter);
+  const tbody = document.getElementById('filamentosTbody');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--gray-400)">Nenhum filamento cadastrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(f => {
+    const nivel = f.status === 'Fechado' ? 100 : f.pct;
+    const color = nivel <= 20 ? 'var(--danger)' : nivel <= 50 ? 'var(--warning)' : 'var(--success)';
+    const qtdStr= f.status === 'Fechado' ? `${f.qtd} rolo(s)` : `${f.pct}% restante`;
+    return `<tr>
+      <td><span class="badge badge-navy">${f.tipo}</span></td>
+      <td>${f.variacao}</td><td>${f.marca}</td>
+      <td>${nivel<=20?'⚠️ ':''}${f.cor} <span class="text-muted">(${f.corTipo})</span></td>
+      <td><span class="badge ${f.status==='Fechado'?'badge-success':'badge-warning'}">${f.status}</span></td>
+      <td>${qtdStr}</td>
+      <td style="min-width:100px">
+        <div class="progress-bar"><div class="progress-fill" style="width:${nivel}%;background:${color}"></div></div>
+        <div class="text-muted">${nivel}%</div>
+      </td>
+      <td>
+        <button class="btn btn-sm btn-ghost" onclick="editFilamento(${f.id})" title="Editar">✏️</button>
+        <button class="btn btn-sm" style="background:var(--success);color:#fff;margin:0 2px" onclick="openAjusteModal(${f.id})" title="Ajustar quantidade">⚖️</button>
+        <button class="btn btn-sm btn-danger" onclick="delFilamento(${f.id})" title="Remover">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+  renderFilCharts();
+  renderBarcodeLibrary();
+}
+
+function renderBarcodeLibrary() {
+  const codes   = Object.entries(DB.barcodes || {});
+  const countEl = document.getElementById('barcodeCount');
+  const listEl  = document.getElementById('barcodeLibraryList');
+  if (!countEl || !listEl) return;
+  countEl.textContent = `${codes.length} código${codes.length!==1?'s':''} memorizado${codes.length!==1?'s':''}`;
+  if (!codes.length) {
+    listEl.innerHTML = '<div class="text-muted">Nenhum código memorizado ainda. Leia o código de barras de um rolo para começar.</div>';
+    return;
+  }
+  listEl.innerHTML = codes.map(([code, d]) => `
+    <div class="barcode-library-item">
+      <div>
+        <div style="font-weight:600;font-size:13px">${d.tipo} ${d.variacao!=='—'?d.variacao:''} · ${d.cor} <span class="text-muted">(${d.corTipo})</span></div>
+        <div style="font-size:12px;color:var(--gray-400)">${d.marca}${d.custo?' · R$ '+d.custo.toFixed(2)+'/rolo':''}</div>
+        <div class="barcode-code">📊 ${code}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="delBarcode('${code}')">✕</button>
+    </div>`).join('');
+}
+function delBarcode(code) {
+  if (!confirm('Remover este código da biblioteca?')) return;
+  delete DB.barcodes[code]; saveDB(); renderBarcodeLibrary();
+}
+
+let chartFilTipo=null, chartFilMarca=null, chartFilCores=null;
+function renderFilCharts() {
+  const tipoCount={}, marcaCount={}, coresMap={};
+  DB.filamentos.forEach(f => {
+    // kg disponíveis: rolo fechado = qtd kg, aberto = pct/100 kg
+    const kg = f.status==='Fechado' ? (f.qtd||0) : ((f.pct||0)/100);
+    tipoCount[f.tipo]   = (tipoCount[f.tipo]  ||0) + (f.status==='Fechado'?f.qtd:1);
+    marcaCount[f.marca] = (marcaCount[f.marca]||0) + 1;
+    const corKey = f.cor || 'Sem cor';
+    coresMap[corKey]    = (coresMap[corKey]   ||0) + kg;
+  });
+
+  const COLORS = ['#1B2A4A','#C9940A','#27AE60','#2980B9','#8E44AD','#E67E22','#C0392B','#16A085','#E74C3C','#F39C12','#1ABC9C','#9B59B6'];
+
+  if(chartFilTipo)  chartFilTipo.destroy();
+  if(chartFilMarca) chartFilMarca.destroy();
+  if(chartFilCores) chartFilCores.destroy();
+
+  chartFilTipo = new Chart(document.getElementById('chartFilTipo'), {
+    type:'doughnut',
+    data:{labels:Object.keys(tipoCount), datasets:[{data:Object.values(tipoCount),backgroundColor:COLORS,borderWidth:2,borderColor:'#fff'}]},
+    options:{plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},cutout:'60%'}
+  });
+
+  chartFilMarca = new Chart(document.getElementById('chartFilMarca'), {
+    type:'bar',
+    data:{labels:Object.keys(marcaCount), datasets:[{label:'Qtd',data:Object.values(marcaCount),backgroundColor:'#C9940A',borderRadius:6}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0ebe3'}},x:{grid:{display:false}}}}
+  });
+
+  // Cores ordenadas por kg desc
+  const coresSorted = Object.entries(coresMap).sort((a,b)=>b[1]-a[1]);
+  const coresLabels = coresSorted.map(([k])=>k);
+  const coresVals   = coresSorted.map(([,v])=>+v.toFixed(2));
+  // Generate colors dynamically based on color name hints
+  const coresBg = coresLabels.map((nome,i) => {
+    const n = nome.toLowerCase();
+    if(n.includes('bran') || n.includes('white')) return '#E8E8E8';
+    if(n.includes('pret') || n.includes('black')) return '#333333';
+    if(n.includes('verm') || n.includes('red'))   return '#E74C3C';
+    if(n.includes('azul') || n.includes('blue'))  return '#2980B9';
+    if(n.includes('verd') || n.includes('green')) return '#27AE60';
+    if(n.includes('amar') || n.includes('yell'))  return '#F1C40F';
+    if(n.includes('laran') || n.includes('orang'))return '#E67E22';
+    if(n.includes('rosa') || n.includes('pink'))  return '#E91E8C';
+    if(n.includes('roxo') || n.includes('purp') || n.includes('violet')) return '#8E44AD';
+    if(n.includes('cinz') || n.includes('grey') || n.includes('gray'))   return '#95A5A6';
+    if(n.includes('marr') || n.includes('brown')) return '#795548';
+    if(n.includes('silk'))  return '#C9940A';
+    if(n.includes('rainbow') || n.includes('arco')) return '#FF6B9D';
+    return COLORS[i % COLORS.length];
+  });
+
+  chartFilCores = new Chart(document.getElementById('chartFilCores'), {
+    type:'bar',
+    data:{
+      labels: coresLabels,
+      datasets:[{
+        label:'kg disponíveis',
+        data: coresVals,
+        backgroundColor: coresBg,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: coresBg.map(c => c+'CC')
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>`${ctx.parsed.x.toFixed(2)} kg`}}
+      },
+      scales:{
+        x:{beginAtZero:true, grid:{color:'#f0ebe3'}, title:{display:true,text:'kg',font:{size:11}}},
+        y:{grid:{display:false}, ticks:{font:{size:11}}}
+      }
+    }
+  });
+}
+
+// ════════════════════════════════════════════════════
+// EDITAR FILAMENTO
+// ════════════════════════════════════════════════════
+function editFilamento(id) {
+  const f = DB.filamentos.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('editFilId').value      = id;
+  document.getElementById('editFilTipo').value    = f.tipo;
+  updateEditFilVariacao();
+  if (f.tipo==='PLA') document.getElementById('editFilVariacao').value = f.variacao;
+  document.getElementById('editFilMarca').value   = f.marca;
+  document.getElementById('editFilCor').value     = f.cor;
+  document.getElementById('editFilCorTipo').value = f.corTipo;
+  document.getElementById('editFilStatus').value  = f.status;
+  document.getElementById('editFilQtd').value     = f.qtd||0;
+  document.getElementById('editFilPct').value     = f.pct||100;
+  document.getElementById('editFilCusto').value   = f.custo||0;
+  toggleEditPct();
+  openModal('modalEditFilamento');
+}
+
+function updateEditFilVariacao() {
+  const t = document.getElementById('editFilTipo').value;
+  document.getElementById('editFilVariacaoGroup').style.display = t==='PLA' ? '' : 'none';
+}
+
+function toggleEditPct() {
+  const s = document.getElementById('editFilStatus').value;
+  document.getElementById('editFilQtdGroup').style.display  = s==='Fechado' ? '' : 'none';
+  document.getElementById('editFilPctGroup').style.display  = s==='Aberto'  ? '' : 'none';
+}
+
+function saveEditFilamento() {
+  const id = parseInt(document.getElementById('editFilId').value);
+  const f  = DB.filamentos.find(x => x.id === id);
+  if (!f) return;
+  const tipo = document.getElementById('editFilTipo').value;
+  f.tipo     = tipo;
+  f.variacao = tipo==='PLA' ? document.getElementById('editFilVariacao').value : '—';
+  f.marca    = document.getElementById('editFilMarca').value;
+  f.cor      = document.getElementById('editFilCor').value;
+  f.corTipo  = document.getElementById('editFilCorTipo').value;
+  f.status   = document.getElementById('editFilStatus').value;
+  f.qtd      = parseInt(document.getElementById('editFilQtd').value)||0;
+  f.pct      = parseInt(document.getElementById('editFilPct').value)||100;
+  f.custo    = parseFloat(document.getElementById('editFilCusto').value)||0;
+  saveDB(); closeModal('modalEditFilamento'); renderAll();
+  showToast('✅ Filamento atualizado!');
+}
+
+// ════════════════════════════════════════════════════
+// AJUSTE DE QUANTIDADE (+ / - kg por scanner ou manual)
+// ════════════════════════════════════════════════════
+let ajusteTipo = 'add'; // 'add' ou 'sub'
+
+function openAjusteModal(id) {
+  const f = DB.filamentos.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('ajusteFilId').value = id;
+  ajusteTipo = 'add';
+  document.getElementById('ajusteBtnAdd').classList.add('active');
+  document.getElementById('ajusteBtnSub').classList.remove('active');
+
+  // Info do filamento
+  document.getElementById('ajusteFilInfo').innerHTML =
+    `<strong>${f.tipo} ${f.variacao!=='—'?f.variacao:''} ${f.cor}</strong> · ${f.marca}<br>
+     <span class="text-muted">Status atual: ${f.status==='Fechado'?f.qtd+' rolo(s) fechado(s)':f.pct+'% no rolo aberto'}</span>`;
+
+  // Mostra campos corretos para o status
+  updateAjusteCampos(f);
+  updateAjustePreview(f);
+  openModal('modalAjuste');
+}
+
+function setAjusteTipo(tipo, el) {
+  ajusteTipo = tipo;
+  document.querySelectorAll('#modalAjuste .cat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const id = parseInt(document.getElementById('ajusteFilId').value);
+  const f  = DB.filamentos.find(x => x.id === id);
+  if (f) { updateAjusteCampos(f); updateAjustePreview(f); }
+}
+
+function updateAjusteCampos(f) {
+  const rolosGroup = document.getElementById('ajusteRolosGroup');
+  const pctGroup   = document.getElementById('ajustePctGroup');
+  if (f.status === 'Fechado') {
+    rolosGroup.style.display = '';
+    pctGroup.style.display   = 'none';
+    document.querySelector('#ajusteRolosGroup label').textContent =
+      ajusteTipo === 'add' ? 'Rolos a adicionar (1kg cada)' : 'Rolos a remover';
+    document.getElementById('ajusteRolos').value = 1;
+  } else {
+    // Rolo aberto — ajusta por percentual
+    rolosGroup.style.display = 'none';
+    pctGroup.style.display   = '';
+    document.getElementById('ajustePct').value = f.pct;
+  }
+}
+
+function updateAjustePreview(f) {
+  const preview = document.getElementById('ajustePreview');
+  if (f.status === 'Fechado') {
+    const delta = parseInt(document.getElementById('ajusteRolos').value)||0;
+    const novo  = ajusteTipo==='add' ? f.qtd+delta : Math.max(0, f.qtd-delta);
+    preview.innerHTML = `Resultado: <strong>${f.qtd} → ${novo} rolo(s)</strong>`;
+  } else {
+    const novoPct = parseInt(document.getElementById('ajustePct').value)||0;
+    preview.innerHTML = `Resultado: <strong>${f.pct}% → ${novoPct}%</strong>`;
+  }
+}
+
+// Chama preview ao mudar inputs
+document.addEventListener('input', e => {
+  if (e.target.id==='ajusteRolos' || e.target.id==='ajustePct') {
+    const id = parseInt(document.getElementById('ajusteFilId').value);
+    const f  = DB.filamentos.find(x => x.id === id);
+    if (f) updateAjustePreview(f);
+  }
+});
+
+function aplicarAjuste() {
+  const id = parseInt(document.getElementById('ajusteFilId').value);
+  const f  = DB.filamentos.find(x => x.id === id);
+  if (!f) return;
+
+  if (f.status === 'Fechado') {
+    const delta = parseInt(document.getElementById('ajusteRolos').value)||0;
+    f.qtd = ajusteTipo==='add' ? f.qtd+delta : Math.max(0, f.qtd-delta);
+    // Se subtraiu tudo, muda para aberto
+    if (f.qtd === 0 && ajusteTipo==='sub') {
+      f.status = 'Aberto'; f.pct = 0;
+    }
+  } else {
+    f.pct = parseInt(document.getElementById('ajustePct').value)||0;
+    if (f.pct <= 0) { f.pct = 0; }
+  }
+
+  saveDB(); closeModal('modalAjuste'); renderAll();
+  showToast(`✅ Estoque de ${f.cor} atualizado!`);
+}
+
+// Abre ajuste após scanner (chamado por onCodeDetected para código conhecido)
+function openAjusteFromScan(id) {
+  openAjusteModal(id);
+}
+
+// ════════════════════════════════════════════════════
+// PRODUTOS
+// ════════════════════════════════════════════════════
+let prodCatFilter = 'Todos';
+const PROD_CATS = ['Todos','Ímãs','Chaveiros','Lápis','Régua','Clips'];
+
+function addProduto() {
+  const variacao = document.getElementById('prodVar').value.trim();
+  const qtd      = parseInt(document.getElementById('prodQtd').value)||0;
+  DB.produtos.push({
+    id: Date.now(),
+    cat:      document.getElementById('prodCat').value,
+    variacao, qtd,
+    custo:    parseFloat(document.getElementById('prodCusto').value)||0,
+    preco:    parseFloat(document.getElementById('prodPreco').value)||0,
+    filamento:document.getElementById('prodFilamento').value
+  });
+  saveDB();
+  showToast('✅ Produto salvo! Pronto para próximo cadastro.');
+  clearProdutoForm();
+  renderAll();
+}
+
+function renderProdutos() {
+  // KPI de valor do estoque de produtos acabados
+  const valProd    = calcValorEstoqueProdutos();
+  const totalUnids = DB.produtos.reduce((s,p)=>s+(p.qtd||0),0);
+  const margem     = valProd.venda > 0
+    ? ((valProd.venda - valProd.custo) / valProd.venda * 100).toFixed(1)
+    : '0.0';
+  const kpiEl = document.getElementById('kpiProdutos');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid #8E44AD">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Valor a Preço de Venda</div>
+      <div class="kpi-value">R$ ${valProd.venda.toFixed(2)}</div>
+      <div class="kpi-sub">Potencial de receita do estoque</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #2980B9">
+      <div class="kpi-icon">🏷️</div>
+      <div class="kpi-label">Valor a Custo</div>
+      <div class="kpi-value">R$ ${valProd.custo.toFixed(2)}</div>
+      <div class="kpi-sub">Capital investido em produtos</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #27AE60">
+      <div class="kpi-icon">📦</div>
+      <div class="kpi-label">Unidades em Estoque</div>
+      <div class="kpi-value">${totalUnids}</div>
+      <div class="kpi-sub">Margem média: ${margem}%</div>
+    </div>
+  `;
+  document.getElementById('prodCatTabs').innerHTML = PROD_CATS.map(c =>
+    `<div class="cat-tab ${c===prodCatFilter?'active':''}" onclick="setProdCat('${c}',this)">${c}</div>`
+  ).join('');
+  const data  = prodCatFilter==='Todos' ? DB.produtos : DB.produtos.filter(p=>p.cat.startsWith(prodCatFilter));
+  const tbody = document.getElementById('produtosTbody');
+  if (!data.length) { tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--gray-400)">Nenhum produto cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = data.map(p=>`<tr>
+    <td><span class="badge badge-navy">${p.cat.split('—')[0].trim()}</span></td>
+    <td>${p.cat.includes('—')?p.cat.split('—')[1].trim():p.cat}</td>
+    <td>${p.variacao||'—'}</td><td><strong>${p.qtd}</strong></td>
+    <td class="text-muted">${p.filamento||'—'}</td>
+    <td>R$ ${p.custo.toFixed(2)}</td>
+    <td><button class="btn btn-sm btn-danger" onclick="delProduto(${p.id})">✕</button></td>
+  </tr>`).join('');
+}
+function setProdCat(cat,el){
+  prodCatFilter=cat;
+  document.querySelectorAll('#prodCatTabs .cat-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active'); renderProdutos();
+}
+function delProduto(id){
+  if(!confirm('Remover este produto?'))return;
+  DB.produtos=DB.produtos.filter(p=>p.id!==id); saveDB(); renderAll();
+}
+
+// ════════════════════════════════════════════════════
+// PEDIDOS
+// ════════════════════════════════════════════════════
+let pedFilter='todos';
+const STATUS_BADGE={'Em produção':'badge-warning','Pronto':'badge-info','Entregue':'badge-success','Recebido':'badge-gold'};
+
+function addPedido() {
+  const clienteDigitado = document.getElementById('pedCliente').value.trim();
+  if (!clienteDigitado) { showToast('⚠️ Informe o cliente.','warning'); return; }
+
+  // Use canonical name if client already exists (case-insensitive match)
+  const existing = DB.clientes.find(c => c.nome.toLowerCase() === clienteDigitado.toLowerCase());
+  const clienteNome = existing ? existing.nome : clienteDigitado;
+  const cidade = document.getElementById('pedCidade').value.trim();
+
+  if (!existing) {
+    DB.clientes.push({id: Date.now(), nome: clienteNome, cidade});
+  } else if (cidade && !existing.cidade) {
+    // Fill in cidade if missing
+    existing.cidade = cidade;
+  }
+
+  DB.pedidos.push({
+    id:Date.now(),
+    num:(DB.pedidos.length+1).toString().padStart(4,'0'),
+    cliente: clienteNome,
+    cidade,
+    produto:document.getElementById('pedProduto').value,
+    qtd:parseInt(document.getElementById('pedQtd').value)||1,
+    valor:parseFloat(document.getElementById('pedValor').value)||0,
+    pgto:document.getElementById('pedPgto').value,
+    status:document.getElementById('pedStatus').value,
+    data:document.getElementById('pedData').value||new Date().toISOString().slice(0,10)
+  });
+  saveDB();
+  showToast('✅ Pedido salvo! Pronto para próximo cadastro.');
+  clearPedidoForm();
+  renderAll();
+}
+
+function filterPedidos(f,el){
+  pedFilter=f;
+  document.querySelectorAll('#tab-pedidos .cat-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active'); renderPedidos();
+}
+function renderPedidos(){
+  const data=pedFilter==='todos'?DB.pedidos:DB.pedidos.filter(p=>p.status===pedFilter);
+  const tbody=document.getElementById('pedidosTbody');
+  if(!data.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--gray-400)">Nenhum pedido encontrado.</td></tr>';return;}
+  tbody.innerHTML=[...data].reverse().map(p=>`<tr>
+    <td class="text-muted">#${p.num}</td>
+    <td><strong>${p.cliente}</strong></td>
+    <td class="text-muted">${p.cidade}</td>
+    <td>${p.produto}</td><td>${p.qtd}</td>
+    <td><strong>R$ ${p.valor.toFixed(2)}</strong></td>
+    <td><span class="badge badge-navy">${p.pgto}</span></td>
+    <td><span class="badge ${STATUS_BADGE[p.status]||'badge-navy'}">${p.status}</span></td>
+    <td class="text-muted">${formatDate(p.data)}</td>
+    <td>
+      <select class="btn btn-ghost btn-sm" onchange="changeStatus(${p.id},this.value)" style="padding:4px 6px;font-size:11px">
+        <option value="">Status</option>
+        <option>Em produção</option><option>Pronto</option><option>Entregue</option><option>Recebido</option>
+      </select>
+      <button class="btn btn-sm btn-danger" onclick="delPedido(${p.id})" style="margin-left:4px">✕</button>
+    </td>
+  </tr>`).join('');
+  renderPedidosChart();
+}
+function changeStatus(id,val){
+  if(!val)return;
+  const p=DB.pedidos.find(p=>p.id===id);
+  if(p){p.status=val;saveDB();renderAll();}
+}
+function delPedido(id){
+  if(!confirm('Remover este pedido?'))return;
+  DB.pedidos=DB.pedidos.filter(p=>p.id!==id);saveDB();renderAll();
+}
+let chartPedStatus=null;
+function renderPedidosChart(){
+  const counts={'Em produção':0,'Pronto':0,'Entregue':0,'Recebido':0};
+  DB.pedidos.forEach(p=>{if(counts[p.status]!==undefined)counts[p.status]++;});
+  if(chartPedStatus)chartPedStatus.destroy();
+  chartPedStatus=new Chart(document.getElementById('chartPedidosStatus'),{
+    type:'bar',
+    data:{labels:Object.keys(counts),datasets:[{label:'Pedidos',data:Object.values(counts),backgroundColor:['#E67E22','#2980B9','#27AE60','#C9940A'],borderRadius:8}]},
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0ebe3'}},x:{grid:{display:false}}}}
+  });
+}
+
+// ════════════════════════════════════════════════════
+// CLIENTES
+// ════════════════════════════════════════════════════
+
+// Remove exact duplicates keeping the one with most data
+function deduplicateClientes() {
+  const seen = {};
+  // Group by lowercase name
+  DB.clientes.forEach(c => {
+    const key = c.nome.toLowerCase().trim();
+    if (!seen[key]) {
+      seen[key] = c;
+    } else {
+      // Keep the one with cidade filled, or the oldest id
+      if (!seen[key].cidade && c.cidade) seen[key] = c;
+    }
+  });
+  DB.clientes = Object.values(seen);
+
+  // Also normalize pedidos to use the canonical casing from DB.clientes
+  DB.pedidos.forEach(p => {
+    const key = (p.cliente||'').toLowerCase().trim();
+    const canonical = DB.clientes.find(c => c.nome.toLowerCase().trim() === key);
+    if (canonical) p.cliente = canonical.nome;
+  });
+}
+
+function addCliente(){
+  const nome=document.getElementById('cliNome').value.trim();
+  if(!nome){showToast('⚠️ Informe o nome do cliente.','warning');return;}
+  if(!DB.clientes.find(c=>c.nome.toLowerCase()===nome.toLowerCase())){
+    DB.clientes.push({id:Date.now(),nome,cidade:document.getElementById('cliCidade').value});
+    saveDB();
+    showToast('✅ Cliente salvo! Pronto para próximo cadastro.');
+  } else {
+    showToast('ℹ️ Cliente já existe na base.','warning');
+  }
+  clearClienteForm();
+  renderAll();
+}
+
+function renderClientes(){
+  // Always deduplicate before rendering
+  deduplicateClientes();
+
+  const tbody=document.getElementById('clientesTbody');
+  const stats=DB.clientes.map(c=>{
+    const peds=DB.pedidos.filter(p=>p.cliente.toLowerCase()===c.nome.toLowerCase());
+    const total=peds.reduce((s,p)=>s+p.valor,0);
+    const ultimo=peds.length?peds.sort((a,b)=>b.data.localeCompare(a.data))[0].data:'—';
+    return{...c,pedidos:peds.length,total,ultimo};
+  }).sort((a,b)=>b.total-a.total);
+  if(!stats.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--gray-400)">Nenhum cliente cadastrado.</td></tr>';return;}
+  const tot=stats.reduce((s,c)=>s+c.total,0);
+  let ac=0;
+  tbody.innerHTML=stats.map(c=>{
+    ac+=c.total;
+    const pct=tot>0?ac/tot*100:100;
+    const cls=pct<=80?'A':pct<=95?'B':'C';
+    return`<tr>
+      <td><strong>${c.nome}</strong></td>
+      <td class="text-muted">${c.cidade||'—'}</td>
+      <td>${c.pedidos}</td>
+      <td><strong>R$ ${c.total.toFixed(2)}</strong></td>
+      <td class="text-muted">${c.ultimo!=='—'?formatDate(c.ultimo):'—'}</td>
+      <td><span class="badge abc-${cls.toLowerCase()}">${cls}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════
+// FINANCEIRO
+// ════════════════════════════════════════════════════
+function addDespesa(){
+  const valor=parseFloat(document.getElementById('despValor').value)||0;
+  if(!valor){showToast('⚠️ Informe o valor.','warning');return;}
+  DB.despesas.push({
+    id:Date.now(),
+    cat:document.getElementById('despCat').value,
+    impressora:document.getElementById('despImpressora').value,
+    desc:document.getElementById('despDesc').value,
+    valor,
+    data:document.getElementById('despData').value||new Date().toISOString().slice(0,10)
+  });
+  document.getElementById('despValor').value='';
+  document.getElementById('despDesc').value='';
+  document.getElementById('despImpressora').value='';
+  saveDB(); showToast('✅ Despesa registrada!'); renderAll();
+}
+function delDespesa(id){
+  DB.despesas=DB.despesas.filter(d=>d.id!==id);saveDB();renderAll();
+}
+
+let chartDespCat=null,chartRecDesp=null;
+function renderFinanceiro(){
+  const now=new Date(),mes=now.getMonth(),ano=now.getFullYear();
+  const recMes =DB.pedidos.filter(p=>{const d=new Date(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
+  const despMes=DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
+  const lucro  =recMes-despMes;
+  const recTot =DB.pedidos.reduce((s,p)=>s+p.valor,0);
+
+  document.getElementById('kpiFinanceiro').innerHTML=`
+    <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">Receita do Mês</div><div class="kpi-value">R$ ${recMes.toFixed(2)}</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📉</div><div class="kpi-label">Despesas do Mês</div><div class="kpi-value" style="color:var(--danger)">R$ ${despMes.toFixed(2)}</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📊</div><div class="kpi-label">Lucro do Mês</div><div class="kpi-value" style="color:${lucro>=0?'var(--success)':'var(--danger)'}">R$ ${lucro.toFixed(2)}</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🏆</div><div class="kpi-label">Receita Total</div><div class="kpi-value">R$ ${recTot.toFixed(2)}</div></div>
+  `;
+
+  const tbody=document.getElementById('despesasTbody');
+  if(!DB.despesas.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--gray-400)">Nenhuma despesa registrada.</td></tr>';}
+  else{
+    tbody.innerHTML=[...DB.despesas].reverse().map(d=>`<tr>
+      <td class="text-muted">${formatDate(d.data)}</td>
+      <td><span class="badge badge-navy">${d.cat}</span></td>
+      <td class="text-muted">${d.impressora||'—'}</td>
+      <td>${d.desc||'—'}</td>
+      <td><strong>R$ ${d.valor.toFixed(2)}</strong></td>
+      <td><button class="btn btn-sm btn-danger" onclick="delDespesa(${d.id})">✕</button></td>
+    </tr>`).join('');
+  }
+
+  const catTot={};
+  DB.despesas.forEach(d=>{catTot[d.cat]=(catTot[d.cat]||0)+d.valor;});
+  if(chartDespCat)chartDespCat.destroy();
+  chartDespCat=new Chart(document.getElementById('chartDespCat'),{
+    type:'doughnut',
+    data:{labels:Object.keys(catTot),datasets:[{data:Object.values(catTot),backgroundColor:['#1B2A4A','#C9940A','#27AE60','#2980B9'],borderWidth:2,borderColor:'#fff'}]},
+    options:{plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},cutout:'55%'}
+  });
+
+  const labels6=[],recs6=[],desps6=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(ano,mes-i,1),m=d.getMonth(),a=d.getFullYear();
+    labels6.push(d.toLocaleString('pt-BR',{month:'short',year:'2-digit'}));
+    recs6.push(DB.pedidos.filter(p=>{const pd=new Date(p.data);return pd.getMonth()===m&&pd.getFullYear()===a}).reduce((s,p)=>s+p.valor,0));
+    desps6.push(DB.despesas.filter(d=>{const dd=new Date(d.data);return dd.getMonth()===m&&dd.getFullYear()===a}).reduce((s,d)=>s+d.valor,0));
+  }
+  if(chartRecDesp)chartRecDesp.destroy();
+  chartRecDesp=new Chart(document.getElementById('chartRecDesp'),{
+    type:'bar',
+    data:{labels:labels6,datasets:[
+      {label:'Receita',data:recs6,backgroundColor:'rgba(39,174,96,0.8)',borderRadius:6},
+      {label:'Despesa',data:desps6,backgroundColor:'rgba(192,57,43,0.7)',borderRadius:6}
+    ]},
+    options:{plugins:{legend:{position:'top',labels:{font:{size:11}}}},scales:{y:{beginAtZero:true,grid:{color:'#f0ebe3'}},x:{grid:{display:false}}}}
+  });
+}
+
+// ════════════════════════════════════════════════════
+// CURVA ABC
+// ════════════════════════════════════════════════════
+let chartAbcCli=null,chartAbcProd=null;
+// Merge similar product names in pedidos (same logic as clientes)
+function deduplicateProdutos() {
+  const allNames = [...new Set(DB.pedidos.map(p => p.produto).filter(Boolean))];
+  const groups = groupSimilar(allNames, 0.72);
+  groups.forEach(group => {
+    // Use the most frequent name as canonical
+    const freq = group.map(name => ({
+      name,
+      count: DB.pedidos.filter(p => p.produto === name).length
+    })).sort((a,b) => b.count - a.count);
+    const canonical = freq[0].name;
+    group.forEach(variant => {
+      if (variant === canonical) return;
+      DB.pedidos.forEach(p => { if (p.produto === variant) p.produto = canonical; });
+    });
+  });
+}
+
+function renderABC(){
+  deduplicateClientes();
+  deduplicateProdutos(); // merge similar product names automatically
+
+  const cliRec=DB.clientes.map(c=>({nome:c.nome,val:DB.pedidos.filter(p=>p.cliente.toLowerCase()===c.nome.toLowerCase()).reduce((s,p)=>s+p.valor,0)})).sort((a,b)=>b.val-a.val);
+  const cliQtd=DB.clientes.map(c=>({nome:c.nome,val:DB.pedidos.filter(p=>p.cliente.toLowerCase()===c.nome.toLowerCase()).length})).sort((a,b)=>b.val-a.val);
+  renderAbcTable('abcClientesTbody',cliRec,'R$');
+  renderAbcTable('abcClientesQtdTbody',cliQtd,'ped');
+
+  // Build product map after dedup — exact names only
+  const prodMap={};
+  DB.pedidos.forEach(p=>{
+    const k=(p.produto||'Outros').trim();
+    if(!prodMap[k])prodMap[k]={rec:0,qtd:0};
+    prodMap[k].rec+=p.valor;
+    prodMap[k].qtd+=p.qtd||1;
+  });
+  const prodRec=Object.entries(prodMap).map(([n,v])=>({nome:n,val:v.rec})).sort((a,b)=>b.val-a.val);
+  const prodQtd=Object.entries(prodMap).map(([n,v])=>({nome:n,val:v.qtd})).sort((a,b)=>b.val-a.val);
+  renderAbcTable('abcProdutosTbody',prodRec,'R$');
+  renderAbcTable('abcProdutosQtdTbody',prodQtd,'un');
+
+  if(chartAbcCli)chartAbcCli.destroy();
+  chartAbcCli=new Chart(document.getElementById('chartAbcClientes'),{type:'bar',data:{labels:cliRec.map(c=>c.nome),datasets:[{data:cliRec.map(c=>c.val),backgroundColor:cliRec.map((_,i)=>i<Math.ceil(cliRec.length*.2)?'#27AE60':i<Math.ceil(cliRec.length*.5)?'#E67E22':'#C0392B'),borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0ebe3'}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+  if(chartAbcProd)chartAbcProd.destroy();
+  chartAbcProd=new Chart(document.getElementById('chartAbcProdutos'),{type:'bar',data:{labels:prodRec.map(p=>p.nome.length>20?p.nome.slice(0,18)+'…':p.nome),datasets:[{data:prodRec.map(p=>p.val),backgroundColor:prodRec.map((_,i)=>i<Math.ceil(prodRec.length*.2)?'#27AE60':i<Math.ceil(prodRec.length*.5)?'#E67E22':'#C0392B'),borderRadius:6}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0ebe3'}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+}
+function renderAbcTable(tbodyId,data,unit){
+  const total=data.reduce((s,x)=>s+x.val,0);let ac=0;
+  const tbody=document.getElementById(tbodyId);
+  if(!data.length||total===0){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--gray-400)">Sem dados.</td></tr>';return;}
+  tbody.innerHTML=data.map(x=>{
+    ac+=x.val;const pct=ac/total*100;const cls=pct<=80?'A':pct<=95?'B':'C';
+    const disp=unit==='R$'?`R$ ${x.val.toFixed(2)}`:`${x.val} ${unit}`;
+    return`<tr><td><span class="badge abc-${cls.toLowerCase()}">${cls}</span></td><td>${x.nome}</td><td>${disp}</td><td class="text-muted">${pct.toFixed(1)}%</td></tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════
+// OVERVIEW
+// ════════════════════════════════════════════════════
+let chartFat=null,chartRes=null;
+function calcValorEstoqueFilamentos() {
+  return DB.filamentos.reduce((s, f) => {
+    const kg = f.status === 'Fechado' ? (f.qtd || 0) : ((f.pct || 0) / 100);
+    return s + kg * (f.custo || 0);
+  }, 0);
+}
+
+function calcValorEstoqueProdutos() {
+  // Valor a custo
+  const custo = DB.produtos.reduce((s, p) => s + (p.qtd || 0) * (p.custo || 0), 0);
+  // Valor a preço de venda
+  const venda = DB.produtos.reduce((s, p) => s + (p.qtd || 0) * (p.preco || 0), 0);
+  return { custo, venda };
+}
+
+function renderOverview(){
+  const now=new Date(),mes=now.getMonth(),ano=now.getFullYear();
+  const semIni=new Date(now);semIni.setDate(now.getDate()-7);
+  const recMes =DB.pedidos.filter(p=>{const d=new Date(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
+  const recSem =DB.pedidos.filter(p=>new Date(p.data)>=semIni).reduce((s,p)=>s+p.valor,0);
+  const recAno =DB.pedidos.filter(p=>new Date(p.data).getFullYear()===ano).reduce((s,p)=>s+p.valor,0);
+  const despMes=DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
+
+  const valFil  = calcValorEstoqueFilamentos();
+  const valProd = calcValorEstoqueProdutos();
+
+  document.getElementById('kpiGrid').innerHTML=`
+    <div class="kpi-card"><div class="kpi-icon">📅</div><div class="kpi-label">Receita Semanal</div><div class="kpi-value">R$ ${recSem.toFixed(2)}</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📆</div><div class="kpi-label">Receita Mensal</div><div class="kpi-value">R$ ${recMes.toFixed(2)}</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🗓️</div><div class="kpi-label">Receita Anual</div><div class="kpi-value">R$ ${recAno.toFixed(2)}</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🛒</div><div class="kpi-label">Pedidos Totais</div><div class="kpi-value">${DB.pedidos.length}</div></div>
+    <div class="kpi-card" style="border-top:3px solid #2980B9">
+      <div class="kpi-icon">🧵</div>
+      <div class="kpi-label">Estoque Filamentos</div>
+      <div class="kpi-value" style="font-size:20px">R$ ${valFil.toFixed(2)}</div>
+      <div class="kpi-sub">${DB.filamentos.length} tipo(s) cadastrado(s)</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #8E44AD">
+      <div class="kpi-icon">📦</div>
+      <div class="kpi-label">Estoque Produtos</div>
+      <div class="kpi-value" style="font-size:20px">R$ ${valProd.venda.toFixed(2)}</div>
+      <div class="kpi-sub">Custo: R$ ${valProd.custo.toFixed(2)}</div>
+    </div>
+  `;
+
+  const labels6=[],vals6=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(ano,mes-i,1);
+    labels6.push(d.toLocaleString('pt-BR',{month:'short'}));
+    vals6.push(DB.pedidos.filter(p=>{const pd=new Date(p.data);return pd.getMonth()===d.getMonth()&&pd.getFullYear()===d.getFullYear()}).reduce((s,p)=>s+p.valor,0));
+  }
+  if(chartFat)chartFat.destroy();
+  chartFat=new Chart(document.getElementById('chartFaturamento'),{type:'line',data:{labels:labels6,datasets:[{label:'Receita',data:vals6,borderColor:'#C9940A',backgroundColor:'rgba(201,148,10,0.1)',borderWidth:2.5,pointBackgroundColor:'#C9940A',fill:true,tension:0.4}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0ebe3'}},x:{grid:{display:false}}}}});
+
+  const lucro=recMes-despMes;
+  if(chartRes)chartRes.destroy();
+  chartRes=new Chart(document.getElementById('chartResultado'),{type:'doughnut',data:{labels:['Lucro','Despesas'],datasets:[{data:[Math.max(lucro,0),despMes],backgroundColor:['#27AE60','#C0392B'],borderWidth:2,borderColor:'#fff'}]},options:{plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},cutout:'60%'}});
+
+  const alertas=DB.filamentos.filter(f=>(f.status==='Aberto'&&f.pct<=20)||(f.status==='Fechado'&&f.qtd===0));
+  const alertasEl=document.getElementById('alertasEstoque');
+  alertasEl.innerHTML=!alertas.length?'<div class="alert alert-success">✅ Estoque de filamentos OK.</div>':alertas.map(f=>`<div class="alert alert-danger">⚠️ <strong>${f.tipo} ${f.variacao} ${f.cor}</strong> (${f.marca}) — ${f.status==='Aberto'?f.pct+'% restante':'Sem estoque'}</div>`).join('');
+
+  const recentes=[...DB.pedidos].sort((a,b)=>b.data.localeCompare(a.data)).slice(0,5);
+  document.getElementById('pedidosRecentes').innerHTML=!recentes.length?'<div class="text-muted">Nenhum pedido registrado.</div>':recentes.map(p=>`<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--gray-100)"><div><strong>${p.cliente}</strong> <span class="text-muted">· ${p.produto}</span></div><div class="flex"><span class="badge ${STATUS_BADGE[p.status]||'badge-navy'}">${p.status}</span> <strong>R$ ${p.valor.toFixed(2)}</strong></div></div>`).join('');
+}
+
+// ════════════════════════════════════════════════════
+// EXPORT / IMPORT
+// ════════════════════════════════════════════════════
+function exportData(){
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`vangardis_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+function importData(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      DB={barcodes:{},...JSON.parse(ev.target.result)};
+      saveDB(); // salva local E sincroniza com a nuvem
+      renderAll();
+      showToast('✅ Dados importados e sincronizados com a nuvem!');
+    }catch{showToast('⚠️ Arquivo inválido.','danger');}
+  };
+  reader.readAsText(file);
+}
+
+// ════════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════════
+function formatDate(str){
+  if(!str)return'—';const[y,m,d]=str.split('-');return`${d}/${m}/${y}`;
+}
+
+// ════════════════════════════════════════════════════
+// FUZZY MATCH (Levenshtein)
+// ════════════════════════════════════════════════════
+function levenshtein(a,b){
+  a=a.toLowerCase().trim();b=b.toLowerCase().trim();
+  if(a===b)return 0;
+  const m=a.length,n=b.length;
+  const dp=Array.from({length:m+1},(_,i)=>Array.from({length:n+1},(_,j)=>i===0?j:j===0?i:0));
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return dp[m][n];
+}
+function similarity(a,b){
+  a=a.toLowerCase().trim();b=b.toLowerCase().trim();
+  if(a===b)return 1;
+  const maxLen=Math.max(a.length,b.length);
+  return maxLen===0?1:1-levenshtein(a,b)/maxLen;
+}
+function groupSimilar(names,threshold=0.75){
+  const used=new Set(),groups=[],list=[...new Set(names.map(n=>n.trim()).filter(Boolean))];
+  for(let i=0;i<list.length;i++){
+    if(used.has(i))continue;
+    const group=[list[i]];used.add(i);
+    for(let j=i+1;j<list.length;j++){
+      if(!used.has(j)&&similarity(list[i],list[j])>=threshold){group.push(list[j]);used.add(j);}
+    }
+    groups.push(group);
+  }
+  return groups.filter(g=>g.length>1);
+}
+
+// ════════════════════════════════════════════════════
+// AUTOCOMPLETE
+// ════════════════════════════════════════════════════
+function normalizeStr(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
+function highlightMatch(text,query){
+  const idx=normalizeStr(text).indexOf(normalizeStr(query));
+  if(idx<0)return text;
+  return text.slice(0,idx)+`<span class="autocomplete-match">${text.slice(idx,idx+query.length)}</span>`+text.slice(idx+query.length);
+}
+function getClienteNames(){
+  const names=new Set();
+  DB.clientes.forEach(c=>names.add(c.nome));
+  DB.pedidos.forEach(p=>{if(p.cliente)names.add(p.cliente);});
+  return[...names].filter(Boolean).sort();
+}
+function getProdutoNames(){
+  const names=new Set();
+  DB.pedidos.forEach(p=>{if(p.produto)names.add(p.produto);});
+  DB.produtos.forEach(p=>names.add(p.cat+(p.variacao?' · '+p.variacao:'')));
+  return[...names].filter(Boolean).sort();
+}
+let acSelectedIdx=-1;
+function acShow(inputId,listId,allItems){
+  const input=document.getElementById(inputId);
+  const list=document.getElementById(listId);
+  const query=input.value.trim();
+  acSelectedIdx=-1;
+  if(!query){list.classList.remove('open');return;}
+  const norm=normalizeStr(query);
+  const scored=allItems.map(item=>{
+    const ni=normalizeStr(item);
+    let score=ni===norm?1:ni.startsWith(norm)?0.9:ni.includes(norm)?0.7:similarity(norm,ni);
+    return{item,score};
+  }).filter(x=>x.score>=0.45).sort((a,b)=>b.score-a.score).slice(0,8);
+  if(!scored.length){list.classList.remove('open');return;}
+  list.innerHTML=scored.map((x,i)=>{
+    const simBadge=x.score<0.75?`<span class="ac-sim">~${Math.round(x.score*100)}%</span>`:'';
+    return`<div class="autocomplete-item" data-value="${x.item.replace(/"/g,'&quot;')}"
+      onmousedown="acSelect('${inputId}','${listId}',this)"
+      onmouseover="acHover(${i},'${listId}')">
+      <div class="ac-main">${highlightMatch(x.item,query)}</div>${simBadge}
+    </div>`;
+  }).join('');
+  list.classList.add('open');
+}
+function acSelect(inputId,listId,el){
+  const val=el.dataset.value;
+  document.getElementById(inputId).value=val;
+  document.getElementById(listId).classList.remove('open');
+  if(inputId==='pedCliente'){
+    const cli=DB.clientes.find(c=>c.nome.toLowerCase()===val.toLowerCase());
+    if(cli&&cli.cidade)document.getElementById('pedCidade').value=cli.cidade;
+  }
+}
+function acKeyNav(e,listId){
+  const list=document.getElementById(listId);
+  const items=list.querySelectorAll('.autocomplete-item');
+  if(!list.classList.contains('open')||!items.length)return;
+  if(e.key==='ArrowDown'){e.preventDefault();acSelectedIdx=Math.min(acSelectedIdx+1,items.length-1);items.forEach((el,i)=>el.classList.toggle('selected',i===acSelectedIdx));}
+  else if(e.key==='ArrowUp'){e.preventDefault();acSelectedIdx=Math.max(acSelectedIdx-1,0);items.forEach((el,i)=>el.classList.toggle('selected',i===acSelectedIdx));}
+  else if(e.key==='Enter'&&acSelectedIdx>=0){e.preventDefault();items[acSelectedIdx].dispatchEvent(new MouseEvent('mousedown'));}
+  else if(e.key==='Escape')list.classList.remove('open');
+}
+function acHover(idx,listId){
+  acSelectedIdx=idx;
+  document.querySelectorAll(`#${listId} .autocomplete-item`).forEach((el,i)=>el.classList.toggle('selected',i===idx));
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.autocomplete-wrap'))
+    document.querySelectorAll('.autocomplete-list').forEach(l=>l.classList.remove('open'));
+});
+
+// ════════════════════════════════════════════════════
+// DEDUP — CLIENTES
+// ════════════════════════════════════════════════════
+let dedupPendingGroups=[];
+function openDedupModal(){
+  const allNames=[...new Set([...DB.clientes.map(c=>c.nome),...DB.pedidos.map(p=>p.cliente)].filter(Boolean))];
+  const groups=groupSimilar(allNames,0.72);
+  dedupPendingGroups=groups;
+  const container=document.getElementById('dedupGroups');
+  const empty=document.getElementById('dedupEmpty');
+  const applyBtn=document.getElementById('dedupApplyBtn');
+  if(!groups.length){
+    container.innerHTML='';empty.style.display='block';applyBtn.style.display='none';
+  } else {
+    empty.style.display='none';applyBtn.style.display='inline-block';
+    container.innerHTML=groups.map((group,gi)=>`
+      <div class="dedup-group">
+        <div class="dedup-group-title">Grupo ${gi+1} — Escolha o nome correto:</div>
+        ${group.map((name,ni)=>`
+          <label class="dedup-option">
+            <input type="radio" name="dedup_${gi}" value="${name.replace(/"/g,'&quot;')}" ${ni===0?'checked':''}>
+            <span>${name}</span>
+            <span class="text-muted" style="margin-left:auto">${DB.pedidos.filter(p=>p.cliente===name).length} pedido(s)</span>
+          </label>`).join('')}
+        <input type="text" class="dedup-custom" data-group="${gi}" placeholder="Ou escreva o nome correto (opcional)"
+          style="width:100%;padding:7px 10px;border-radius:6px;border:1.5px solid var(--gray-200);font-size:12px;margin-top:8px">
+      </div>`).join('');
+  }
+  openModal('modalDedup');
+}
+function applyDedup(){
+  dedupPendingGroups.forEach((group,gi)=>{
+    const custom=document.querySelector(`.dedup-custom[data-group="${gi}"]`)?.value.trim();
+    const checked=document.querySelector(`input[name="dedup_${gi}"]:checked`);
+    const canonical=custom||checked?.value;
+    if(!canonical)return;
+    group.forEach(variant=>{
+      if(variant===canonical)return;
+      DB.pedidos.forEach(p=>{if(p.cliente===variant)p.cliente=canonical;});
+      DB.clientes=DB.clientes.filter(c=>c.nome!==variant);
+    });
+    if(!DB.clientes.find(c=>c.nome===canonical))
+      DB.clientes.push({id:Date.now(),nome:canonical,cidade:''});
+  });
+  saveDB();closeModal('modalDedup');renderAll();
+  showToast(`✅ ${dedupPendingGroups.length} grupo(s) de clientes corrigido(s)!`);
+}
+
+// ════════════════════════════════════════════════════
+// DEDUP — PRODUTOS
+// ════════════════════════════════════════════════════
+let dedupProdPendingGroups=[];
+function openDedupProdModal(){
+  const allNames=[...new Set(DB.pedidos.map(p=>p.produto).filter(Boolean))];
+  const groups=groupSimilar(allNames,0.72);
+  dedupProdPendingGroups=groups;
+  const container=document.getElementById('dedupProdGroups');
+  const empty=document.getElementById('dedupProdEmpty');
+  if(!groups.length){
+    container.innerHTML='';empty.style.display='block';
+  } else {
+    empty.style.display='none';
+    container.innerHTML=groups.map((group,gi)=>`
+      <div class="dedup-group">
+        <div class="dedup-group-title">Grupo ${gi+1} — Escolha o nome correto:</div>
+        ${group.map((name,ni)=>`
+          <label class="dedup-option">
+            <input type="radio" name="dedupProd_${gi}" value="${name.replace(/"/g,'&quot;')}" ${ni===0?'checked':''}>
+            <span>${name}</span>
+            <span class="text-muted" style="margin-left:auto">${DB.pedidos.filter(p=>p.produto===name).length} pedido(s)</span>
+          </label>`).join('')}
+        <input type="text" class="dedup-prod-custom" data-group="${gi}" placeholder="Ou escreva o nome correto (opcional)"
+          style="width:100%;padding:7px 10px;border-radius:6px;border:1.5px solid var(--gray-200);font-size:12px;margin-top:8px">
+      </div>`).join('');
+  }
+  openModal('modalDedupProd');
+}
+function applyDedupProd(){
+  dedupProdPendingGroups.forEach((group,gi)=>{
+    const custom=document.querySelector(`.dedup-prod-custom[data-group="${gi}"]`)?.value.trim();
+    const checked=document.querySelector(`input[name="dedupProd_${gi}"]:checked`);
+    const canonical=custom||checked?.value;
+    if(!canonical)return;
+    group.forEach(variant=>{
+      if(variant===canonical)return;
+      DB.pedidos.forEach(p=>{if(p.produto===variant)p.produto=canonical;});
+    });
+  });
+  deduplicateProdutos(); // run auto-merge pass after manual corrections
+  saveDB();closeModal('modalDedupProd');renderAll();
+  showToast(`✅ ${dedupProdPendingGroups.length} grupo(s) de produtos corrigido(s)!`);
+}
+
+function renderAll(){
+  renderOverview();renderFilamentos();renderProdutos();
+  renderPedidos();renderClientes();renderFinanceiro();renderABC();
+}
+
+// ════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════
+document.getElementById('topbarDate').textContent = new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+document.getElementById('pedData').value  = new Date().toISOString().slice(0,10);
+document.getElementById('despData').value = new Date().toISOString().slice(0,10);
+
+// loadDB é async — carrega local imediatamente, depois sincroniza nuvem
+loadDB();
+</script>
+</body>
+</html>
