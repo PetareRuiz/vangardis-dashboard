@@ -965,6 +965,147 @@ tr:hover td { background: var(--gray-100); }
   </div>
 </div>
 
+<!-- ═══════ MODAL EDITAR PEDIDO ═══════ -->
+<div class="modal-overlay" id="modalEditPedido">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Pedido</div>
+    <input type="hidden" id="editPedId">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Cliente</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="editPedCliente" autocomplete="off"
+            oninput="acShow('editPedCliente','acEditClientes',getClienteNames())"
+            onkeydown="acKeyNav(event,'acEditClientes')">
+          <div class="autocomplete-list" id="acEditClientes"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Cidade</label>
+        <input type="text" id="editPedCidade">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Produto / Descrição</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="editPedProduto" autocomplete="off"
+            oninput="acShow('editPedProduto','acEditProdutos',getProdutoNames())"
+            onkeydown="acKeyNav(event,'acEditProdutos')">
+          <div class="autocomplete-list" id="acEditProdutos"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" id="editPedQtd" min="1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Valor Total (R$)</label>
+        <input type="number" id="editPedValor" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Pagamento</label>
+        <select id="editPedPgto">
+          <option>Pix</option><option>Cartão</option><option>Dinheiro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="editPedStatus">
+          <option>Em produção</option><option>Pronto</option><option>Entregue</option><option>Recebido</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="editPedData">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditPedido')">Cancelar</button>
+      <button class="btn btn-gold" onclick="saveEditPedido()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL EDITAR PRODUTO ═══════ -->
+<div class="modal-overlay" id="modalEditProduto">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Produto Acabado</div>
+    <input type="hidden" id="editProdId">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Categoria</label>
+        <select id="editProdCat">
+          <option>Ímãs — Capivara</option><option>Ímãs — Turismo</option><option>Ímãs — Religioso</option>
+          <option>Chaveiros — Simples</option><option>Chaveiros — Boné</option><option>Chaveiros — Natalino</option>
+          <option>Lápis</option><option>Régua</option><option>Clips</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Variação / Cor</label>
+        <input type="text" id="editProdVar">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Quantidade</label>
+        <input type="number" id="editProdQtd" min="0">
+      </div>
+      <div class="form-group">
+        <label>Custo Unitário (R$)</label>
+        <input type="number" id="editProdCusto" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Preço de Venda (R$)</label>
+        <input type="number" id="editProdPreco" step="0.01">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Filamento(s) Utilizado(s)</label>
+        <input type="text" id="editProdFilamento">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditProduto')">Cancelar</button>
+      <button class="btn btn-gold" onclick="saveEditProduto()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL AJUSTE PRODUTO ═══════ -->
+<div class="modal-overlay" id="modalAjusteProduto">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">⚖️ Ajustar Estoque de Produto</div>
+    <input type="hidden" id="ajusteProdId">
+    <div id="ajusteProdInfo" style="background:var(--gray-100);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px"></div>
+    <div class="cat-tabs" style="margin-bottom:16px">
+      <div class="cat-tab active" id="ajusteProdBtnAdd" onclick="setAjusteProdTipo('add',this)">➕ Entrada</div>
+      <div class="cat-tab" id="ajusteProdBtnSub" onclick="setAjusteProdTipo('sub',this)">➖ Saída</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label id="ajusteProdQtdLabel">Quantidade a adicionar</label>
+        <input type="number" id="ajusteProdQtd" value="1" min="1"
+          oninput="updateAjusteProdPreview()">
+      </div>
+      <div class="form-group">
+        <label>Motivo (opcional)</label>
+        <input type="text" id="ajusteProdMotivo" placeholder="Ex: Produção, Venda, Quebra…">
+      </div>
+    </div>
+    <div id="ajusteProdPreview" style="font-size:12px;color:var(--gray-400);margin-top:4px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAjusteProduto')">Cancelar</button>
+      <button class="btn btn-gold" onclick="aplicarAjusteProduto()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ DEDUP MODAL ═══════ -->
 <div class="modal-overlay" id="modalDedup">
   <div class="modal" style="max-width:640px">
@@ -1907,10 +2048,15 @@ function renderProdutos() {
   tbody.innerHTML = data.map(p=>`<tr>
     <td><span class="badge badge-navy">${p.cat.split('—')[0].trim()}</span></td>
     <td>${p.cat.includes('—')?p.cat.split('—')[1].trim():p.cat}</td>
-    <td>${p.variacao||'—'}</td><td><strong>${p.qtd}</strong></td>
+    <td>${p.variacao||'—'}</td>
+    <td><strong>${p.qtd}</strong></td>
     <td class="text-muted">${p.filamento||'—'}</td>
     <td>R$ ${p.custo.toFixed(2)}</td>
-    <td><button class="btn btn-sm btn-danger" onclick="delProduto(${p.id})">✕</button></td>
+    <td>
+      <button class="btn btn-sm btn-ghost" onclick="editProduto(${p.id})" title="Editar">✏️</button>
+      <button class="btn btn-sm" style="background:var(--success);color:#fff;margin:0 2px" onclick="openAjusteProduto(${p.id})" title="Ajustar estoque">⚖️</button>
+      <button class="btn btn-sm btn-danger" onclick="delProduto(${p.id})" title="Remover">✕</button>
+    </td>
   </tr>`).join('');
 }
 function setProdCat(cat,el){
@@ -1982,11 +2128,12 @@ function renderPedidos(){
     <td><span class="badge ${STATUS_BADGE[p.status]||'badge-navy'}">${p.status}</span></td>
     <td class="text-muted">${formatDate(p.data)}</td>
     <td>
-      <select class="btn btn-ghost btn-sm" onchange="changeStatus(${p.id},this.value)" style="padding:4px 6px;font-size:11px">
+      <button class="btn btn-sm btn-ghost" onclick="editPedido(${p.id})" title="Editar pedido">✏️</button>
+      <select class="btn btn-ghost btn-sm" onchange="changeStatus(${p.id},this.value)" style="padding:4px 6px;font-size:11px;margin:0 2px">
         <option value="">Status</option>
         <option>Em produção</option><option>Pronto</option><option>Entregue</option><option>Recebido</option>
       </select>
-      <button class="btn btn-sm btn-danger" onclick="delPedido(${p.id})" style="margin-left:4px">✕</button>
+      <button class="btn btn-sm btn-danger" onclick="delPedido(${p.id})">✕</button>
     </td>
   </tr>`).join('');
   renderPedidosChart();
@@ -2316,6 +2463,134 @@ function importData(e){
 
 // ════════════════════════════════════════════════════
 // UTILS
+// ════════════════════════════════════════════════════
+// EDITAR PEDIDO
+// ════════════════════════════════════════════════════
+function editPedido(id) {
+  const p = DB.pedidos.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('editPedId').value      = id;
+  document.getElementById('editPedCliente').value = p.cliente;
+  document.getElementById('editPedCidade').value  = p.cidade;
+  document.getElementById('editPedProduto').value = p.produto;
+  document.getElementById('editPedQtd').value     = p.qtd;
+  document.getElementById('editPedValor').value   = p.valor;
+  document.getElementById('editPedPgto').value    = p.pgto;
+  document.getElementById('editPedStatus').value  = p.status;
+  document.getElementById('editPedData').value    = p.data;
+  openModal('modalEditPedido');
+}
+
+function saveEditPedido() {
+  const id = parseInt(document.getElementById('editPedId').value);
+  const p  = DB.pedidos.find(x => x.id === id);
+  if (!p) return;
+  const novoCliente = document.getElementById('editPedCliente').value.trim();
+  const novaCidade  = document.getElementById('editPedCidade').value.trim();
+  // Atualiza nome canônico se cliente já existe
+  const existing = DB.clientes.find(c => c.nome.toLowerCase() === novoCliente.toLowerCase());
+  p.cliente = existing ? existing.nome : novoCliente;
+  p.cidade  = novaCidade;
+  p.produto = document.getElementById('editPedProduto').value.trim();
+  p.qtd     = parseInt(document.getElementById('editPedQtd').value)   || 1;
+  p.valor   = parseFloat(document.getElementById('editPedValor').value)|| 0;
+  p.pgto    = document.getElementById('editPedPgto').value;
+  p.status  = document.getElementById('editPedStatus').value;
+  p.data    = document.getElementById('editPedData').value;
+  // Garante cliente na base
+  if (!existing && novoCliente) {
+    DB.clientes.push({ id: Date.now(), nome: novoCliente, cidade: novaCidade });
+  }
+  saveDB(); closeModal('modalEditPedido'); renderAll();
+  showToast('✅ Pedido atualizado!');
+}
+
+// ════════════════════════════════════════════════════
+// EDITAR PRODUTO ACABADO
+// ════════════════════════════════════════════════════
+function editProduto(id) {
+  const p = DB.produtos.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('editProdId').value       = id;
+  document.getElementById('editProdCat').value      = p.cat;
+  document.getElementById('editProdVar').value      = p.variacao || '';
+  document.getElementById('editProdQtd').value      = p.qtd;
+  document.getElementById('editProdCusto').value    = p.custo;
+  document.getElementById('editProdPreco').value    = p.preco || 0;
+  document.getElementById('editProdFilamento').value= p.filamento || '';
+  openModal('modalEditProduto');
+}
+
+function saveEditProduto() {
+  const id = parseInt(document.getElementById('editProdId').value);
+  const p  = DB.produtos.find(x => x.id === id);
+  if (!p) return;
+  p.cat      = document.getElementById('editProdCat').value;
+  p.variacao = document.getElementById('editProdVar').value;
+  p.qtd      = parseInt(document.getElementById('editProdQtd').value)    || 0;
+  p.custo    = parseFloat(document.getElementById('editProdCusto').value) || 0;
+  p.preco    = parseFloat(document.getElementById('editProdPreco').value) || 0;
+  p.filamento= document.getElementById('editProdFilamento').value;
+  saveDB(); closeModal('modalEditProduto'); renderAll();
+  showToast('✅ Produto atualizado!');
+}
+
+// ════════════════════════════════════════════════════
+// AJUSTE DE QUANTIDADE — PRODUTO ACABADO
+// ════════════════════════════════════════════════════
+let ajusteProdTipo = 'add';
+
+function openAjusteProduto(id) {
+  const p = DB.produtos.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('ajusteProdId').value = id;
+  ajusteProdTipo = 'add';
+  document.getElementById('ajusteProdBtnAdd').classList.add('active');
+  document.getElementById('ajusteProdBtnSub').classList.remove('active');
+  document.getElementById('ajusteProdQtd').value   = 1;
+  document.getElementById('ajusteProdMotivo').value = '';
+  document.getElementById('ajusteProdQtdLabel').textContent = 'Quantidade a adicionar';
+  document.getElementById('ajusteProdInfo').innerHTML =
+    `<strong>${p.cat}${p.variacao?' · '+p.variacao:''}</strong><br>
+     <span class="text-muted">Estoque atual: <strong>${p.qtd} unidade(s)</strong></span>`;
+  updateAjusteProdPreview();
+  openModal('modalAjusteProduto');
+}
+
+function setAjusteProdTipo(tipo, el) {
+  ajusteProdTipo = tipo;
+  document.querySelectorAll('#modalAjusteProduto .cat-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('ajusteProdQtdLabel').textContent =
+    tipo === 'add' ? 'Quantidade a adicionar' : 'Quantidade a retirar';
+  updateAjusteProdPreview();
+}
+
+function updateAjusteProdPreview() {
+  const id    = parseInt(document.getElementById('ajusteProdId').value);
+  const p     = DB.produtos.find(x => x.id === id);
+  if (!p) return;
+  const delta = parseInt(document.getElementById('ajusteProdQtd').value) || 0;
+  const novo  = ajusteProdTipo === 'add' ? p.qtd + delta : Math.max(0, p.qtd - delta);
+  const color = novo < p.qtd ? 'var(--danger)' : novo > p.qtd ? 'var(--success)' : 'var(--gray-400)';
+  document.getElementById('ajusteProdPreview').innerHTML =
+    `Resultado: <strong style="color:${color}">${p.qtd} → ${novo} unidade(s)</strong>`;
+}
+
+function aplicarAjusteProduto() {
+  const id    = parseInt(document.getElementById('ajusteProdId').value);
+  const p     = DB.produtos.find(x => x.id === id);
+  if (!p) return;
+  const delta = parseInt(document.getElementById('ajusteProdQtd').value) || 0;
+  if (ajusteProdTipo === 'add') {
+    p.qtd += delta;
+  } else {
+    p.qtd = Math.max(0, p.qtd - delta);
+  }
+  saveDB(); closeModal('modalAjusteProduto'); renderAll();
+  showToast(`✅ Estoque de ${p.cat} atualizado! ${p.qtd} unidade(s).`);
+}
+
 // ════════════════════════════════════════════════════
 function formatDate(str){
   if(!str)return'—';const[y,m,d]=str.split('-');return`${d}/${m}/${y}`;
