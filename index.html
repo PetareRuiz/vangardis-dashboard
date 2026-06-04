@@ -2442,31 +2442,38 @@ function calcValorEstoqueProdutos() {
 
 function renderOverview(){
   const now=new Date(),mes=now.getMonth(),ano=now.getFullYear();
-  const semIni=new Date(now);semIni.setDate(now.getDate()-7);
-  const recMes =DB.pedidos.filter(p=>{const d=new Date(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
-  const recSem =DB.pedidos.filter(p=>new Date(p.data)>=semIni).reduce((s,p)=>s+p.valor,0);
-  const recAno =DB.pedidos.filter(p=>new Date(p.data).getFullYear()===ano).reduce((s,p)=>s+p.valor,0);
-  const despMes=DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
+  const semIni =new Date(now); semIni.setDate(now.getDate()-7);
+  const trinta =new Date(now); trinta.setDate(now.getDate()-30);
 
-  const valFil  = calcValorEstoqueFilamentos();
-  const valProd = calcValorEstoqueProdutos();
+  const recMes  = DB.pedidos.filter(p=>{const d=new Date(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
+  const recSem  = DB.pedidos.filter(p=>new Date(p.data)>=semIni).reduce((s,p)=>s+p.valor,0);
+  const recAno  = DB.pedidos.filter(p=>new Date(p.data).getFullYear()===ano).reduce((s,p)=>s+p.valor,0);
+  const despMes = DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
+
+  // Últimos 30 dias
+  const ped30   = DB.pedidos.filter(p=>new Date(p.data)>=trinta);
+  const rec30   = ped30.reduce((s,p)=>s+p.valor,0);
+
+  // Ticket médio — média por pedido de todos os pedidos com valor > 0
+  const pedComValor = DB.pedidos.filter(p=>p.valor>0);
+  const ticketMedio = pedComValor.length > 0 ? pedComValor.reduce((s,p)=>s+p.valor,0) / pedComValor.length : 0;
 
   document.getElementById('kpiGrid').innerHTML=`
     <div class="kpi-card"><div class="kpi-icon">📅</div><div class="kpi-label">Receita Semanal</div><div class="kpi-value">R$ ${recSem.toFixed(2)}</div></div>
     <div class="kpi-card"><div class="kpi-icon">📆</div><div class="kpi-label">Receita Mensal</div><div class="kpi-value">R$ ${recMes.toFixed(2)}</div></div>
     <div class="kpi-card"><div class="kpi-icon">🗓️</div><div class="kpi-label">Receita Anual</div><div class="kpi-value">R$ ${recAno.toFixed(2)}</div></div>
     <div class="kpi-card"><div class="kpi-icon">🛒</div><div class="kpi-label">Pedidos Totais</div><div class="kpi-value">${DB.pedidos.length}</div></div>
-    <div class="kpi-card" style="border-top:3px solid #2980B9">
-      <div class="kpi-icon">🧵</div>
-      <div class="kpi-label">Estoque Filamentos</div>
-      <div class="kpi-value" style="font-size:20px">R$ ${valFil.toFixed(2)}</div>
-      <div class="kpi-sub">${DB.filamentos.length} tipo(s) cadastrado(s)</div>
+    <div class="kpi-card" style="border-top:3px solid #27AE60">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-label">Receita — Últimos 30 dias</div>
+      <div class="kpi-value" style="color:var(--success)">R$ ${rec30.toFixed(2)}</div>
+      <div class="kpi-sub">${ped30.length} pedido(s) no período</div>
     </div>
-    <div class="kpi-card" style="border-top:3px solid #8E44AD">
-      <div class="kpi-icon">📦</div>
-      <div class="kpi-label">Estoque Produtos</div>
-      <div class="kpi-value" style="font-size:20px">R$ ${valProd.venda.toFixed(2)}</div>
-      <div class="kpi-sub">Custo: R$ ${valProd.custo.toFixed(2)}</div>
+    <div class="kpi-card" style="border-top:3px solid var(--gold)">
+      <div class="kpi-icon">🎯</div>
+      <div class="kpi-label">Ticket Médio</div>
+      <div class="kpi-value" style="color:var(--gold)">R$ ${ticketMedio.toFixed(2)}</div>
+      <div class="kpi-sub">Média por pedido (geral)</div>
     </div>
   `;
 
