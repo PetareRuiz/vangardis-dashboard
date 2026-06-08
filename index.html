@@ -266,7 +266,27 @@ tr:hover td { background: var(--gray-100); }
 .flex { display: flex; align-items: center; gap: 10px; }
 .flex-between { display: flex; align-items: center; justify-content: space-between; }
 
-/* ── SCANNER ── */
+/* ── NF IMPORT ── */
+.nf-review-card {
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin-bottom: 12px;
+  position: relative;
+}
+.nf-review-card .nf-filename {
+  font-size: 11px; color: var(--gray-400);
+  font-family: monospace; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.nf-review-card.nf-error { border-color: var(--danger); background: #fdecea; }
+.nf-skip-btn {
+  position: absolute; top: 10px; right: 10px;
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; color: var(--gray-400);
+}
+.nf-skip-btn:hover { color: var(--danger); }
 .scanner-overlay {
   display: none; position: fixed; inset: 0;
   background: rgba(10,16,30,0.92); z-index: 300;
@@ -544,10 +564,32 @@ tr:hover td { background: var(--gray-100); }
 
     <!-- ═══════════════ FINANCEIRO ═══════════════ -->
     <div class="tab" id="tab-financeiro">
+      <!-- Seletor de mês -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-body" style="padding:14px 24px">
+          <div class="flex-between" style="flex-wrap:wrap;gap:12px">
+            <div class="flex" style="gap:10px;align-items:center">
+              <button class="btn btn-ghost btn-sm" onclick="mudarMesFinanceiro(-1)">◀ Mês anterior</button>
+              <div style="font-family:'Playfair Display',serif;font-size:18px;color:var(--navy);min-width:180px;text-align:center" id="finMesLabel"></div>
+              <button class="btn btn-ghost btn-sm" onclick="mudarMesFinanceiro(1)" id="finProxMesBtn">Próximo mês ▶</button>
+            </div>
+            <div class="flex" style="gap:8px;align-items:center">
+              <label style="font-size:12px;color:var(--gray-600);font-weight:600">Ir para:</label>
+              <input type="month" id="finMesPicker" onchange="irParaMes(this.value)"
+                style="padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif">
+              <button class="btn btn-ghost btn-sm" onclick="voltarMesAtual()">Mês Atual</button>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="kpi-grid" id="kpiFinanceiro"></div>
       <div class="card">
         <div class="card-header">
           <div class="card-title">Registrar Despesa</div>
+          <button class="btn btn-gold" onclick="document.getElementById('importNFInput').click()">
+            📄 Importar Notas Fiscais
+          </button>
+          <input type="file" id="importNFInput" accept=".pdf" multiple style="display:none" onchange="importarNotasFiscais(event)">
         </div>
         <div class="card-body">
           <div class="form-row">
@@ -1195,6 +1237,20 @@ tr:hover td { background: var(--gray-100); }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalAjusteProduto')">Cancelar</button>
       <button class="btn btn-gold" onclick="aplicarAjusteProduto()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL IMPORTAR NOTAS FISCAIS ═══════ -->
+<div class="modal-overlay" id="modalImportNF">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-title">📄 Importar Notas Fiscais</div>
+    <p class="text-muted" style="margin-bottom:16px">Revise os dados extraídos de cada nota. Ajuste o que precisar antes de confirmar.</p>
+    <div id="nfReviewList"></div>
+    <div id="nfReviewEmpty" style="display:none" class="alert alert-warning">⚠️ Nenhum dado pôde ser extraído dos PDFs selecionados.</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalImportNF')">Cancelar</button>
+      <button class="btn btn-gold" id="nfConfirmBtn" onclick="confirmarImportNF()">✅ Confirmar e Registrar</button>
     </div>
   </div>
 </div>
@@ -2463,24 +2519,71 @@ function delDespesa(id){
 }
 
 let chartDespCat=null,chartRecDesp=null;
+// Mês selecionado no financeiro (padrão = mês atual)
+let finMesSel = new Date().getMonth();
+let finAnoSel = new Date().getFullYear();
+
+function mudarMesFinanceiro(delta) {
+  finMesSel += delta;
+  if (finMesSel > 11) { finMesSel = 0; finAnoSel++; }
+  if (finMesSel < 0)  { finMesSel = 11; finAnoSel--; }
+  renderFinanceiro();
+}
+
+function irParaMes(val) {
+  if (!val) return;
+  const [y, m] = val.split('-');
+  finAnoSel = parseInt(y); finMesSel = parseInt(m) - 1;
+  renderFinanceiro();
+}
+
+function voltarMesAtual() {
+  finMesSel = new Date().getMonth();
+  finAnoSel = new Date().getFullYear();
+  renderFinanceiro();
+}
+
 function renderFinanceiro(){
-  const now=new Date(),mes=now.getMonth(),ano=now.getFullYear();
-  const recMes =DB.pedidos.filter(p=>{const d=new Date(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
-  const despMes=DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
-  const lucro  =recMes-despMes;
-  const recTot =DB.pedidos.reduce((s,p)=>s+p.valor,0);
+  const mes = finMesSel, ano = finAnoSel;
+  const now  = new Date();
+  const isMesAtual = mes === now.getMonth() && ano === now.getFullYear();
+
+  // Atualiza label e picker
+  const nomeMes = new Date(ano, mes, 1).toLocaleString('pt-BR',{month:'long',year:'numeric'});
+  const labelEl = document.getElementById('finMesLabel');
+  if (labelEl) labelEl.textContent = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)
+    + (isMesAtual ? ' 📍' : '');
+
+  const pickerEl = document.getElementById('finMesPicker');
+  if (pickerEl) pickerEl.value = `${ano}-${String(mes+1).padStart(2,'0')}`;
+
+  // Desabilita "próximo mês" se já estiver no futuro
+  const proxBtn = document.getElementById('finProxMesBtn');
+  if (proxBtn) proxBtn.disabled = (ano > now.getFullYear()) ||
+    (ano === now.getFullYear() && mes >= now.getMonth());
+
+  // KPIs do mês selecionado
+  const recMes  = DB.pedidos.filter(p=>{const d=new Date(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
+  const despMes = DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
+  const lucro   = recMes - despMes;
+  const recTot  = DB.pedidos.reduce((s,p)=>s+p.valor,0);
 
   document.getElementById('kpiFinanceiro').innerHTML=`
     <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-label">Receita do Mês</div><div class="kpi-value">R$ ${recMes.toFixed(2)}</div></div>
     <div class="kpi-card"><div class="kpi-icon">📉</div><div class="kpi-label">Despesas do Mês</div><div class="kpi-value" style="color:var(--danger)">R$ ${despMes.toFixed(2)}</div></div>
     <div class="kpi-card"><div class="kpi-icon">📊</div><div class="kpi-label">Lucro do Mês</div><div class="kpi-value" style="color:${lucro>=0?'var(--success)':'var(--danger)'}">R$ ${lucro.toFixed(2)}</div></div>
-    <div class="kpi-card"><div class="kpi-icon">🏆</div><div class="kpi-label">Receita Total</div><div class="kpi-value">R$ ${recTot.toFixed(2)}</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🏆</div><div class="kpi-label">Receita Total Acumulada</div><div class="kpi-value">R$ ${recTot.toFixed(2)}</div></div>
   `;
 
+  // Tabela de despesas filtrada pelo mês selecionado
+  const despMesList = DB.despesas.filter(d=>{
+    const dt=new Date(d.data); return dt.getMonth()===mes && dt.getFullYear()===ano;
+  });
   const tbody=document.getElementById('despesasTbody');
-  if(!DB.despesas.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--gray-400)">Nenhuma despesa registrada.</td></tr>';}
-  else{
-    tbody.innerHTML=[...DB.despesas].reverse().map(d=>`<tr>
+  if(!despMesList.length){
+    tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--gray-400)">Nenhuma despesa em ${nomeMes}.</td></tr>`;
+  } else {
+    tbody.innerHTML=[...despMesList].reverse().map(d=>`<tr>
       <td class="text-muted">${formatDate(d.data)}</td>
       <td><span class="badge badge-navy">${d.cat}</span></td>
       <td class="text-muted">${d.impressora||'—'}</td>
@@ -2490,15 +2593,19 @@ function renderFinanceiro(){
     </tr>`).join('');
   }
 
+  // Gráfico despesas por categoria — mês selecionado
   const catTot={};
-  DB.despesas.forEach(d=>{catTot[d.cat]=(catTot[d.cat]||0)+d.valor;});
+  despMesList.forEach(d=>{catTot[d.cat]=(catTot[d.cat]||0)+d.valor;});
   if(chartDespCat)chartDespCat.destroy();
-  chartDespCat=new Chart(document.getElementById('chartDespCat'),{
-    type:'doughnut',
-    data:{labels:Object.keys(catTot),datasets:[{data:Object.values(catTot),backgroundColor:['#1B2A4A','#C9940A','#27AE60','#2980B9'],borderWidth:2,borderColor:'#fff'}]},
-    options:{plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},cutout:'55%'}
-  });
+  if(Object.keys(catTot).length){
+    chartDespCat=new Chart(document.getElementById('chartDespCat'),{
+      type:'doughnut',
+      data:{labels:Object.keys(catTot),datasets:[{data:Object.values(catTot),backgroundColor:['#1B2A4A','#C9940A','#27AE60','#2980B9','#8E44AD','#E67E22'],borderWidth:2,borderColor:'#fff'}]},
+      options:{plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},cutout:'55%'}
+    });
+  }
 
+  // Gráfico Receita vs Despesa — 6 meses centrados no mês selecionado
   const labels6=[],recs6=[],desps6=[];
   for(let i=5;i>=0;i--){
     const d=new Date(ano,mes-i,1),m=d.getMonth(),a=d.getFullYear();
@@ -2940,7 +3047,244 @@ document.addEventListener('click',e=>{
 });
 
 // ════════════════════════════════════════════════════
-// DEDUP — CLIENTES
+// IMPORTAR NOTAS FISCAIS (PDF)
+// ════════════════════════════════════════════════════
+
+// Categorização automática por palavras-chave no texto da NF
+function categorizarNF(texto) {
+  const t = texto.toLowerCase();
+  if (/filament|pla|petg|tpu|bobina|rolo|polímero|resina|impressão 3d|3d print/.test(t)) return 'Filamento';
+  if (/frete|envio|entrega|sedex|correio|transportadora|logística|despacho/.test(t)) return 'Frete';
+  if (/embalagem|caixa|sacola|plástico|papel|envelope|fita|bolha/.test(t)) return 'Embalagem';
+  if (/manutenção|reparo|conserto|técnico|peça|componente|impressora/.test(t)) return 'Manutenção';
+  if (/equipamento|eletrônico|monitor|computador|notebook|ferramenta/.test(t)) return 'Equipamentos';
+  return 'Outros';
+}
+
+// Extrai dados de uma NF a partir do texto do PDF
+function extrairDadosNF(texto, nomeArquivo) {
+  // Valor total — padrões comuns em NF-e brasileira
+  let valor = 0;
+  const valorPatterns = [
+    /valor total da nota[\s\S]{0,30}?r?\$?\s*([\d.,]+)/i,
+    /total da nf[\s\S]{0,20}?r?\$?\s*([\d.,]+)/i,
+    /valor total[\s\S]{0,20}?r?\$?\s*([\d.,]+)/i,
+    /total a pagar[\s\S]{0,20}?r?\$?\s*([\d.,]+)/i,
+    /vl\.?\s*total[\s\S]{0,20}?r?\$?\s*([\d.,]+)/i,
+    /r\$\s*([\d]{1,3}(?:\.\d{3})*,\d{2})/i,
+  ];
+  for (const p of valorPatterns) {
+    const m = texto.match(p);
+    if (m) {
+      valor = parseFloat(m[1].replace(/\./g,'').replace(',','.'));
+      if (valor > 0) break;
+    }
+  }
+
+  // Data de emissão
+  let data = new Date().toISOString().slice(0,10);
+  const dataPatterns = [
+    /data de emiss[aã]o[\s:]+(\d{2}\/\d{2}\/\d{4})/i,
+    /emiss[aã]o[\s:]+(\d{2}\/\d{2}\/\d{4})/i,
+    /data[\s:]+(\d{2}\/\d{2}\/\d{4})/i,
+    /(\d{2}\/\d{2}\/\d{4})/,
+  ];
+  for (const p of dataPatterns) {
+    const m = texto.match(p);
+    if (m) {
+      const [d,mo,y] = m[1].split('/');
+      data = `${y}-${mo}-${d}`;
+      break;
+    }
+  }
+
+  // Fornecedor / Razão social
+  let fornecedor = nomeArquivo.replace('.pdf','');
+  const fornPatterns = [
+    /razão social[\s:]+([^\n]+)/i,
+    /nome\/razão social[\s:]+([^\n]+)/i,
+    /emitente[\s\S]{0,50}?razão social[\s:]+([^\n]+)/i,
+    /destinatário[\s\S]{0,10}?:?\s*([A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÀÜ][^\n]{5,60}ltda|s\.a\.|eireli|me|epp)/i,
+  ];
+  for (const p of fornPatterns) {
+    const m = texto.match(p);
+    if (m) { fornecedor = m[1].trim().slice(0, 80); break; }
+  }
+
+  // Número da NF
+  let numNF = '';
+  const nfPatterns = [
+    /n[uú]mero[\s:]+(\d+)/i,
+    /nf-?e?[\s:]+n[oº°]?\s*(\d+)/i,
+    /nota fiscal[\s\S]{0,20}?n[oº°]?\s*(\d+)/i,
+  ];
+  for (const p of nfPatterns) {
+    const m = texto.match(p);
+    if (m) { numNF = m[1]; break; }
+  }
+
+  const cat = categorizarNF(texto);
+  const desc = fornecedor + (numNF ? ` — NF ${numNF}` : '');
+
+  return { valor, data, desc, cat, fornecedor, numNF };
+}
+
+// Lê o texto de um PDF usando a API nativa do navegador (pdfjsLib se disponível, senão ArrayBuffer)
+async function lerTextoPDF(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        // Tenta usar PDF.js se disponível
+        if (window.pdfjsLib) {
+          const pdf = await pdfjsLib.getDocument({data: e.target.result}).promise;
+          let texto = '';
+          for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            texto += content.items.map(item => item.str).join(' ') + '\n';
+          }
+          resolve(texto);
+          return;
+        }
+        // Fallback: tenta extrair texto como string do buffer
+        const bytes = new Uint8Array(e.target.result);
+        let texto = '';
+        for (let i = 0; i < bytes.length - 1; i++) {
+          if (bytes[i] >= 32 && bytes[i] < 127) texto += String.fromCharCode(bytes[i]);
+          else if (bytes[i] === 10 || bytes[i] === 13) texto += ' ';
+        }
+        resolve(texto);
+      } catch(err) {
+        resolve('');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+let nfDadosExtraidos = [];
+
+async function importarNotasFiscais(event) {
+  const files = Array.from(event.target.files);
+  if (!files.length) return;
+
+  // Carrega PDF.js dinamicamente se não estiver disponível
+  if (!window.pdfjsLib) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload = () => {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        res();
+      };
+      s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  showToast(`⏳ Lendo ${files.length} nota(s)...`, 'warning');
+  nfDadosExtraidos = [];
+
+  for (const file of files) {
+    const texto = await lerTextoPDF(file);
+    const dados = extrairDadosNF(texto, file.name);
+    nfDadosExtraidos.push({ file: file.name, ...dados, skip: false });
+  }
+
+  // Monta tela de revisão
+  const list = document.getElementById('nfReviewList');
+  const empty = document.getElementById('nfReviewEmpty');
+
+  if (!nfDadosExtraidos.length) {
+    empty.style.display = 'block'; list.innerHTML = '';
+  } else {
+    empty.style.display = 'none';
+    list.innerHTML = nfDadosExtraidos.map((d, i) => `
+      <div class="nf-review-card" id="nfCard_${i}">
+        <button class="nf-skip-btn" onclick="toggleSkipNF(${i})" title="Pular esta nota">✕</button>
+        <div class="nf-filename">📄 ${d.file}</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Fornecedor / Descrição</label>
+            <input type="text" id="nfDesc_${i}" value="${d.desc.replace(/"/g,'&quot;')}" style="font-size:12px">
+          </div>
+          <div class="form-group" style="max-width:140px">
+            <label>Valor (R$)</label>
+            <input type="number" id="nfValor_${i}" value="${d.valor}" step="0.01">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Categoria</label>
+            <select id="nfCat_${i}">
+              <option ${d.cat==='Filamento'?'selected':''}>Filamento</option>
+              <option ${d.cat==='Embalagem'?'selected':''}>Embalagem</option>
+              <option ${d.cat==='Frete'?'selected':''}>Frete</option>
+              <option ${d.cat==='Manutenção'?'selected':''}>Manutenção</option>
+              <option ${d.cat==='Equipamentos'?'selected':''}>Equipamentos</option>
+              <option ${d.cat==='Outros'?'selected':''}>Outros</option>
+            </select>
+          </div>
+          <div class="form-group" style="max-width:160px">
+            <label>Data</label>
+            <input type="date" id="nfData_${i}" value="${d.data}">
+          </div>
+          <div class="form-group" style="max-width:200px">
+            <label>Impressora (manutenção)</label>
+            <select id="nfImpressora_${i}">
+              <option value="">— Nenhuma —</option>
+              <option>Alícia (A1 Mini)</option>
+              <option>Letícia (A1 Combo)</option>
+              <option>Jaime (A1 Combo)</option>
+              <option>Arruda (A1 Combo)</option>
+              <option>Nantes (A1 Combo)</option>
+              <option>Rosalina (A1)</option>
+            </select>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Reset input para permitir reimportar os mesmos arquivos
+  event.target.value = '';
+  openModal('modalImportNF');
+}
+
+function toggleSkipNF(i) {
+  nfDadosExtraidos[i].skip = !nfDadosExtraidos[i].skip;
+  const card = document.getElementById(`nfCard_${i}`);
+  if (nfDadosExtraidos[i].skip) {
+    card.style.opacity = '0.4';
+    card.querySelector('.nf-skip-btn').textContent = '↩️';
+    card.querySelector('.nf-skip-btn').title = 'Incluir novamente';
+  } else {
+    card.style.opacity = '1';
+    card.querySelector('.nf-skip-btn').textContent = '✕';
+    card.querySelector('.nf-skip-btn').title = 'Pular esta nota';
+  }
+}
+
+function confirmarImportNF() {
+  let count = 0;
+  nfDadosExtraidos.forEach((d, i) => {
+    if (d.skip) return;
+    const desc   = document.getElementById(`nfDesc_${i}`).value.trim();
+    const valor  = parseFloat(document.getElementById(`nfValor_${i}`).value) || 0;
+    const cat    = document.getElementById(`nfCat_${i}`).value;
+    const data   = document.getElementById(`nfData_${i}`).value;
+    const imp    = document.getElementById(`nfImpressora_${i}`).value;
+    if (!valor || !desc) return;
+    DB.despesas.push({ id: Date.now() + i, cat, impressora: imp, desc, valor, data });
+    count++;
+  });
+  if (!count) { showToast('⚠️ Nenhuma nota válida para registrar.', 'warning'); return; }
+  saveDB();
+  closeModal('modalImportNF');
+  renderAll();
+  showToast(`✅ ${count} nota(s) fiscal(is) registrada(s) como despesa!`);
+}
 // ════════════════════════════════════════════════════
 let dedupPendingGroups=[];
 function openDedupModal(){
