@@ -2519,6 +2519,13 @@ function delDespesa(id){
 }
 
 let chartDespCat=null,chartRecDesp=null;
+// Helper: parseia data YYYY-MM-DD sem problema de fuso horário
+function parseLocalDate(str) {
+  if (!str) return new Date();
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d); // mês local, sem UTC
+}
+
 // Mês selecionado no financeiro (padrão = mês atual)
 let finMesSel = new Date().getMonth();
 let finAnoSel = new Date().getFullYear();
@@ -2557,14 +2564,14 @@ function renderFinanceiro(){
   const pickerEl = document.getElementById('finMesPicker');
   if (pickerEl) pickerEl.value = `${ano}-${String(mes+1).padStart(2,'0')}`;
 
-  // Desabilita "próximo mês" se já estiver no futuro
+  // Desabilita "próximo mês" se já estiver no mês atual ou futuro
   const proxBtn = document.getElementById('finProxMesBtn');
   if (proxBtn) proxBtn.disabled = (ano > now.getFullYear()) ||
     (ano === now.getFullYear() && mes >= now.getMonth());
 
   // KPIs do mês selecionado
-  const recMes  = DB.pedidos.filter(p=>{const d=new Date(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
-  const despMes = DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
+  const recMes  = DB.pedidos.filter(p=>{const d=parseLocalDate(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
+  const despMes = DB.despesas.filter(d=>{const dt=parseLocalDate(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
   const lucro   = recMes - despMes;
   const recTot  = DB.pedidos.reduce((s,p)=>s+p.valor,0);
 
@@ -2577,7 +2584,7 @@ function renderFinanceiro(){
 
   // Tabela de despesas filtrada pelo mês selecionado
   const despMesList = DB.despesas.filter(d=>{
-    const dt=new Date(d.data); return dt.getMonth()===mes && dt.getFullYear()===ano;
+    const dt=parseLocalDate(d.data); return dt.getMonth()===mes && dt.getFullYear()===ano;
   });
   const tbody=document.getElementById('despesasTbody');
   if(!despMesList.length){
@@ -2610,8 +2617,8 @@ function renderFinanceiro(){
   for(let i=5;i>=0;i--){
     const d=new Date(ano,mes-i,1),m=d.getMonth(),a=d.getFullYear();
     labels6.push(d.toLocaleString('pt-BR',{month:'short',year:'2-digit'}));
-    recs6.push(DB.pedidos.filter(p=>{const pd=new Date(p.data);return pd.getMonth()===m&&pd.getFullYear()===a}).reduce((s,p)=>s+p.valor,0));
-    desps6.push(DB.despesas.filter(d=>{const dd=new Date(d.data);return dd.getMonth()===m&&dd.getFullYear()===a}).reduce((s,d)=>s+d.valor,0));
+    recs6.push(DB.pedidos.filter(p=>{const pd=parseLocalDate(p.data);return pd.getMonth()===m&&pd.getFullYear()===a}).reduce((s,p)=>s+p.valor,0));
+    desps6.push(DB.despesas.filter(d=>{const dd=parseLocalDate(d.data);return dd.getMonth()===m&&dd.getFullYear()===a}).reduce((s,d)=>s+d.valor,0));
   }
   if(chartRecDesp)chartRecDesp.destroy();
   chartRecDesp=new Chart(document.getElementById('chartRecDesp'),{
@@ -2708,13 +2715,13 @@ function renderOverview(){
   const semIni =new Date(now); semIni.setDate(now.getDate()-7);
   const trinta =new Date(now); trinta.setDate(now.getDate()-30);
 
-  const recMes  = DB.pedidos.filter(p=>{const d=new Date(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
-  const recSem  = DB.pedidos.filter(p=>new Date(p.data)>=semIni).reduce((s,p)=>s+p.valor,0);
-  const recAno  = DB.pedidos.filter(p=>new Date(p.data).getFullYear()===ano).reduce((s,p)=>s+p.valor,0);
-  const despMes = DB.despesas.filter(d=>{const dt=new Date(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
+  const recMes  = DB.pedidos.filter(p=>{const d=parseLocalDate(p.data);return d.getMonth()===mes&&d.getFullYear()===ano}).reduce((s,p)=>s+p.valor,0);
+  const recSem  = DB.pedidos.filter(p=>parseLocalDate(p.data)>=semIni).reduce((s,p)=>s+p.valor,0);
+  const recAno  = DB.pedidos.filter(p=>parseLocalDate(p.data).getFullYear()===ano).reduce((s,p)=>s+p.valor,0);
+  const despMes = DB.despesas.filter(d=>{const dt=parseLocalDate(d.data);return dt.getMonth()===mes&&dt.getFullYear()===ano}).reduce((s,d)=>s+d.valor,0);
 
   // Últimos 30 dias
-  const ped30   = DB.pedidos.filter(p=>new Date(p.data)>=trinta);
+  const ped30   = DB.pedidos.filter(p=>parseLocalDate(p.data)>=trinta);
   const rec30   = ped30.reduce((s,p)=>s+p.valor,0);
 
   // Ticket médio — média por pedido de todos os pedidos com valor > 0
@@ -2744,7 +2751,7 @@ function renderOverview(){
   for(let i=5;i>=0;i--){
     const d=new Date(ano,mes-i,1);
     labels6.push(d.toLocaleString('pt-BR',{month:'short'}));
-    vals6.push(DB.pedidos.filter(p=>{const pd=new Date(p.data);return pd.getMonth()===d.getMonth()&&pd.getFullYear()===d.getFullYear()}).reduce((s,p)=>s+p.valor,0));
+    vals6.push(DB.pedidos.filter(p=>{const pd=parseLocalDate(p.data);return pd.getMonth()===d.getMonth()&&pd.getFullYear()===d.getFullYear()}).reduce((s,p)=>s+p.valor,0));
   }
   if(chartFat)chartFat.destroy();
   chartFat=new Chart(document.getElementById('chartFaturamento'),{type:'line',data:{labels:labels6,datasets:[{label:'Receita',data:vals6,borderColor:'#C9940A',backgroundColor:'rgba(201,148,10,0.1)',borderWidth:2.5,pointBackgroundColor:'#C9940A',fill:true,tension:0.4}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#f0ebe3'}},x:{grid:{display:false}}}}});
