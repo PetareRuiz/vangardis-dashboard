@@ -266,6 +266,47 @@ tr:hover td { background: var(--gray-100); }
 .flex { display: flex; align-items: center; gap: 10px; }
 .flex-between { display: flex; align-items: center; justify-content: space-between; }
 
+/* ── SORTABLE TABLE ── */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+th.sortable:hover { background: var(--navy-mid); }
+.sort-ind {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 9px;
+  opacity: 0.5;
+}
+.sort-ind.active { opacity: 1; color: var(--gold); }
+
+/* ── ALERTA ATRASADOS ── */
+.alerta-atraso {
+  background: #FDECEA;
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.alerta-atraso-title {
+  font-weight: 700; font-size: 13px; color: var(--danger);
+  margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+}
+.alerta-item {
+  font-size: 12px; padding: 6px 0;
+  border-bottom: 1px solid rgba(192,57,43,0.15);
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+}
+.alerta-item:last-child { border-bottom: none; }
+.alerta-dias {
+  background: var(--danger); color: #fff;
+  padding: 2px 8px; border-radius: 12px;
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+
 /* ── NF IMPORT ── */
 .nf-review-card {
   background: var(--white);
@@ -531,8 +572,20 @@ tr:hover td { background: var(--gray-100); }
             <div class="cat-tab" onclick="filterPedidos('Entregue',this)">Entregue</div>
             <div class="cat-tab" onclick="filterPedidos('Recebido',this)">Recebido</div>
           </div>
+          <div id="alertaAtrasados"></div>
           <div class="table-wrap"><table>
-            <thead><tr><th>#</th><th>Cliente</th><th>Cidade</th><th>Produto</th><th>Qtd</th><th>Valor</th><th>Pagamento</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
+            <thead><tr>
+              <th class="sortable" onclick="sortPedidos('num')">#<span class="sort-ind" id="sortInd-num"></span></th>
+              <th class="sortable" onclick="sortPedidos('cliente')">Cliente<span class="sort-ind" id="sortInd-cliente"></span></th>
+              <th class="sortable" onclick="sortPedidos('cidade')">Cidade<span class="sort-ind" id="sortInd-cidade"></span></th>
+              <th class="sortable" onclick="sortPedidos('produto')">Produto<span class="sort-ind" id="sortInd-produto"></span></th>
+              <th class="sortable" onclick="sortPedidos('qtd')">Qtd<span class="sort-ind" id="sortInd-qtd"></span></th>
+              <th class="sortable" onclick="sortPedidos('valor')">Valor<span class="sort-ind" id="sortInd-valor"></span></th>
+              <th class="sortable" onclick="sortPedidos('pgto')">Pagamento<span class="sort-ind" id="sortInd-pgto"></span></th>
+              <th class="sortable" onclick="sortPedidos('status')">Status<span class="sort-ind" id="sortInd-status"></span></th>
+              <th class="sortable" onclick="sortPedidos('data')">Data<span class="sort-ind" id="sortInd-data"></span></th>
+              <th>Ações</th>
+            </tr></thead>
             <tbody id="pedidosTbody"></tbody>
           </table></div>
         </div>
@@ -2313,6 +2366,101 @@ function filterPedidos(f,el){
   document.querySelectorAll('#tab-pedidos .cat-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active'); renderPedidos();
 }
+// ════════════════════════════════════════════════════
+// ORDENAÇÃO DA TABELA DE PEDIDOS
+// ════════════════════════════════════════════════════
+let pedSortCol = null;   // coluna atual
+let pedSortAsc = true;   // direção
+
+function sortPedidos(col) {
+  if (pedSortCol === col) {
+    pedSortAsc = !pedSortAsc;      // mesma coluna → inverte direção
+  } else {
+    pedSortCol = col; pedSortAsc = true;  // nova coluna → crescente
+  }
+  renderPedidos();
+}
+
+// ════════════════════════════════════════════════════
+// ALERTA — ENTREGUES HÁ +15 DIAS SEM RECEBIMENTO
+// ════════════════════════════════════════════════════
+function renderAlertaAtrasados() {
+  const el = document.getElementById('alertaAtrasados');
+  if (!el) return;
+
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const LIMITE_DIAS = 15;
+
+  const atrasados = DB.pedidos.filter(p => {
+    if (p.status !== 'Entregue') return false;
+
+    // Se tem parcelamento, verifica se ainda há valor pendente
+    if (p.parcelas) {
+      const p1ok = p.parcelas.parc1.status === 'recebido';
+      const p2ok = p.parcelas.parc2.status === 'recebido';
+      if (p1ok && p2ok) return false; // tudo recebido, sem alerta
+
+      // Se a 2ª parcela tem data prevista futura, não alerta ainda
+      if (p1ok && p.parcelas.parc2.data) {
+        const prev = parseLocalDate(p.parcelas.parc2.data);
+        prev.setHours(0,0,0,0);
+        if (prev >= hoje) return false; // previsão ainda não venceu
+      }
+      // Se a 1ª parcela tem data prevista futura e nada foi recebido
+      if (!p1ok && p.parcelas.parc1.data) {
+        const prev1 = parseLocalDate(p.parcelas.parc1.data);
+        prev1.setHours(0,0,0,0);
+        if (prev1 >= hoje) return false;
+      }
+    }
+
+    // Calcula dias desde a data do pedido
+    const dPed = parseLocalDate(p.data);
+    dPed.setHours(0,0,0,0);
+    const dias = Math.floor((hoje - dPed) / (1000*60*60*24));
+    return dias > LIMITE_DIAS;
+  }).map(p => {
+    const dPed = parseLocalDate(p.data);
+    dPed.setHours(0,0,0,0);
+    const dias = Math.floor((hoje - dPed) / (1000*60*60*24));
+    // Valor ainda pendente
+    let pendente = p.valor;
+    if (p.parcelas) {
+      if (p.parcelas.parc1.status === 'recebido') pendente -= p.parcelas.parc1.valor;
+      if (p.parcelas.parc2.status === 'recebido') pendente -= p.parcelas.parc2.valor;
+    }
+    return { ...p, dias, pendente };
+  }).sort((a,b) => b.dias - a.dias);
+
+  if (!atrasados.length) { el.innerHTML = ''; return; }
+
+  const totalPendente = atrasados.reduce((s,p) => s + p.pendente, 0);
+
+  el.innerHTML = `
+    <div class="alerta-atraso">
+      <div class="alerta-atraso-title">
+        ⚠️ ${atrasados.length} pedido(s) entregue(s) há mais de ${LIMITE_DIAS} dias sem recebimento
+        <span style="margin-left:auto;font-size:12px">Total pendente: R$ ${totalPendente.toFixed(2)}</span>
+      </div>
+      ${atrasados.map(p => `
+        <div class="alerta-item">
+          <div>
+            <strong>#${p.num} · ${p.cliente}</strong>
+            <span class="text-muted"> — ${p.produto}</span>
+            ${p.parcelas ? '<br><span style="font-size:11px;color:var(--gray-600)">'+
+              (p.parcelas.parc2.data ? 'Previsão 2ª parcela: '+formatDate(p.parcelas.parc2.data)+' (vencida)' : 'Parcelado sem data prevista')
+              +'</span>' : ''}
+          </div>
+          <div class="flex" style="gap:8px">
+            <strong style="color:var(--danger)">R$ ${p.pendente.toFixed(2)}</strong>
+            <span class="alerta-dias">${p.dias} dias</span>
+            <button class="btn btn-sm btn-ghost" onclick="editPedido(${p.id})" title="Abrir pedido">✏️</button>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
 function renderPedidos(){
   // ── Valores a receber (descontando parcelas já recebidas) ──
   // Helper: calcula o valor PENDENTE de um pedido
@@ -2364,11 +2512,51 @@ function renderPedidos(){
     </div>
   `;
 
+  // ── Alerta de pedidos entregues há +15 dias sem recebimento ──
+  renderAlertaAtrasados();
+
   // ── Tabela de pedidos ──────────────────────────────
-  const data=pedFilter==='todos'?DB.pedidos:DB.pedidos.filter(p=>p.status===pedFilter);
+  let data = pedFilter==='todos' ? [...DB.pedidos] : DB.pedidos.filter(p=>p.status===pedFilter);
+
+  // Aplica ordenação se houver coluna selecionada
+  if (pedSortCol) {
+    data.sort((a,b) => {
+      let va = a[pedSortCol], vb = b[pedSortCol];
+      // Numéricos
+      if (pedSortCol==='valor' || pedSortCol==='qtd') {
+        va = parseFloat(va)||0; vb = parseFloat(vb)||0;
+        return pedSortAsc ? va-vb : vb-va;
+      }
+      // Datas
+      if (pedSortCol==='data') {
+        return pedSortAsc ? (va||'').localeCompare(vb||'') : (vb||'').localeCompare(va||'');
+      }
+      // Número do pedido (string numérica)
+      if (pedSortCol==='num') {
+        const na = parseInt(va)||0, nb = parseInt(vb)||0;
+        return pedSortAsc ? na-nb : nb-na;
+      }
+      // Texto
+      va = (va||'').toString().toLowerCase();
+      vb = (vb||'').toString().toLowerCase();
+      return pedSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+  } else {
+    data = data.reverse(); // padrão: mais recentes primeiro
+  }
+
+  // Atualiza indicadores visuais de ordenação
+  document.querySelectorAll('.sort-ind').forEach(el => {
+    el.textContent = '⇅'; el.classList.remove('active');
+  });
+  if (pedSortCol) {
+    const ind = document.getElementById('sortInd-'+pedSortCol);
+    if (ind) { ind.textContent = pedSortAsc ? '▲' : '▼'; ind.classList.add('active'); }
+  }
+
   const tbody=document.getElementById('pedidosTbody');
   if(!data.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--gray-400)">Nenhum pedido encontrado.</td></tr>';renderPedidosChart();return;}
-  tbody.innerHTML=[...data].reverse().map(p=>`<tr>
+  tbody.innerHTML=data.map(p=>`<tr>
     <td class="text-muted">#${p.num}</td>
     <td><strong>${p.cliente}</strong></td>
     <td class="text-muted">${p.cidade}</td>
