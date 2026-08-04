@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root {
   --navy: #1B2A4A;
@@ -307,6 +308,51 @@ th.sortable:hover { background: var(--navy-mid); }
   font-size: 11px; font-weight: 700; white-space: nowrap;
 }
 
+/* ── FILA DE PRODUÇÃO ── */
+.fila-card {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--white); border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 10px;
+  border-left: 5px solid var(--gold);
+  transition: box-shadow 0.15s;
+}
+.fila-card:hover { box-shadow: var(--shadow); }
+.fila-pos {
+  flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%;
+  background: var(--navy); color: var(--gold-light);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px;
+}
+.fila-pos.urgente { background: var(--danger); color: #fff; }
+.fila-info { flex: 1; min-width: 0; }
+.fila-cliente { font-weight: 700; color: var(--navy); font-size: 14px; }
+.fila-produtos { font-size: 12px; color: var(--gray-600); margin-top: 2px; }
+.fila-meta { flex: 0 0 auto; text-align: right; font-size: 12px; }
+.fila-dias-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 700; margin-top: 4px;
+}
+
+/* ── TERMÔMETRO ── */
+.termo-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  margin-bottom: 8px; background: var(--gray-100);
+}
+.termo-bolha {
+  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 13px;
+}
+.termo-info { flex: 1; min-width: 0; }
+.termo-nome { font-weight: 700; color: var(--navy); font-size: 14px; }
+.termo-detalhe { font-size: 12px; color: var(--gray-600); margin-top: 2px; }
+.termo-dias {
+  flex: 0 0 auto; text-align: right;
+  font-size: 20px; font-weight: 700;
+}
+.termo-dias-label { font-size: 10px; color: var(--gray-400); font-weight: 400; }
+
 /* ── NF IMPORT ── */
 .nf-review-card {
   background: var(--white);
@@ -441,6 +487,7 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="nav-item" onclick="goTab('produtos')"><span class="icon">📦</span> Produtos Acabados</div>
     <div class="nav-section">Comercial</div>
     <div class="nav-item" onclick="goTab('pedidos')"><span class="icon">🛒</span> Pedidos</div>
+    <div class="nav-item" onclick="goTab('fila')"><span class="icon">🏭</span> Fila de Produção</div>
     <div class="nav-item" onclick="goTab('clientes')"><span class="icon">🏪</span> Clientes</div>
     <div class="nav-section">Financeiro</div>
     <div class="nav-item" onclick="goTab('financeiro')"><span class="icon">💰</span> Receitas & Despesas</div>
@@ -562,7 +609,7 @@ th.sortable:hover { background: var(--navy-mid); }
       <div class="card">
         <div class="card-header">
           <div class="card-title">Gestão de Pedidos</div>
-          <button class="btn btn-gold" onclick="openModal('modalPedido')">+ Novo Pedido</button>
+          <button class="btn btn-gold" onclick="abrirNovoPedido()">+ Novo Pedido</button>
         </div>
         <div class="card-body">
           <div class="cat-tabs">
@@ -603,14 +650,43 @@ th.sortable:hover { background: var(--navy-mid); }
           <div class="card-title">Base de Clientes</div>
           <div class="flex">
             <button class="btn btn-ghost" onclick="openDedupModal()" title="Detectar e mesclar duplicatas">🔀 Corrigir Duplicatas</button>
-            <button class="btn btn-gold" onclick="openModal('modalCliente')">+ Novo Cliente</button>
+            <button class="btn btn-gold" onclick="abrirNovoCliente()">+ Novo Cliente</button>
           </div>
         </div>
         <div class="card-body">
           <div class="table-wrap"><table>
-            <thead><tr><th>Cliente</th><th>Cidade</th><th>Pedidos</th><th>Total Comprado</th><th>Último Pedido</th><th>Classificação</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Cidade</th><th>Contato</th><th>Pedidos</th><th>Total Comprado</th><th>Último Pedido</th><th>Classificação</th><th>Ações</th></tr></thead>
             <tbody id="clientesTbody"></tbody>
           </table></div>
+        </div>
+      </div>
+
+      <!-- Termômetro de clientes inativos -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🌡️ Termômetro de Clientes — Tempo sem Comprar</div>
+        </div>
+        <div class="card-body">
+          <div id="termometroLegenda" style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;font-size:12px">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:50%;background:#27AE60;display:inline-block"></span> Ativo (até 15 dias)</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:50%;background:#E67E22;display:inline-block"></span> Atenção (15 a 30 dias)</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:50%;background:#C0392B;display:inline-block"></span> Alerta (30 a 60 dias)</span>
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:50%;background:#7B241C;display:inline-block"></span> Crítico (+60 dias)</span>
+          </div>
+          <div id="termometroList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ FILA DE PRODUÇÃO ═══════════════ -->
+    <div class="tab" id="tab-fila">
+      <div id="kpiFila" class="kpi-grid" style="margin-bottom:20px"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🏭 Fila de Produção — Pedidos em Produção (ordem de chegada)</div>
+        </div>
+        <div class="card-body">
+          <div id="filaProducaoList"></div>
         </div>
       </div>
     </div>
@@ -891,26 +967,21 @@ th.sortable:hover { background: var(--navy-mid); }
         <input type="text" id="pedCidade" placeholder="Ex: Curitiba">
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group" style="flex:2">
-        <label>Produto / Descrição</label>
-        <div class="autocomplete-wrap">
-          <input type="text" id="pedProduto" placeholder="Ex: Capivara Gamer, 10 unid." autocomplete="off"
-            oninput="acShow('pedProduto','acProdutos',getProdutoNames())"
-            onkeydown="acKeyNav(event,'acProdutos')">
-          <div class="autocomplete-list" id="acProdutos"></div>
-        </div>
+
+    <!-- Lista de produtos -->
+    <div style="background:var(--gray-100);border-radius:8px;padding:14px;margin-bottom:14px">
+      <div class="flex-between" style="margin-bottom:10px">
+        <div style="font-size:12px;color:var(--gray-600);font-weight:600">📦 Produtos do pedido</div>
+        <button class="btn btn-sm btn-gold" onclick="addLinhaProduto()">+ Adicionar produto</button>
       </div>
-      <div class="form-group">
-        <label>Quantidade</label>
-        <input type="number" id="pedQtd" value="1" min="1">
+      <div id="pedProdutosList"></div>
+      <div class="flex-between" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-200)">
+        <span style="font-size:12px;color:var(--gray-600);font-weight:600">Valor Total do Pedido</span>
+        <strong id="pedValorTotalDisplay" style="font-size:16px;color:var(--gold)">R$ 0,00</strong>
       </div>
     </div>
+
     <div class="form-row">
-      <div class="form-group">
-        <label>Valor Total (R$)</label>
-        <input type="number" id="pedValor" placeholder="0,00" step="0.01" oninput="updateParcelasPreview('ped')">
-      </div>
       <div class="form-group">
         <label>Forma de Pagamento</label>
         <select id="pedPgto">
@@ -923,16 +994,43 @@ th.sortable:hover { background: var(--navy-mid); }
           <option>Em produção</option><option>Pronto</option><option>Entregue</option><option>Recebido</option>
         </select>
       </div>
-    </div>
-    <!-- Opção 50+50 -->
-    <div class="form-row" style="align-items:center">
-      <div class="form-group" style="flex:0 0 auto">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
-          <input type="checkbox" id="pedParcelado" onchange="toggleParcelado('ped')" style="accent-color:var(--gold);width:16px;height:16px">
-          Recebimento 50% + 50%
-        </label>
+      <div class="form-group">
+        <label>Data do Pedido</label>
+        <input type="date" id="pedData">
       </div>
     </div>
+
+    <!-- Condição de pagamento -->
+    <div class="form-row" style="align-items:center">
+      <div class="form-group">
+        <label>Condição de Recebimento</label>
+        <select id="pedCondicao" onchange="toggleCondicao('ped')">
+          <option value="avista">À vista</option>
+          <option value="15dias">A prazo — 15 dias</option>
+          <option value="5050">50% + 50%</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Box 15 dias -->
+    <div id="ped15diasBox" style="display:none;background:var(--gray-100);border-radius:8px;padding:14px;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--gray-600);margin-bottom:10px;font-weight:600">📅 Pagamento a prazo (15 dias)</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data Prevista de Pagamento</label>
+          <input type="date" id="ped15Data">
+        </div>
+        <div class="form-group">
+          <label>Recebido?</label>
+          <select id="ped15Status">
+            <option value="pendente">Pendente</option>
+            <option value="recebido">Recebido</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Box 50+50 -->
     <div id="pedParceladoBox" style="display:none;background:var(--gray-100);border-radius:8px;padding:14px;margin-bottom:8px">
       <div style="font-size:12px;color:var(--gray-600);margin-bottom:10px;font-weight:600">💳 Divisão do recebimento</div>
       <div class="form-row">
@@ -970,12 +1068,7 @@ th.sortable:hover { background: var(--navy-mid); }
         </div>
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>Data do Pedido</label>
-        <input type="date" id="pedData">
-      </div>
-    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalPedido')">Cancelar</button>
       <button class="btn btn-gold" onclick="addPedido()">Salvar Pedido</button>
@@ -985,8 +1078,11 @@ th.sortable:hover { background: var(--navy-mid); }
 
 <!-- Modal Cliente -->
 <div class="modal-overlay" id="modalCliente">
-  <div class="modal">
-    <div class="modal-title">🏪 Novo Cliente</div>
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">🏪 <span id="cliModalTitulo">Novo Cliente</span></div>
+    <input type="hidden" id="cliId">
+
+    <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Identificação</div>
     <div class="form-row">
       <div class="form-group">
         <label>Nome / Loja</label>
@@ -997,9 +1093,73 @@ th.sortable:hover { background: var(--navy-mid); }
         <input type="text" id="cliCidade" placeholder="Ex: Curitiba">
       </div>
     </div>
+
+    <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px">Contato</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>📱 WhatsApp</label>
+        <input type="text" id="cliWhatsapp" placeholder="(41) 99999-9999">
+      </div>
+      <div class="form-group">
+        <label>✉️ E-mail</label>
+        <input type="email" id="cliEmail" placeholder="contato@loja.com.br">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>🌐 Site</label>
+        <input type="text" id="cliSite" placeholder="www.loja.com.br">
+      </div>
+      <div class="form-group">
+        <label>📞 Telefone Fixo</label>
+        <input type="text" id="cliTelefone" placeholder="(41) 3333-3333">
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px">Redes Sociais</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>📷 Instagram</label>
+        <input type="text" id="cliInstagram" placeholder="@loja">
+      </div>
+      <div class="form-group">
+        <label>👍 Facebook</label>
+        <input type="text" id="cliFacebook" placeholder="/loja">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>🎵 TikTok</label>
+        <input type="text" id="cliTiktok" placeholder="@loja">
+      </div>
+      <div class="form-group">
+        <label>🔗 Outra rede</label>
+        <input type="text" id="cliOutraRede" placeholder="LinkedIn, YouTube, etc.">
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px">Ficha do Cliente</div>
+    <div class="form-group">
+      <label>📋 Informações e observações</label>
+      <textarea id="cliFicha" rows="6" placeholder="Principais produtos vendidos, público que frequenta, preço médio dos produtos, dias de maior movimento, preferências, histórico de negociação, oportunidades identificadas..."
+        style="width:100%;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;line-height:1.5"></textarea>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalCliente')">Cancelar</button>
       <button class="btn btn-gold" onclick="addCliente()">Salvar Cliente</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL FICHA CLIENTE (visualização) ═══════ -->
+<div class="modal-overlay" id="modalFichaCliente">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">📇 Ficha do Cliente</div>
+    <div id="fichaClienteBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalFichaCliente')">Fechar</button>
+      <button class="btn btn-gold" id="fichaEditBtn">✏️ Editar</button>
     </div>
   </div>
 </div>
@@ -1127,26 +1287,21 @@ th.sortable:hover { background: var(--navy-mid); }
         <input type="text" id="editPedCidade">
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group" style="flex:2">
-        <label>Produto / Descrição</label>
-        <div class="autocomplete-wrap">
-          <input type="text" id="editPedProduto" autocomplete="off"
-            oninput="acShow('editPedProduto','acEditProdutos',getProdutoNames())"
-            onkeydown="acKeyNav(event,'acEditProdutos')">
-          <div class="autocomplete-list" id="acEditProdutos"></div>
-        </div>
+
+    <!-- Lista de produtos -->
+    <div style="background:var(--gray-100);border-radius:8px;padding:14px;margin-bottom:14px">
+      <div class="flex-between" style="margin-bottom:10px">
+        <div style="font-size:12px;color:var(--gray-600);font-weight:600">📦 Produtos do pedido</div>
+        <button class="btn btn-sm btn-gold" onclick="addLinhaProduto('editPed')">+ Adicionar produto</button>
       </div>
-      <div class="form-group">
-        <label>Quantidade</label>
-        <input type="number" id="editPedQtd" min="1">
+      <div id="editPedProdutosList"></div>
+      <div class="flex-between" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-200)">
+        <span style="font-size:12px;color:var(--gray-600);font-weight:600">Valor Total do Pedido</span>
+        <strong id="editPedValorTotalDisplay" style="font-size:16px;color:var(--gold)">R$ 0,00</strong>
       </div>
     </div>
+
     <div class="form-row">
-      <div class="form-group">
-        <label>Valor Total (R$)</label>
-        <input type="number" id="editPedValor" step="0.01" oninput="updateParcelasPreview('editPed')">
-      </div>
       <div class="form-group">
         <label>Pagamento</label>
         <select id="editPedPgto">
@@ -1159,16 +1314,43 @@ th.sortable:hover { background: var(--navy-mid); }
           <option>Em produção</option><option>Pronto</option><option>Entregue</option><option>Recebido</option>
         </select>
       </div>
-    </div>
-    <!-- Opção 50+50 edição -->
-    <div class="form-row" style="align-items:center">
-      <div class="form-group" style="flex:0 0 auto">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
-          <input type="checkbox" id="editPedParcelado" onchange="toggleParcelado('editPed')" style="accent-color:var(--gold);width:16px;height:16px">
-          Recebimento 50% + 50%
-        </label>
+      <div class="form-group">
+        <label>Data</label>
+        <input type="date" id="editPedData">
       </div>
     </div>
+
+    <!-- Condição de pagamento -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Condição de Recebimento</label>
+        <select id="editPedCondicao" onchange="toggleCondicao('editPed')">
+          <option value="avista">À vista</option>
+          <option value="15dias">A prazo — 15 dias</option>
+          <option value="5050">50% + 50%</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Box 15 dias -->
+    <div id="editPed15diasBox" style="display:none;background:var(--gray-100);border-radius:8px;padding:14px;margin-bottom:8px">
+      <div style="font-size:12px;color:var(--gray-600);margin-bottom:10px;font-weight:600">📅 Pagamento a prazo (15 dias)</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data Prevista de Pagamento</label>
+          <input type="date" id="editPed15Data">
+        </div>
+        <div class="form-group">
+          <label>Recebido?</label>
+          <select id="editPed15Status">
+            <option value="pendente">Pendente</option>
+            <option value="recebido">Recebido</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Box 50+50 -->
     <div id="editPedParceladoBox" style="display:none;background:var(--gray-100);border-radius:8px;padding:14px;margin-bottom:8px">
       <div style="font-size:12px;color:var(--gray-600);margin-bottom:10px;font-weight:600">💳 Divisão do recebimento</div>
       <div class="form-row">
@@ -1206,12 +1388,7 @@ th.sortable:hover { background: var(--navy-mid); }
         </div>
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label>Data</label>
-        <input type="date" id="editPedData">
-      </div>
-    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalEditPedido')">Cancelar</button>
       <button class="btn btn-gold" onclick="saveEditPedido()">Salvar Alterações</button>
@@ -1517,7 +1694,7 @@ async function forceSyncFromCloud() {
 // ════════════════════════════════════════════════════
 const TAB_TITLES = {
   overview:'Visão Geral', filamentos:'Filamentos', produtos:'Produtos Acabados',
-  pedidos:'Pedidos', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
+  pedidos:'Pedidos', fila:'Fila de Produção', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
 };
 function goTab(id) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1536,6 +1713,11 @@ function toggleSidebar() { document.getElementById('sidebar').classList.toggle('
 // MODALS
 // ════════════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('open'); }
+
+function abrirNovoPedido() {
+  clearPedidoForm();
+  openModal('modalPedido');
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
@@ -1809,23 +1991,37 @@ function clearProdutoForm() {
 function clearPedidoForm() {
   document.getElementById('pedCliente').value = '';
   document.getElementById('pedCidade').value  = '';
-  document.getElementById('pedProduto').value = '';
-  document.getElementById('pedQtd').value     = '1';
-  document.getElementById('pedValor').value   = '';
   document.getElementById('pedPgto').value    = 'Pix';
   document.getElementById('pedStatus').value  = 'Em produção';
   document.getElementById('pedData').value    = new Date().toISOString().slice(0,10);
-  // Reset parcelas
-  document.getElementById('pedParcelado').checked = false;
+  // Reset produtos — limpa lista e adiciona 1 linha vazia
+  document.getElementById('pedProdutosList').innerHTML = '';
+  addLinhaProduto('ped');
+  // Reset condição de pagamento
+  document.getElementById('pedCondicao').value = 'avista';
+  document.getElementById('ped15diasBox').style.display   = 'none';
   document.getElementById('pedParceladoBox').style.display = 'none';
-  ['pedParc1Data','pedParc2Data'].forEach(id => { document.getElementById(id).value=''; });
-  ['pedParc1Status','pedParc2Status'].forEach(id => { document.getElementById(id).value='pendente'; });
-  ['pedParc1Valor','pedParc2Valor'].forEach(id => { document.getElementById(id).value=''; });
+  document.getElementById('ped15Data').value = '';
+  document.getElementById('ped15Status').value = 'pendente';
+  ['pedParc1Data','pedParc2Data'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+  ['pedParc1Status','pedParc2Status'].forEach(id => { const e=document.getElementById(id); if(e) e.value='pendente'; });
+  ['pedParc1Valor','pedParc2Valor'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+  document.getElementById('pedValorTotalDisplay').textContent = 'R$ 0,00';
 }
 
 function clearClienteForm() {
-  document.getElementById('cliNome').value   = '';
-  document.getElementById('cliCidade').value = '';
+  ['cliNome','cliCidade','cliWhatsapp','cliEmail','cliSite','cliTelefone',
+   'cliInstagram','cliFacebook','cliTiktok','cliOutraRede','cliFicha'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('cliId').value = '';
+  document.getElementById('cliModalTitulo').textContent = 'Novo Cliente';
+}
+
+function abrirNovoCliente() {
+  clearClienteForm();
+  openModal('modalCliente');
 }
 
 // ════════════════════════════════════════════════════
@@ -2283,42 +2479,155 @@ function delProduto(id){
 let pedFilter='todos';
 const STATUS_BADGE={'Em produção':'badge-warning','Pronto':'badge-info','Entregue':'badge-success','Recebido':'badge-gold'};
 
+// ════════════════════════════════════════════════════
+// LINHAS DE PRODUTO NO PEDIDO
+// ════════════════════════════════════════════════════
+let pedLinhaCount = 0;
+
+function addLinhaProduto(prefixo, produto, qtd, valor) {
+  const px = prefixo || 'ped';
+  const listId = px + 'ProdutosList';
+  const list = document.getElementById(listId);
+  const idx = pedLinhaCount++;
+  const div = document.createElement('div');
+  div.className = 'ped-produto-linha';
+  div.id = `${px}Linha_${idx}`;
+  div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:flex-end';
+  div.innerHTML = `
+    <div class="autocomplete-wrap" style="flex:2">
+      <label style="font-size:10px;color:var(--gray-600);font-weight:600">Produto</label>
+      <input type="text" id="${px}LinhaProd_${idx}" placeholder="Produto/serviço" autocomplete="off"
+        value="${produto ? produto.replace(/"/g,'&quot;') : ''}"
+        oninput="acShow('${px}LinhaProd_${idx}','${px}LinhaAc_${idx}',getProdutoNames())"
+        onkeydown="acKeyNav(event,'${px}LinhaAc_${idx}')"
+        style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+      <div class="autocomplete-list" id="${px}LinhaAc_${idx}"></div>
+    </div>
+    <div style="flex:0 0 70px">
+      <label style="font-size:10px;color:var(--gray-600);font-weight:600">Qtd</label>
+      <input type="number" id="${px}LinhaQtd_${idx}" value="${qtd||1}" min="1"
+        oninput="updatePedTotal('${px}')"
+        style="width:100%;padding:8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+    </div>
+    <div style="flex:0 0 110px">
+      <label style="font-size:10px;color:var(--gray-600);font-weight:600">Valor Unit. (R$)</label>
+      <input type="number" id="${px}LinhaVal_${idx}" value="${valor||''}" step="0.01" placeholder="0,00"
+        oninput="updatePedTotal('${px}')"
+        style="width:100%;padding:8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+    </div>
+    <button class="btn btn-sm btn-danger" onclick="removeLinhaProduto('${px}Linha_${idx}','${px}')" title="Remover" style="flex:0 0 auto">✕</button>
+  `;
+  list.appendChild(div);
+  updatePedTotal(px);
+}
+
+function removeLinhaProduto(linhaId, px) {
+  const el = document.getElementById(linhaId);
+  if (el) el.remove();
+  updatePedTotal(px);
+}
+
+function getLinhasProduto(px) {
+  const list = document.getElementById(px + 'ProdutosList');
+  const linhas = [];
+  list.querySelectorAll('.ped-produto-linha').forEach(div => {
+    const idx = div.id.split('_')[1];
+    const prod = document.getElementById(`${px}LinhaProd_${idx}`).value.trim();
+    const qtd  = parseInt(document.getElementById(`${px}LinhaQtd_${idx}`).value) || 1;
+    const val  = parseFloat(document.getElementById(`${px}LinhaVal_${idx}`).value) || 0;
+    if (prod) linhas.push({ produto: prod, qtd, valor: val });
+  });
+  return linhas;
+}
+
+function updatePedTotal(px) {
+  const linhas = getLinhasProduto(px);
+  const total = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  const disp = document.getElementById(px + 'ValorTotalDisplay');
+  if (disp) disp.textContent = `R$ ${total.toFixed(2)}`;
+  // Atualiza parcelas se 50+50 estiver ativo
+  updateCondicaoValores(px, total);
+}
+
+function updateCondicaoValores(px, total) {
+  const metade = (total/2).toFixed(2);
+  const p1 = document.getElementById(px+'Parc1Valor');
+  const p2 = document.getElementById(px+'Parc2Valor');
+  if (p1) p1.value = `R$ ${metade}`;
+  if (p2) p2.value = `R$ ${metade}`;
+}
+
+// ════════════════════════════════════════════════════
+// CONDIÇÃO DE PAGAMENTO
+// ════════════════════════════════════════════════════
+function toggleCondicao(px) {
+  const cond = document.getElementById(px+'Condicao').value;
+  document.getElementById(px+'15diasBox').style.display   = cond === '15dias' ? 'block' : 'none';
+  document.getElementById(px+'ParceladoBox').style.display = cond === '5050'  ? 'block' : 'none';
+  if (cond === '5050') {
+    const total = getLinhasProduto(px).reduce((s,l) => s + l.qtd*l.valor, 0);
+    updateCondicaoValores(px, total);
+  }
+  // Auto-preenche data prevista de 15 dias a partir de hoje
+  if (cond === '15dias') {
+    const campo = document.getElementById(px+'15Data');
+    if (campo && !campo.value) {
+      const d = new Date(); d.setDate(d.getDate()+15);
+      campo.value = d.toISOString().slice(0,10);
+    }
+  }
+}
+
 function addPedido() {
   const clienteDigitado = document.getElementById('pedCliente').value.trim();
   if (!clienteDigitado) { showToast('⚠️ Informe o cliente.','warning'); return; }
+
+  const linhas = getLinhasProduto('ped');
+  if (!linhas.length) { showToast('⚠️ Adicione pelo menos um produto.','warning'); return; }
+
   const existing = DB.clientes.find(c => c.nome.toLowerCase() === clienteDigitado.toLowerCase());
   const clienteNome = existing ? existing.nome : clienteDigitado;
   const cidade = document.getElementById('pedCidade').value.trim();
   if (!existing) DB.clientes.push({id: Date.now(), nome: clienteNome, cidade});
   else if (cidade && !existing.cidade) existing.cidade = cidade;
 
-  const valor = parseFloat(document.getElementById('pedValor').value)||0;
-  const parcelado = document.getElementById('pedParcelado').checked;
+  const valor = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  const qtdTotal = linhas.reduce((s,l) => s + l.qtd, 0);
+  const cond = document.getElementById('pedCondicao').value;
 
-  const parcelas = parcelado ? {
-    parc1: {
-      valor: valor/2,
-      data:  document.getElementById('pedParc1Data').value,
-      status: document.getElementById('pedParc1Status').value
-    },
-    parc2: {
-      valor: valor/2,
-      data:  document.getElementById('pedParc2Data').value,
-      status: document.getElementById('pedParc2Status').value
-    }
-  } : null;
+  // Monta objeto de condição de pagamento
+  let parcelas = null, prazo15 = null;
+  if (cond === '5050') {
+    parcelas = {
+      parc1: { valor: valor/2, data: document.getElementById('pedParc1Data').value, status: document.getElementById('pedParc1Status').value },
+      parc2: { valor: valor/2, data: document.getElementById('pedParc2Data').value, status: document.getElementById('pedParc2Status').value }
+    };
+  } else if (cond === '15dias') {
+    prazo15 = {
+      data:   document.getElementById('ped15Data').value,
+      status: document.getElementById('ped15Status').value
+    };
+  }
+
+  // Descrição resumida para exibição na tabela
+  const produtoResumo = linhas.length === 1
+    ? linhas[0].produto
+    : `${linhas[0].produto} +${linhas.length-1} item(ns)`;
 
   DB.pedidos.push({
     id: Date.now(),
     num: (DB.pedidos.length+1).toString().padStart(4,'0'),
     cliente: clienteNome, cidade,
-    produto: document.getElementById('pedProduto').value,
-    qtd:     parseInt(document.getElementById('pedQtd').value)||1,
+    produto: produtoResumo,
+    itens: linhas,            // ← lista completa de produtos
+    qtd: qtdTotal,
     valor,
-    pgto:    document.getElementById('pedPgto').value,
-    status:  document.getElementById('pedStatus').value,
-    data:    document.getElementById('pedData').value||new Date().toISOString().slice(0,10),
-    parcelas
+    pgto:   document.getElementById('pedPgto').value,
+    condicao: cond,
+    status: document.getElementById('pedStatus').value,
+    data:   document.getElementById('pedData').value||new Date().toISOString().slice(0,10),
+    parcelas,
+    prazo15
   });
   saveDB();
   showToast('✅ Pedido salvo! Pronto para próximo cadastro.');
@@ -2327,16 +2636,19 @@ function addPedido() {
 }
 
 // ════════════════════════════════════════════════════
-// PARCELAS 50+50
+// PARCELAS 50+50 (legado — mantido p/ compatibilidade)
 // ════════════════════════════════════════════════════
 function toggleParcelado(prefix) {
-  const checked = document.getElementById(prefix+'Parcelado').checked;
+  const cb = document.getElementById(prefix+'Parcelado');
+  if (!cb) return;
+  const checked = cb.checked;
   document.getElementById(prefix+'ParceladoBox').style.display = checked ? 'block' : 'none';
   if (checked) updateParcelasPreview(prefix);
 }
 
 function updateParcelasPreview(prefix) {
-  const valor = parseFloat(document.getElementById(prefix+'Valor').value) || 0;
+  const campo = document.getElementById(prefix+'Valor');
+  const valor = campo ? (parseFloat(campo.value) || 0) : 0;
   const metade = (valor / 2).toFixed(2);
   const p1 = document.getElementById(prefix+'Parc1Valor');
   const p2 = document.getElementById(prefix+'Parc2Valor');
@@ -2352,6 +2664,211 @@ function parcelaBadge(parc) {
   if (p1ok)         return `<span class="badge badge-warning" title="1ª parcela recebida, 2ª pendente">💰 1/2 ${parc.parc2.data?'até '+formatDate(parc.parc2.data):''}</span>`;
   return `<span class="badge badge-danger" title="Nenhuma parcela recebida">💰 0/2</span>`;
 }
+
+function prazo15Badge(pz) {
+  if (!pz) return '';
+  if (pz.status === 'recebido') return `<span class="badge badge-success" title="Pago">💰 Pago</span>`;
+  return `<span class="badge badge-warning" title="A prazo 15 dias">📅 15d ${pz.data?'até '+formatDate(pz.data):''}</span>`;
+}
+
+// ════════════════════════════════════════════════════
+// GERAR RECIBO DE ENTREGA — PDF (venda a prazo)
+// ════════════════════════════════════════════════════
+const VANGARDIS_LOGO = "data:image/jpeg;base64,";
+
+function gerarReciboPDF(id) {
+  const p = DB.pedidos.find(x => x.id === id);
+  if (!p) return;
+  if (!window.jspdf) { showToast("⚠️ Biblioteca PDF não carregada. Recarregue a página.", "warning"); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const W = 210, H = 297;
+
+  // ── Cores da identidade Vangardis ──
+  const navy = [27, 42, 74];
+  const gold = [201, 148, 10];
+  const goldLight = [232, 201, 106];
+  const grayLight = [242, 237, 230];
+  const darkText = [26, 26, 26];
+
+  // ── Cabeçalho navy ──
+  doc.setFillColor(navy[0], navy[1], navy[2]);
+  doc.rect(0, 0, W, 45, "F");
+  // Faixa dourada no topo
+  doc.setFillColor(gold[0], gold[1], gold[2]);
+  doc.rect(0, 0, W, 3, "F");
+
+  // Logo
+  try { doc.addImage(VANGARDIS_LOGO, "JPEG", 15, 10, 40, 26); } catch(e) {}
+
+  // Título do documento
+  doc.setTextColor(goldLight[0], goldLight[1], goldLight[2]);
+  doc.setFont("times", "bold");
+  doc.setFontSize(20);
+  doc.text("RECIBO DE ENTREGA", W - 15, 20, { align: "right" });
+  doc.setFontSize(12);
+  doc.setTextColor(255, 255, 255);
+  // Subtítulo conforme condição de pagamento
+  let subtitulo = "Pagamento à Vista";
+  if (p.prazo15) subtitulo = "Pagamento a Prazo — 15 dias";
+  else if (p.parcelas) subtitulo = "Pagamento Parcelado 50% + 50%";
+  doc.text(subtitulo, W - 15, 28, { align: "right" });
+  doc.setFontSize(9);
+  doc.setTextColor(200, 200, 200);
+  doc.text("Vangardis Expertise", W - 15, 36, { align: "right" });
+
+  // ── Número e data do documento ──
+  let y = 56;
+  doc.setFillColor(grayLight[0], grayLight[1], grayLight[2]);
+  doc.rect(15, y, W - 30, 12, "F");
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.text("Documento Nº: " + p.num, 20, y + 7.5);
+  const hoje = new Date();
+  doc.text("Emitido em: " + hoje.toLocaleDateString("pt-BR"), W - 20, y + 7.5, { align: "right" });
+
+  // ── Dados do cliente ──
+  y += 20;
+  doc.setFont("times", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.text("DADOS DO CLIENTE", 15, y);
+  doc.setDrawColor(gold[0], gold[1], gold[2]);
+  doc.setLineWidth(0.5);
+  doc.line(15, y + 2, W - 15, y + 2);
+
+  y += 9;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+  doc.text("Cliente: " + p.cliente, 20, y);
+  if (p.cidade) { y += 6; doc.text("Cidade: " + p.cidade, 20, y); }
+
+  // ── Data de entrega e condição de pagamento ──
+  const temPrazo = p.prazo15 || p.parcelas;
+  y += 12;
+  doc.setFont("times", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.text(temPrazo ? "ENTREGA E VENCIMENTO" : "ENTREGA E PAGAMENTO", 15, y);
+  doc.line(15, y + 2, W - 15, y + 2);
+
+  y += 9;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+  const dataEntrega = hoje.toLocaleDateString("pt-BR");
+  doc.text("Data de Entrega: " + dataEntrega, 20, y);
+
+  y += 6;
+  // Condição de pagamento
+  if (p.prazo15) {
+    const previsaoTxt = p.prazo15.data ? formatDatePDF(p.prazo15.data) : "—";
+    doc.text("Condição: A prazo — 15 dias", 20, y);
+    y += 6;
+    doc.setFont("helvetica", "bold");
+    doc.text("Previsão de Pagamento: " + previsaoTxt, 20, y);
+  } else if (p.parcelas) {
+    doc.text("Condição: Parcelado 50% + 50%", 20, y);
+    y += 6;
+    doc.setFont("helvetica", "bold");
+    const d1 = p.parcelas.parc1.data ? formatDatePDF(p.parcelas.parc1.data) : "—";
+    const d2 = p.parcelas.parc2.data ? formatDatePDF(p.parcelas.parc2.data) : "—";
+    doc.text("1ª Parcela (50%): " + d1 + "  |  2ª Parcela (50%): " + d2, 20, y);
+  } else {
+    // À vista
+    doc.setFont("helvetica", "bold");
+    doc.text("Condição: Pagamento à vista (" + (p.pgto || "—") + ")", 20, y);
+  }
+
+  // ── Tabela de produtos ──
+  y += 14;
+  doc.setFont("times", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.text("RELAÇÃO DE PRODUTOS", 15, y);
+
+  y += 4;
+  // Cabeçalho da tabela
+  doc.setFillColor(navy[0], navy[1], navy[2]);
+  doc.rect(15, y, W - 30, 9, "F");
+  doc.setTextColor(goldLight[0], goldLight[1], goldLight[2]);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("PRODUTO", 20, y + 6);
+  doc.text("QTD", 120, y + 6, { align: "center" });
+  doc.text("VALOR UNIT.", 150, y + 6, { align: "right" });
+  doc.text("SUBTOTAL", W - 18, y + 6, { align: "right" });
+
+  y += 9;
+  const itens = p.itens && p.itens.length ? p.itens : [{ produto: p.produto, qtd: p.qtd, valor: p.valor / (p.qtd||1) }];
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+  itens.forEach((it, i) => {
+    if (i % 2 === 1) {
+      doc.setFillColor(grayLight[0], grayLight[1], grayLight[2]);
+      doc.rect(15, y, W - 30, 8, "F");
+    }
+    const subtotal = it.qtd * it.valor;
+    doc.setFontSize(9);
+    // Trunca nome do produto se muito longo
+    let nome = it.produto;
+    if (nome.length > 55) nome = nome.slice(0, 53) + "...";
+    doc.text(nome, 20, y + 5.5);
+    doc.text(String(it.qtd), 120, y + 5.5, { align: "center" });
+    doc.text("R$ " + it.valor.toFixed(2), 150, y + 5.5, { align: "right" });
+    doc.text("R$ " + subtotal.toFixed(2), W - 18, y + 5.5, { align: "right" });
+    y += 8;
+  });
+
+  // ── Total ──
+  doc.setFillColor(gold[0], gold[1], gold[2]);
+  doc.rect(W - 90, y, 75, 11, "F");
+  doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("VALOR TOTAL:", W - 87, y + 7.5);
+  doc.text("R$ " + p.valor.toFixed(2), W - 18, y + 7.5, { align: "right" });
+
+  // ── Rodapé ──
+  const footerY = H - 30;
+  doc.setDrawColor(gold[0], gold[1], gold[2]);
+  doc.setLineWidth(0.5);
+  doc.line(15, footerY, W - 15, footerY);
+  doc.setFont("times", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  const rodapeTxt = temPrazo
+    ? "Este documento comprova a entrega dos produtos relacionados e o compromisso de pagamento na data prevista."
+    : "Este documento comprova a entrega dos produtos relacionados.";
+  doc.text(rodapeTxt, W/2, footerY + 6, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.text("Vangardis Expertise", W/2, footerY + 14, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text("Impressão 3D · Corte a Laser · Ímãs NFC personalizados · www.vangardis.com.br", W/2, footerY + 19, { align: "center" });
+
+  // Faixa dourada no rodapé
+  doc.setFillColor(gold[0], gold[1], gold[2]);
+  doc.rect(0, H - 3, W, 3, "F");
+
+  // ── Salva ──
+  const nomeArq = "Recibo_Entrega_" + p.cliente.replace(/[^a-zA-Z0-9]/g, "_") + "_" + p.num + ".pdf";
+  doc.save(nomeArq);
+  showToast("✅ Recibo gerado! Verifique seus downloads.");
+}
+
+function formatDatePDF(str) {
+  if (!str) return "—";
+  const [y, m, d] = str.split("-");
+  return d + "/" + m + "/" + y;
+}
+
 
 function clearPedidoFormParcelas() {
   document.getElementById('pedParcelado').checked = false;
@@ -2415,6 +2932,17 @@ function renderAlertaAtrasados() {
       }
     }
 
+    // Se é pagamento a prazo 15 dias
+    if (p.prazo15) {
+      if (p.prazo15.status === 'recebido') return false; // já pago
+      // Se a data prevista ainda não venceu, não alerta
+      if (p.prazo15.data) {
+        const prev = parseLocalDate(p.prazo15.data);
+        prev.setHours(0,0,0,0);
+        if (prev >= hoje) return false;
+      }
+    }
+
     // Calcula dias desde a data do pedido
     const dPed = parseLocalDate(p.data);
     dPed.setHours(0,0,0,0);
@@ -2430,6 +2958,7 @@ function renderAlertaAtrasados() {
       if (p.parcelas.parc1.status === 'recebido') pendente -= p.parcelas.parc1.valor;
       if (p.parcelas.parc2.status === 'recebido') pendente -= p.parcelas.parc2.valor;
     }
+    if (p.prazo15 && p.prazo15.status === 'recebido') pendente = 0;
     return { ...p, dias, pendente };
   }).sort((a,b) => b.dias - a.dias);
 
@@ -2451,6 +2980,9 @@ function renderAlertaAtrasados() {
             ${p.parcelas ? '<br><span style="font-size:11px;color:var(--gray-600)">'+
               (p.parcelas.parc2.data ? 'Previsão 2ª parcela: '+formatDate(p.parcelas.parc2.data)+' (vencida)' : 'Parcelado sem data prevista')
               +'</span>' : ''}
+            ${p.prazo15 ? '<br><span style="font-size:11px;color:var(--gray-600)">'+
+              (p.prazo15.data ? 'Previsão de pagamento: '+formatDate(p.prazo15.data)+' (vencida)' : 'A prazo sem data prevista')
+              +'</span>' : ''}
           </div>
           <div class="flex" style="gap:8px">
             <strong style="color:var(--danger)">R$ ${p.pendente.toFixed(2)}</strong>
@@ -2465,10 +2997,15 @@ function renderPedidos(){
   // ── Valores a receber (descontando parcelas já recebidas) ──
   // Helper: calcula o valor PENDENTE de um pedido
   function valorPendente(p) {
-    if (!p.parcelas) return p.valor; // sem parcelamento: valor total
-    const p1 = p.parcelas.parc1.status === 'recebido' ? p.parcelas.parc1.valor : 0;
-    const p2 = p.parcelas.parc2.status === 'recebido' ? p.parcelas.parc2.valor : 0;
-    return p.valor - p1 - p2;
+    // Pagamento a prazo 15 dias
+    if (p.prazo15) return p.prazo15.status === 'recebido' ? 0 : p.valor;
+    // Parcelado 50+50
+    if (p.parcelas) {
+      const p1 = p.parcelas.parc1.status === 'recebido' ? p.parcelas.parc1.valor : 0;
+      const p2 = p.parcelas.parc2.status === 'recebido' ? p.parcelas.parc2.valor : 0;
+      return p.valor - p1 - p2;
+    }
+    return p.valor; // à vista: valor total
   }
 
   const pedEmProd   = DB.pedidos.filter(p=>p.status==='Em produção');
@@ -2556,7 +3093,8 @@ function renderPedidos(){
 
   const tbody=document.getElementById('pedidosTbody');
   if(!data.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--gray-400)">Nenhum pedido encontrado.</td></tr>';renderPedidosChart();return;}
-  tbody.innerHTML=data.map(p=>`<tr>
+  tbody.innerHTML=data.map(p=>{
+    return `<tr>
     <td class="text-muted">#${p.num}</td>
     <td><strong>${p.cliente}</strong></td>
     <td class="text-muted">${p.cidade}</td>
@@ -2564,19 +3102,21 @@ function renderPedidos(){
     <td>
       <strong>R$ ${p.valor.toFixed(2)}</strong>
       ${p.parcelas ? '<br>'+parcelaBadge(p.parcelas) : ''}
+      ${p.prazo15 ? '<br>'+prazo15Badge(p.prazo15) : ''}
     </td>
     <td><span class="badge badge-navy">${p.pgto}</span></td>
     <td><span class="badge ${STATUS_BADGE[p.status]||'badge-navy'}">${p.status}</span></td>
     <td class="text-muted">${formatDate(p.data)}</td>
-    <td>
+    <td style="white-space:nowrap">
       <button class="btn btn-sm btn-ghost" onclick="editPedido(${p.id})" title="Editar pedido">✏️</button>
+      <button class="btn btn-sm" style="background:var(--navy);color:var(--gold-light);margin:0 2px" onclick="gerarReciboPDF(${p.id})" title="Gerar Recibo de Entrega (PDF)">📄</button>
       <select class="btn btn-ghost btn-sm" onchange="changeStatus(${p.id},this.value)" style="padding:4px 6px;font-size:11px;margin:0 2px">
         <option value="">Status</option>
         <option>Em produção</option><option>Pronto</option><option>Entregue</option><option>Recebido</option>
       </select>
       <button class="btn btn-sm btn-danger" onclick="delPedido(${p.id})">✕</button>
     </td>
-  </tr>`).join('');
+  </tr>`}).join('');
   renderPedidosChart();
 }
 
@@ -2595,7 +3135,20 @@ function filterPedidosKpi(status) {
 function changeStatus(id,val){
   if(!val)return;
   const p=DB.pedidos.find(p=>p.id===id);
-  if(p){p.status=val;saveDB();renderAll();}
+  if(p){
+    const virouEntregue = val === 'Entregue' && p.status !== 'Entregue';
+    p.status=val;
+    saveDB();
+    renderAll();
+    // Ao virar "Entregue", oferece gerar o recibo (qualquer forma de pagamento)
+    if (virouEntregue) {
+      setTimeout(() => {
+        if (confirm('📄 Pedido marcado como Entregue.\n\nDeseja gerar o Recibo de Entrega em PDF para enviar ao cliente?')) {
+          gerarReciboPDF(id);
+        }
+      }, 300);
+    }
+  }
 }
 function delPedido(id){
   if(!confirm('Remover este pedido?'))return;
@@ -2643,14 +3196,42 @@ function deduplicateClientes() {
 function addCliente(){
   const nome=document.getElementById('cliNome').value.trim();
   if(!nome){showToast('⚠️ Informe o nome do cliente.','warning');return;}
-  if(!DB.clientes.find(c=>c.nome.toLowerCase()===nome.toLowerCase())){
-    DB.clientes.push({id:Date.now(),nome,cidade:document.getElementById('cliCidade').value});
-    saveDB();
-    showToast('✅ Cliente salvo! Pronto para próximo cadastro.');
+
+  const editId = document.getElementById('cliId').value;
+  const dados = {
+    nome,
+    cidade:    document.getElementById('cliCidade').value.trim(),
+    whatsapp:  document.getElementById('cliWhatsapp').value.trim(),
+    email:     document.getElementById('cliEmail').value.trim(),
+    site:      document.getElementById('cliSite').value.trim(),
+    telefone:  document.getElementById('cliTelefone').value.trim(),
+    instagram: document.getElementById('cliInstagram').value.trim(),
+    facebook:  document.getElementById('cliFacebook').value.trim(),
+    tiktok:    document.getElementById('cliTiktok').value.trim(),
+    outraRede: document.getElementById('cliOutraRede').value.trim(),
+    ficha:     document.getElementById('cliFicha').value.trim()
+  };
+
+  if (editId) {
+    // Edição de cliente existente
+    const c = DB.clientes.find(x => x.id === parseInt(editId));
+    if (c) Object.assign(c, dados);
+    showToast('✅ Ficha do cliente atualizada!');
   } else {
-    showToast('ℹ️ Cliente já existe na base.','warning');
+    // Novo cliente
+    const existente = DB.clientes.find(c=>c.nome.toLowerCase()===nome.toLowerCase());
+    if (existente) {
+      // Atualiza o existente com os novos dados preenchidos
+      Object.keys(dados).forEach(k => { if (dados[k]) existente[k] = dados[k]; });
+      showToast('ℹ️ Cliente já existia — ficha atualizada.');
+    } else {
+      DB.clientes.push({ id:Date.now(), ...dados });
+      showToast('✅ Cliente cadastrado com sucesso!');
+    }
   }
+  saveDB();
   clearClienteForm();
+  closeModal('modalCliente');
   renderAll();
 }
 
@@ -2665,21 +3246,264 @@ function renderClientes(){
     const ultimo=peds.length?peds.sort((a,b)=>b.data.localeCompare(a.data))[0].data:'—';
     return{...c,pedidos:peds.length,total,ultimo};
   }).sort((a,b)=>b.total-a.total);
-  if(!stats.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--gray-400)">Nenhum cliente cadastrado.</td></tr>';return;}
+  if(!stats.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--gray-400)">Nenhum cliente cadastrado.</td></tr>';renderTermometro();return;}
   const tot=stats.reduce((s,c)=>s+c.total,0);
   let ac=0;
   tbody.innerHTML=stats.map(c=>{
     ac+=c.total;
     const pct=tot>0?ac/tot*100:100;
     const cls=pct<=80?'A':pct<=95?'B':'C';
+    // Ícones de contato disponíveis
+    const contatos = [];
+    if (c.whatsapp)  contatos.push('📱');
+    if (c.email)     contatos.push('✉️');
+    if (c.site)      contatos.push('🌐');
+    if (c.instagram) contatos.push('📷');
+    if (c.facebook)  contatos.push('👍');
+    if (c.tiktok)    contatos.push('🎵');
+    const contatoStr = contatos.length ? contatos.join(' ') : '<span class="text-muted">—</span>';
+    const temFicha = c.ficha ? '📋' : '';
     return`<tr>
-      <td><strong>${c.nome}</strong></td>
+      <td><strong>${c.nome}</strong> ${temFicha}</td>
       <td class="text-muted">${c.cidade||'—'}</td>
+      <td style="font-size:15px">${contatoStr}</td>
       <td>${c.pedidos}</td>
       <td><strong>R$ ${c.total.toFixed(2)}</strong></td>
       <td class="text-muted">${c.ultimo!=='—'?formatDate(c.ultimo):'—'}</td>
       <td><span class="badge abc-${cls.toLowerCase()}">${cls}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-ghost" onclick="verFichaCliente(${c.id})" title="Ver ficha completa">📇</button>
+        <button class="btn btn-sm btn-ghost" onclick="editarCliente(${c.id})" title="Editar">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="delCliente(${c.id})" title="Remover">✕</button>
+      </td>
     </tr>`;
+  }).join('');
+
+  renderTermometro();
+}
+
+function delCliente(id) {
+  const c = DB.clientes.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`Remover o cliente "${c.nome}"? Os pedidos dele não serão apagados.`)) return;
+  DB.clientes = DB.clientes.filter(x => x.id !== id);
+  saveDB(); renderAll();
+  showToast('Cliente removido.');
+}
+
+function editarCliente(id) {
+  const c = DB.clientes.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('cliId').value        = id;
+  document.getElementById('cliModalTitulo').textContent = 'Editar Cliente';
+  document.getElementById('cliNome').value      = c.nome || '';
+  document.getElementById('cliCidade').value    = c.cidade || '';
+  document.getElementById('cliWhatsapp').value  = c.whatsapp || '';
+  document.getElementById('cliEmail').value     = c.email || '';
+  document.getElementById('cliSite').value      = c.site || '';
+  document.getElementById('cliTelefone').value  = c.telefone || '';
+  document.getElementById('cliInstagram').value = c.instagram || '';
+  document.getElementById('cliFacebook').value  = c.facebook || '';
+  document.getElementById('cliTiktok').value    = c.tiktok || '';
+  document.getElementById('cliOutraRede').value = c.outraRede || '';
+  document.getElementById('cliFicha').value     = c.ficha || '';
+  openModal('modalCliente');
+}
+
+function verFichaCliente(id) {
+  const c = DB.clientes.find(x => x.id === id);
+  if (!c) return;
+  const peds = DB.pedidos.filter(p => p.cliente.toLowerCase() === c.nome.toLowerCase());
+  const total = peds.reduce((s,p) => s + p.valor, 0);
+  const ultimo = peds.length ? peds.sort((a,b)=>b.data.localeCompare(a.data))[0].data : null;
+
+  const linkContato = (icone, label, valor, href) => {
+    if (!valor) return '';
+    const link = href ? `<a href="${href}" target="_blank" style="color:var(--navy);text-decoration:none">${valor}</a>` : valor;
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:13px"><strong>${icone} ${label}:</strong> ${link}</div>`;
+  };
+
+  // Normaliza links
+  const waLink = c.whatsapp ? 'https://wa.me/55' + c.whatsapp.replace(/\D/g,'') : null;
+  const siteLink = c.site ? (c.site.startsWith('http') ? c.site : 'https://'+c.site) : null;
+  const igLink = c.instagram ? 'https://instagram.com/' + c.instagram.replace('@','') : null;
+
+  document.getElementById('fichaClienteBody').innerHTML = `
+    <div style="background:var(--navy);color:#fff;padding:16px;border-radius:var(--radius-sm);margin-bottom:16px">
+      <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--gold-light)">${c.nome}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px">📍 ${c.cidade||'Cidade não informada'}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="background:var(--gray-100);padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--navy)">${peds.length}</div>
+        <div style="font-size:11px;color:var(--gray-600)">Pedidos</div>
+      </div>
+      <div style="background:var(--gray-100);padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--gold)">R$ ${total.toFixed(0)}</div>
+        <div style="font-size:11px;color:var(--gray-600)">Total Comprado</div>
+      </div>
+      <div style="background:var(--gray-100);padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:14px;font-weight:700;color:var(--navy)">${ultimo?formatDate(ultimo):'—'}</div>
+        <div style="font-size:11px;color:var(--gray-600)">Último Pedido</div>
+      </div>
+    </div>
+
+    ${(c.whatsapp||c.email||c.site||c.telefone) ? `<div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;margin-bottom:8px">Contato</div>` : ''}
+    ${linkContato('📱','WhatsApp', c.whatsapp, waLink)}
+    ${linkContato('✉️','E-mail', c.email, c.email?'mailto:'+c.email:null)}
+    ${linkContato('🌐','Site', c.site, siteLink)}
+    ${linkContato('📞','Telefone', c.telefone, null)}
+
+    ${(c.instagram||c.facebook||c.tiktok||c.outraRede) ? `<div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;margin:14px 0 8px">Redes Sociais</div>` : ''}
+    ${linkContato('📷','Instagram', c.instagram, igLink)}
+    ${linkContato('👍','Facebook', c.facebook, null)}
+    ${linkContato('🎵','TikTok', c.tiktok, null)}
+    ${linkContato('🔗','Outra', c.outraRede, null)}
+
+    ${c.ficha ? `
+      <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;margin:14px 0 8px">Ficha do Cliente</div>
+      <div style="background:var(--gray-100);padding:14px;border-radius:8px;font-size:13px;line-height:1.6;white-space:pre-wrap">${c.ficha}</div>
+    ` : '<div style="margin-top:14px;padding:14px;background:var(--gray-100);border-radius:8px;font-size:13px;color:var(--gray-400);text-align:center">Nenhuma anotação na ficha ainda. Clique em Editar para adicionar informações sobre este cliente.</div>'}
+  `;
+
+  document.getElementById('fichaEditBtn').onclick = () => {
+    closeModal('modalFichaCliente');
+    editarCliente(id);
+  };
+  openModal('modalFichaCliente');
+}
+
+// ════════════════════════════════════════════════════
+// FILA DE PRODUÇÃO
+// ════════════════════════════════════════════════════
+function renderFilaProducao() {
+  const emProducao = DB.pedidos
+    .filter(p => p.status === 'Em produção')
+    .sort((a,b) => a.data.localeCompare(b.data)); // ordem de chegada (mais antigo primeiro)
+
+  // KPIs
+  const totalFila = emProducao.length;
+  const valorFila = emProducao.reduce((s,p) => s + p.valor, 0);
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const maisAntigo = emProducao.length
+    ? Math.floor((hoje - parseLocalDate(emProducao[0].data)) / (1000*60*60*24))
+    : 0;
+
+  const kpiEl = document.getElementById('kpiFila');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid #E67E22">
+      <div class="kpi-icon">🏭</div>
+      <div class="kpi-label">Pedidos na Fila</div>
+      <div class="kpi-value">${totalFila}</div>
+      <div class="kpi-sub">Em produção agora</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid var(--gold)">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Valor em Produção</div>
+      <div class="kpi-value">R$ ${valorFila.toFixed(2)}</div>
+      <div class="kpi-sub">Total a produzir</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid ${maisAntigo>7?'var(--danger)':'#27AE60'}">
+      <div class="kpi-icon">⏱️</div>
+      <div class="kpi-label">Espera Mais Longa</div>
+      <div class="kpi-value" style="color:${maisAntigo>7?'var(--danger)':'inherit'}">${maisAntigo} dias</div>
+      <div class="kpi-sub">Pedido mais antigo na fila</div>
+    </div>
+  `;
+
+  const list = document.getElementById('filaProducaoList');
+  if (!emProducao.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:30px">✅ Nenhum pedido em produção no momento.</div>';
+    return;
+  }
+
+  list.innerHTML = emProducao.map((p, i) => {
+    const dias = Math.floor((hoje - parseLocalDate(p.data)) / (1000*60*60*24));
+    // Cor do badge de dias
+    let badgeCor, badgeTxt;
+    if (dias >= 7)      { badgeCor = 'background:var(--danger);color:#fff'; badgeTxt = `${dias} dias na fila`; }
+    else if (dias >= 3) { badgeCor = 'background:var(--warning);color:#fff'; badgeTxt = `${dias} dias na fila`; }
+    else                { badgeCor = 'background:var(--success);color:#fff'; badgeTxt = dias===0?'Entrou hoje':`${dias} dia(s) na fila`; }
+
+    // Lista de produtos
+    const itens = (p.itens && p.itens.length) ? p.itens : [{produto:p.produto, qtd:p.qtd}];
+    const produtosStr = itens.map(it => `${it.qtd}× ${it.produto}`).join(' · ');
+
+    // Info de prazo se houver
+    let prazoInfo = '';
+    if (p.prazo15 && p.prazo15.data) prazoInfo = `📅 Pagto: ${formatDate(p.prazo15.data)}`;
+
+    return `
+      <div class="fila-card">
+        <div class="fila-pos ${dias>=7?'urgente':''}">${i+1}</div>
+        <div class="fila-info">
+          <div class="fila-cliente">${p.cliente} <span class="text-muted" style="font-weight:400">· #${p.num}</span></div>
+          <div class="fila-produtos">${produtosStr}</div>
+        </div>
+        <div class="fila-meta">
+          <div><strong>R$ ${p.valor.toFixed(2)}</strong></div>
+          <div class="text-muted" style="font-size:11px">Pedido: ${formatDate(p.data)}</div>
+          <span class="fila-dias-badge" style="${badgeCor}">${badgeTxt}</span>
+        </div>
+        <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:4px">
+          <button class="btn btn-sm" style="background:#2980B9;color:#fff" onclick="changeStatus(${p.id},'Pronto')" title="Marcar como Pronto">✓ Pronto</button>
+          <button class="btn btn-sm btn-ghost" onclick="editPedido(${p.id})" title="Editar">✏️</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════
+// TERMÔMETRO DE CLIENTES INATIVOS
+// ════════════════════════════════════════════════════
+function renderTermometro() {
+  const el = document.getElementById('termometroList');
+  if (!el) return;
+
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+  // Só clientes que já fizeram ao menos 1 pedido
+  const clientesComPedido = DB.clientes.map(c => {
+    const peds = DB.pedidos.filter(p => p.cliente.toLowerCase() === c.nome.toLowerCase());
+    if (!peds.length) return null;
+    const ultimoPed = peds.sort((a,b) => b.data.localeCompare(a.data))[0];
+    const diasSemComprar = Math.floor((hoje - parseLocalDate(ultimoPed.data)) / (1000*60*60*24));
+    const total = peds.reduce((s,p) => s + p.valor, 0);
+    return { ...c, diasSemComprar, ultimoPedido: ultimoPed.data, numPedidos: peds.length, total };
+  }).filter(Boolean).sort((a,b) => b.diasSemComprar - a.diasSemComprar);
+
+  if (!clientesComPedido.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px">Nenhum cliente com histórico de pedidos ainda.</div>';
+    return;
+  }
+
+  // Faixas: 15 / 30 / 60 dias
+  const corFaixa = (dias) => {
+    if (dias <= 15) return { cor:'#27AE60', label:'Ativo' };
+    if (dias <= 30) return { cor:'#E67E22', label:'Atenção' };
+    if (dias <= 60) return { cor:'#C0392B', label:'Alerta' };
+    return { cor:'#7B241C', label:'Crítico' };
+  };
+
+  el.innerHTML = clientesComPedido.map(c => {
+    const f = corFaixa(c.diasSemComprar);
+    return `
+      <div class="termo-item">
+        <div class="termo-bolha" style="background:${f.cor}">${f.label.charAt(0)}</div>
+        <div class="termo-info">
+          <div class="termo-nome">${c.nome} <span class="badge" style="background:${f.cor};color:#fff;font-size:10px">${f.label}</span></div>
+          <div class="termo-detalhe">
+            ${c.cidade||'—'} · ${c.numPedidos} pedido(s) · R$ ${c.total.toFixed(2)} total
+            · Último: ${formatDate(c.ultimoPedido)}
+            ${c.whatsapp ? ` · <a href="https://wa.me/55${c.whatsapp.replace(/\D/g,'')}" target="_blank" style="color:#27AE60;text-decoration:none">📱 chamar</a>` : ''}
+          </div>
+        </div>
+        <div class="termo-dias" style="color:${f.cor}">
+          ${c.diasSemComprar}
+          <div class="termo-dias-label">dias</div>
+        </div>
+      </div>`;
   }).join('');
 }
 
@@ -2991,25 +3815,30 @@ function editPedido(id) {
   document.getElementById('editPedId').value      = id;
   document.getElementById('editPedCliente').value = p.cliente;
   document.getElementById('editPedCidade').value  = p.cidade;
-  document.getElementById('editPedProduto').value = p.produto;
-  document.getElementById('editPedQtd').value     = p.qtd;
-  document.getElementById('editPedValor').value   = p.valor;
   document.getElementById('editPedPgto').value    = p.pgto;
   document.getElementById('editPedStatus').value  = p.status;
   document.getElementById('editPedData').value    = p.data;
-  // Load parcelas if exists
-  const cb = document.getElementById('editPedParcelado');
-  if (p.parcelas) {
-    cb.checked = true;
-    toggleParcelado('editPed');
-    updateParcelasPreview('editPed');
+
+  // Carrega produtos — usa itens[] se existir, senão converte o formato antigo
+  document.getElementById('editPedProdutosList').innerHTML = '';
+  const itens = (p.itens && p.itens.length) ? p.itens
+    : [{ produto: p.produto, qtd: p.qtd, valor: p.valor / (p.qtd||1) }];
+  itens.forEach(it => addLinhaProduto('editPed', it.produto, it.qtd, it.valor));
+
+  // Determina condição
+  let cond = p.condicao;
+  if (!cond) cond = p.parcelas ? '5050' : (p.prazo15 ? '15dias' : 'avista');
+  document.getElementById('editPedCondicao').value = cond;
+  toggleCondicao('editPed');
+
+  if (cond === '5050' && p.parcelas) {
     document.getElementById('editPedParc1Data').value   = p.parcelas.parc1.data   || '';
     document.getElementById('editPedParc1Status').value = p.parcelas.parc1.status || 'pendente';
     document.getElementById('editPedParc2Data').value   = p.parcelas.parc2.data   || '';
     document.getElementById('editPedParc2Status').value = p.parcelas.parc2.status || 'pendente';
-  } else {
-    cb.checked = false;
-    toggleParcelado('editPed');
+  } else if (cond === '15dias' && p.prazo15) {
+    document.getElementById('editPed15Data').value   = p.prazo15.data   || '';
+    document.getElementById('editPed15Status').value = p.prazo15.status || 'pendente';
   }
   openModal('modalEditPedido');
 }
@@ -3018,32 +3847,41 @@ function saveEditPedido() {
   const id = parseInt(document.getElementById('editPedId').value);
   const p  = DB.pedidos.find(x => x.id === id);
   if (!p) return;
+
+  const linhas = getLinhasProduto('editPed');
+  if (!linhas.length) { showToast('⚠️ Adicione pelo menos um produto.','warning'); return; }
+
   const novoCliente = document.getElementById('editPedCliente').value.trim();
   const novaCidade  = document.getElementById('editPedCidade').value.trim();
   const existing = DB.clientes.find(c => c.nome.toLowerCase() === novoCliente.toLowerCase());
   p.cliente = existing ? existing.nome : novoCliente;
   p.cidade  = novaCidade;
-  p.produto = document.getElementById('editPedProduto').value.trim();
-  p.qtd     = parseInt(document.getElementById('editPedQtd').value)    || 1;
-  p.valor   = parseFloat(document.getElementById('editPedValor').value) || 0;
+  if (!existing && novoCliente) DB.clientes.push({ id: Date.now(), nome: novoCliente, cidade: novaCidade });
+
+  p.itens = linhas;
+  p.valor = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  p.qtd   = linhas.reduce((s,l) => s + l.qtd, 0);
+  p.produto = linhas.length === 1 ? linhas[0].produto : `${linhas[0].produto} +${linhas.length-1} item(ns)`;
   p.pgto    = document.getElementById('editPedPgto').value;
   p.status  = document.getElementById('editPedStatus').value;
   p.data    = document.getElementById('editPedData').value;
-  if (!existing && novoCliente) DB.clientes.push({ id: Date.now(), nome: novoCliente, cidade: novaCidade });
-  // Save parcelas
-  const parcelado = document.getElementById('editPedParcelado').checked;
-  p.parcelas = parcelado ? {
-    parc1: {
-      valor: p.valor/2,
-      data:  document.getElementById('editPedParc1Data').value,
-      status: document.getElementById('editPedParc1Status').value
-    },
-    parc2: {
-      valor: p.valor/2,
-      data:  document.getElementById('editPedParc2Data').value,
-      status: document.getElementById('editPedParc2Status').value
-    }
-  } : null;
+
+  // Condição de pagamento
+  const cond = document.getElementById('editPedCondicao').value;
+  p.condicao = cond;
+  p.parcelas = null; p.prazo15 = null;
+  if (cond === '5050') {
+    p.parcelas = {
+      parc1: { valor: p.valor/2, data: document.getElementById('editPedParc1Data').value, status: document.getElementById('editPedParc1Status').value },
+      parc2: { valor: p.valor/2, data: document.getElementById('editPedParc2Data').value, status: document.getElementById('editPedParc2Status').value }
+    };
+  } else if (cond === '15dias') {
+    p.prazo15 = {
+      data:   document.getElementById('editPed15Data').value,
+      status: document.getElementById('editPed15Status').value
+    };
+  }
+
   saveDB(); closeModal('modalEditPedido'); renderAll();
   showToast('✅ Pedido atualizado!');
 }
@@ -3573,7 +4411,7 @@ function applyDedupProd(){
 
 function renderAll(){
   renderOverview();renderFilamentos();renderProdutos();
-  renderPedidos();renderClientes();renderFinanceiro();renderABC();
+  renderPedidos();renderFilaProducao();renderClientes();renderFinanceiro();renderABC();
 }
 
 // ════════════════════════════════════════════════════
