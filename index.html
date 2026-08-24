@@ -485,6 +485,7 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="nav-section">Estoque</div>
     <div class="nav-item" onclick="goTab('filamentos')"><span class="icon">🧵</span> Filamentos</div>
     <div class="nav-item" onclick="goTab('produtos')"><span class="icon">📦</span> Produtos Acabados</div>
+    <div class="nav-item" onclick="goTab('catalogo')"><span class="icon">📖</span> Catálogo de Produtos</div>
     <div class="nav-section">Comercial</div>
     <div class="nav-item" onclick="goTab('pedidos')"><span class="icon">🛒</span> Pedidos</div>
     <div class="nav-item" onclick="goTab('fila')"><span class="icon">🏭</span> Fila de Produção</div>
@@ -603,6 +604,99 @@ th.sortable:hover { background: var(--navy-mid); }
       </div>
     </div>
 
+    <!-- ═══════════════ CATÁLOGO DE PRODUTOS ═══════════════ -->
+    <div class="tab" id="tab-catalogo">
+      <div id="kpiCatalogo" class="kpi-grid" style="margin-bottom:20px"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📖 Catálogo de Produtos</div>
+          <div class="flex" style="gap:8px">
+            <button class="btn btn-ghost" onclick="exportarProdutosPublicados()" title="Gerar JSON apenas dos produtos com Publicar = Sim">📤 Exportar Publicados (JSON)</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('importCatalogoInput').click()" title="Importar produtos de um catálogo PDF">📄 Importar Catálogo PDF</button>
+            <input type="file" id="importCatalogoInput" accept=".pdf" style="display:none" onchange="importarCatalogoPDF(event)">
+            <button class="btn btn-gold" onclick="abrirNovoProdutoCatalogo()">+ Novo Produto</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- Barra de filtros -->
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--gray-200)">
+            <div style="flex:1;min-width:160px">
+              <label style="font-size:11px;color:var(--gray-600);font-weight:600;display:block;margin-bottom:4px">Categoria</label>
+              <select id="catFiltroCategoria" onchange="renderCatalogo()" style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+                <option value="">Todas as categorias</option>
+              </select>
+            </div>
+            <div style="min-width:110px">
+              <label style="font-size:11px;color:var(--gray-600);font-weight:600;display:block;margin-bottom:4px">Preço mín. (R$)</label>
+              <input type="number" id="catFiltroMin" placeholder="0" step="0.01" oninput="renderCatalogo()" style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+            </div>
+            <div style="min-width:110px">
+              <label style="font-size:11px;color:var(--gray-600);font-weight:600;display:block;margin-bottom:4px">Preço máx. (R$)</label>
+              <input type="number" id="catFiltroMax" placeholder="∞" step="0.01" oninput="renderCatalogo()" style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="limparFiltrosCatalogo()">Limpar filtros</button>
+          </div>
+
+          <!-- Barra de ações em lote (aparece quando há seleção) -->
+          <div id="catBatchBar" style="display:none;background:var(--navy);border-radius:8px;padding:12px 16px;margin-bottom:16px;align-items:center;gap:12px;flex-wrap:wrap">
+            <span id="catBatchCount" style="color:var(--gold-light);font-weight:600;font-size:13px"></span>
+            <div style="flex:1"></div>
+            <input type="text" id="catBatchCategoria" placeholder="Digite ou escolha a categoria..." list="catBatchCatList" style="padding:6px 10px;border-radius:6px;border:none;font-size:12px;min-width:150px">
+            <datalist id="catBatchCatList"></datalist>
+            <select id="catBatchCatModo" style="padding:6px 8px;border-radius:6px;border:none;font-size:12px">
+              <option value="add">adicionar</option>
+              <option value="replace">substituir todas</option>
+            </select>
+            <button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark)" onclick="aplicarCategoriaLote()">Aplicar categoria</button>
+            <div style="display:flex;gap:4px;align-items:center">
+              <input type="number" id="catBatchPreco" placeholder="Preço" step="0.01" style="width:80px;padding:6px 8px;border-radius:6px;border:none;font-size:12px">
+              <select id="catBatchPrecoTipo" style="padding:6px 8px;border-radius:6px;border:none;font-size:12px">
+                <option value="fixo">= fixo</option>
+                <option value="mais">+ acrescentar</option>
+                <option value="menos">− reduzir</option>
+                <option value="perc_mais">+% aumentar</option>
+                <option value="perc_menos">−% diminuir</option>
+              </select>
+              <button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark)" onclick="aplicarPrecoLote()">Aplicar preço</button>
+            </div>
+            <button class="btn btn-sm btn-danger" onclick="excluirLote()">🗑️ Excluir selecionados</button>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-sm" style="background:#27AE60;color:#fff" onclick="publicarLote(true)" title="Marcar como Publicar = Sim">📤 Publicar</button>
+              <button class="btn btn-sm" style="background:var(--gray-400);color:#fff" onclick="publicarLote(false)" title="Marcar como Publicar = Não">Despublicar</button>
+            </div>
+          </div>
+
+          <!-- Lista de produtos -->
+          <div class="table-wrap"><table>
+            <thead><tr>
+              <th style="width:36px"><input type="checkbox" id="catSelectAll" onchange="toggleSelectAllCat(this)" style="cursor:pointer"></th>
+              <th style="width:52px">Foto</th>
+              <th>Produto</th>
+              <th>Categoria</th>
+              <th>Dimensões</th>
+              <th>Peso</th>
+              <th>Valor</th>
+              <th>Publicar</th>
+              <th style="width:120px">Ações</th>
+            </tr></thead>
+            <tbody id="catalogoTbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ MODAL VISUALIZAR PRODUTO (com fotos) ═══════ -->
+    <div class="modal-overlay" id="modalVerProduto">
+      <div class="modal" style="max-width:560px">
+        <div class="modal-title">📦 <span id="verProdNome">Produto</span></div>
+        <div id="verProdBody"></div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="closeModal('modalVerProduto')">Fechar</button>
+          <button class="btn btn-gold" id="verProdEditBtn">✏️ Editar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══════════════ PEDIDOS ═══════════════ -->
     <div class="tab" id="tab-pedidos">
       <div id="kpiPedidos" class="kpi-grid" style="margin-bottom:20px"></div>
@@ -654,8 +748,23 @@ th.sortable:hover { background: var(--navy-mid); }
           </div>
         </div>
         <div class="card-body">
+          <!-- Campo de pesquisa -->
+          <div style="margin-bottom:16px">
+            <input type="text" id="clienteSearch" placeholder="🔍 Pesquisar por nome, cidade, contato, WhatsApp, e-mail..."
+              oninput="renderClientes()"
+              style="width:100%;padding:10px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px">
+          </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Cliente</th><th>Cidade</th><th>Contato</th><th>Pedidos</th><th>Total Comprado</th><th>Último Pedido</th><th>Classificação</th><th>Ações</th></tr></thead>
+            <thead><tr>
+              <th class="sortable" onclick="sortClientes('nome')">Cliente<span class="sort-ind" id="cliSortInd-nome"></span></th>
+              <th class="sortable" onclick="sortClientes('cidade')">Cidade<span class="sort-ind" id="cliSortInd-cidade"></span></th>
+              <th class="sortable" onclick="sortClientes('contato')">Contato<span class="sort-ind" id="cliSortInd-contato"></span></th>
+              <th class="sortable" onclick="sortClientes('pedidos')">Pedidos<span class="sort-ind" id="cliSortInd-pedidos"></span></th>
+              <th class="sortable" onclick="sortClientes('total')">Total Comprado<span class="sort-ind" id="cliSortInd-total"></span></th>
+              <th class="sortable" onclick="sortClientes('ultimo')">Último Pedido<span class="sort-ind" id="cliSortInd-ultimo"></span></th>
+              <th class="sortable" onclick="sortClientes('classificacao')">Classificação<span class="sort-ind" id="cliSortInd-classificacao"></span></th>
+              <th>Ações</th>
+            </tr></thead>
             <tbody id="clientesTbody"></tbody>
           </table></div>
         </div>
@@ -1093,6 +1202,12 @@ th.sortable:hover { background: var(--navy-mid); }
         <input type="text" id="cliCidade" placeholder="Ex: Curitiba">
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>👤 Pessoa de Contato</label>
+        <input type="text" id="cliContato" placeholder="Nome de quem você fala na loja">
+      </div>
+    </div>
 
     <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px">Contato</div>
     <div class="form-row">
@@ -1157,9 +1272,26 @@ th.sortable:hover { background: var(--navy-mid); }
   <div class="modal" style="max-width:600px">
     <div class="modal-title">📇 Ficha do Cliente</div>
     <div id="fichaClienteBody"></div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost btn-sm" id="fichaVincularBtn" onclick="abrirVincularPedidos()" title="Vincular pedidos que estão com outro nome a este cliente">🔗 Vincular pedidos</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="closeModal('modalFichaCliente')">Fechar</button>
+        <button class="btn btn-gold" id="fichaEditBtn">✏️ Editar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL VINCULAR PEDIDOS ═══════ -->
+<div class="modal-overlay" id="modalVincularPedidos">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">🔗 Vincular pedidos a <span id="vincClienteNome"></span></div>
+    <input type="hidden" id="vincClienteId">
+    <p class="text-muted" style="margin-bottom:14px;font-size:13px">Selecione abaixo os nomes que aparecem nos pedidos mas que na verdade são deste cliente (ex: quando o nome do contato foi usado antes do nome da loja). Os pedidos serão transferidos para <strong id="vincClienteNome2"></strong>.</p>
+    <div id="vincNomesList"></div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('modalFichaCliente')">Fechar</button>
-      <button class="btn btn-gold" id="fichaEditBtn">✏️ Editar</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalVincularPedidos')">Cancelar</button>
+      <button class="btn btn-gold" onclick="confirmarVincularPedidos()">Vincular selecionados</button>
     </div>
   </div>
 </div>
@@ -1485,6 +1617,193 @@ th.sortable:hover { background: var(--navy-mid); }
   </div>
 </div>
 
+<!-- ═══════ MODAL REATIVAÇÃO IA ═══════ -->
+<div class="modal-overlay" id="modalReativacao">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">✨ Reativação de Cliente</div>
+    <input type="hidden" id="reativClienteId">
+    <div id="reativClienteInfo" style="background:var(--gray-100);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px"></div>
+
+    <!-- O que a IA está analisando -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">🔍 Dados usados pela IA</div>
+      <div id="reativDadosAnalisados" style="background:#F8F6F1;border:1px dashed var(--gray-300);border-radius:8px;padding:12px;font-size:12px;line-height:1.7"></div>
+    </div>
+
+    <!-- Canal e tom -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Canal</label>
+        <select id="reativCanal" onchange="atualizarBotaoEnvio()">
+          <option value="whatsapp">📱 WhatsApp</option>
+          <option value="email">✉️ E-mail</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tom da mensagem</label>
+        <select id="reativTom">
+          <option value="amigavel">😊 Amigável e próximo</option>
+          <option value="profissional">💼 Profissional e direto</option>
+          <option value="promocional">🎯 Promocional com ofertas</option>
+          <option value="escassez">⏳ Escassez / urgência</option>
+          <option value="consultivo">🧠 Consultivo</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:0 0 auto;display:flex;align-items:flex-end">
+        <button class="btn btn-gold" onclick="gerarMensagemReativacao()" style="white-space:nowrap">✨ Gerar</button>
+      </div>
+    </div>
+
+    <div id="reativLoading" style="display:none;text-align:center;padding:24px">
+      <div style="font-size:32px;margin-bottom:8px">✨</div>
+      <div style="color:var(--gray-600);font-size:13px">A IA está analisando o cliente e gerando a mensagem...</div>
+    </div>
+
+    <div id="reativErro" style="display:none" class="alert alert-warning"></div>
+
+    <div id="reativResultado" style="display:none">
+      <label style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px" id="reativLabelMsg">Mensagem gerada (edite se quiser)</label>
+      <textarea id="reativMensagem" rows="9"
+        style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;line-height:1.5;margin-top:6px"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="copiarMensagemReativ()">📋 Copiar</button>
+      </div>
+    </div>
+
+    <!-- Histórico de mensagens geradas -->
+    <div id="reativHistorico" style="display:none;margin-top:16px">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">📜 Últimas abordagens geradas</div>
+      <div id="reativHistoricoList"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalReativacao')">Fechar</button>
+      <button class="btn btn-gold" id="reativEnvioBtn" style="display:none" onclick="enviarReativ()">📱 Abrir no WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL PRODUTO CATÁLOGO ═══════ -->
+<div class="modal-overlay" id="modalProdCatalogo">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">📖 <span id="prodCatTitulo">Novo Produto</span></div>
+    <input type="hidden" id="prodCatId">
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Nome do Produto</label>
+        <input type="text" id="prodCatNome" placeholder="Ex: Capivara Gamer">
+      </div>
+      <div class="form-group">
+        <label>Valor (R$)</label>
+        <input type="number" id="prodCatValor" placeholder="0,00" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Publicar?</label>
+        <select id="prodCatPublicar">
+          <option value="nao">Não</option>
+          <option value="sim">Sim</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Categorias (múltiplas) -->
+    <div class="form-group">
+      <label>Categorias <span class="text-muted" style="font-weight:400;font-size:11px">(marque uma ou mais, ou adicione novas)</span></label>
+      <div id="prodCatCategoriasChips" style="display:flex;flex-wrap:wrap;gap:8px;margin:6px 0"></div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="prodCatNovaCategoria" placeholder="Digite uma categoria nova e clique em +"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();adicionarNovaCategoria();}"
+          style="flex:1;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+        <button class="btn btn-sm btn-gold" onclick="adicionarNovaCategoria()">+ Adicionar</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Dimensões (A×L×P)</label>
+        <input type="text" id="prodCatDimensoes" placeholder="Ex: 8,2 × 9,5 × 9,3 cm">
+      </div>
+      <div class="form-group">
+        <label>Peso</label>
+        <input type="text" id="prodCatPeso" placeholder="Ex: 110 g">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Material / Descrição</label>
+      <textarea id="prodCatDesc" rows="2" placeholder="Ex: PLA Premium · descrição do produto"
+        style="width:100%;padding:10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical"></textarea>
+    </div>
+
+    <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 8px">Imagens (até 4 · digite o nome do arquivo)</div>
+    <div style="background:#F8F6F1;border:1px dashed var(--gray-300);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--gray-600);margin-bottom:10px">
+      💡 Digite apenas o nome do arquivo da imagem (ex: <strong>capivara-gamer.jpg</strong>). O sistema completa automaticamente com o endereço do seu servidor de imagens. Você também pode colar uma URL completa se preferir.
+    </div>
+    <div id="prodCatImagens"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalProdCatalogo')">Cancelar</button>
+      <button class="btn btn-gold" onclick="salvarProdutoCatalogo()">Salvar Produto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL IMPORTAR CATÁLOGO PDF (revisão 1 a 1) ═══════ -->
+<div class="modal-overlay" id="modalImportCatalogo">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">📄 Importar Catálogo — <span id="catReviewProgresso">Produto 1 de 1</span></div>
+    <div id="catReviewEmpty" style="display:none" class="alert alert-warning">⚠️ Nenhum produto pôde ser extraído do PDF.</div>
+
+    <div id="catReviewSingle">
+      <!-- Barra de progresso -->
+      <div style="background:var(--gray-200);height:6px;border-radius:3px;margin-bottom:16px;overflow:hidden">
+        <div id="catProgressBar" style="height:100%;background:var(--gold);width:0%;transition:width 0.3s"></div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label>Nome do Produto</label>
+          <input type="text" id="catRevNome" style="font-size:14px;font-weight:600">
+        </div>
+        <div class="form-group">
+          <label>Categoria</label>
+          <input type="text" id="catRevCategoria" list="catCategorias">
+          <datalist id="catCategorias"></datalist>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Dimensões</label>
+          <input type="text" id="catRevDimensoes">
+        </div>
+        <div class="form-group">
+          <label>Peso</label>
+          <input type="text" id="catRevPeso">
+        </div>
+        <div class="form-group" style="max-width:120px">
+          <label>Valor (R$)</label>
+          <input type="number" id="catRevValor" step="0.01">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Material / Descrição</label>
+        <input type="text" id="catRevDesc">
+      </div>
+
+      <div style="background:#F8F6F1;border:1px dashed var(--gray-300);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--gray-600);margin-top:6px">
+        💡 As imagens você adiciona depois, editando o produto no catálogo. Confira os dados e aprove.
+      </div>
+    </div>
+
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" onclick="pularProdutoRevisao()">⏭️ Pular este</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="cancelarImportCatalogo()">Cancelar tudo</button>
+        <button class="btn btn-gold" id="catAprovarBtn" onclick="aprovarProdutoRevisao()">✅ Aprovar e próximo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ DEDUP MODAL ═══════ -->
 <div class="modal-overlay" id="modalDedup">
   <div class="modal" style="max-width:640px">
@@ -1591,6 +1910,7 @@ let DB = {
   pedidos: [],
   clientes: [],
   despesas: [],
+  catalogo: [],
   barcodes: {}
 };
 
@@ -1694,6 +2014,7 @@ async function forceSyncFromCloud() {
 // ════════════════════════════════════════════════════
 const TAB_TITLES = {
   overview:'Visão Geral', filamentos:'Filamentos', produtos:'Produtos Acabados',
+  catalogo:'Catálogo de Produtos',
   pedidos:'Pedidos', fila:'Fila de Produção', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
 };
 function goTab(id) {
@@ -2010,7 +2331,7 @@ function clearPedidoForm() {
 }
 
 function clearClienteForm() {
-  ['cliNome','cliCidade','cliWhatsapp','cliEmail','cliSite','cliTelefone',
+  ['cliNome','cliCidade','cliContato','cliWhatsapp','cliEmail','cliSite','cliTelefone',
    'cliInstagram','cliFacebook','cliTiktok','cliOutraRede','cliFicha'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -3201,6 +3522,7 @@ function addCliente(){
   const dados = {
     nome,
     cidade:    document.getElementById('cliCidade').value.trim(),
+    contato:   document.getElementById('cliContato').value.trim(),
     whatsapp:  document.getElementById('cliWhatsapp').value.trim(),
     email:     document.getElementById('cliEmail').value.trim(),
     site:      document.getElementById('cliSite').value.trim(),
@@ -3215,8 +3537,27 @@ function addCliente(){
   if (editId) {
     // Edição de cliente existente
     const c = DB.clientes.find(x => x.id === parseInt(editId));
-    if (c) Object.assign(c, dados);
-    showToast('✅ Ficha do cliente atualizada!');
+    if (c) {
+      const nomeAntigo = c.nome;
+      Object.assign(c, dados);
+      // Se o nome mudou, propaga para todos os pedidos daquele cliente
+      if (nomeAntigo && nomeAntigo.toLowerCase() !== nome.toLowerCase()) {
+        let atualizados = 0;
+        DB.pedidos.forEach(p => {
+          if (p.cliente && p.cliente.toLowerCase() === nomeAntigo.toLowerCase()) {
+            p.cliente = nome;
+            atualizados++;
+          }
+        });
+        if (atualizados > 0) {
+          showToast(`✅ Cliente atualizado! Nome corrigido em ${atualizados} pedido(s).`);
+        } else {
+          showToast('✅ Ficha do cliente atualizada!');
+        }
+      } else {
+        showToast('✅ Ficha do cliente atualizada!');
+      }
+    }
   } else {
     // Novo cliente
     const existente = DB.clientes.find(c=>c.nome.toLowerCase()===nome.toLowerCase());
@@ -3235,25 +3576,85 @@ function addCliente(){
   renderAll();
 }
 
+let cliSortCol = null;
+let cliSortAsc = true;
+
+function sortClientes(col) {
+  if (cliSortCol === col) cliSortAsc = !cliSortAsc;
+  else { cliSortCol = col; cliSortAsc = true; }
+  renderClientes();
+}
+
 function renderClientes(){
   // Always deduplicate before rendering
   deduplicateClientes();
 
   const tbody=document.getElementById('clientesTbody');
-  const stats=DB.clientes.map(c=>{
+
+  // Monta stats de cada cliente
+  let stats=DB.clientes.map(c=>{
     const peds=DB.pedidos.filter(p=>p.cliente.toLowerCase()===c.nome.toLowerCase());
     const total=peds.reduce((s,p)=>s+p.valor,0);
-    const ultimo=peds.length?peds.sort((a,b)=>b.data.localeCompare(a.data))[0].data:'—';
+    const ultimo=peds.length?peds.sort((a,b)=>b.data.localeCompare(a.data))[0].data:'';
     return{...c,pedidos:peds.length,total,ultimo};
-  }).sort((a,b)=>b.total-a.total);
-  if(!stats.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--gray-400)">Nenhum cliente cadastrado.</td></tr>';renderTermometro();return;}
-  const tot=stats.reduce((s,c)=>s+c.total,0);
+  });
+
+  // Classificação ABC é calculada SEMPRE pela ordem de total (antes de filtrar/reordenar)
+  const porTotal = [...stats].sort((a,b)=>b.total-a.total);
+  const tot = porTotal.reduce((s,c)=>s+c.total,0);
   let ac=0;
-  tbody.innerHTML=stats.map(c=>{
+  const classMap = {};
+  porTotal.forEach(c=>{
     ac+=c.total;
     const pct=tot>0?ac/tot*100:100;
-    const cls=pct<=80?'A':pct<=95?'B':'C';
-    // Ícones de contato disponíveis
+    classMap[c.id] = pct<=80?'A':pct<=95?'B':'C';
+  });
+  stats.forEach(c=>{ c.classificacao = classMap[c.id]; });
+
+  // Filtro de pesquisa
+  const q = (document.getElementById('clienteSearch')?.value || '').trim().toLowerCase();
+  if (q) {
+    stats = stats.filter(c => {
+      return [c.nome, c.cidade, c.contato, c.whatsapp, c.email, c.telefone,
+              c.instagram, c.facebook, c.tiktok, c.ficha]
+        .filter(Boolean).some(v => v.toLowerCase().includes(q));
+    });
+  }
+
+  // Ordenação
+  if (cliSortCol) {
+    stats.sort((a,b)=>{
+      let va=a[cliSortCol], vb=b[cliSortCol];
+      if (cliSortCol==='total' || cliSortCol==='pedidos') {
+        va=parseFloat(va)||0; vb=parseFloat(vb)||0;
+        return cliSortAsc?va-vb:vb-va;
+      }
+      if (cliSortCol==='ultimo') {
+        return cliSortAsc ? (va||'').localeCompare(vb||'') : (vb||'').localeCompare(va||'');
+      }
+      if (cliSortCol==='classificacao') {
+        return cliSortAsc ? (va||'').localeCompare(vb||'') : (vb||'').localeCompare(va||'');
+      }
+      va=(va||'').toString().toLowerCase();
+      vb=(vb||'').toString().toLowerCase();
+      return cliSortAsc?va.localeCompare(vb):vb.localeCompare(va);
+    });
+  } else {
+    stats.sort((a,b)=>b.total-a.total); // padrão: maior comprador primeiro
+  }
+
+  // Indicadores visuais de ordenação
+  document.querySelectorAll('[id^="cliSortInd-"]').forEach(el=>{ el.textContent='⇅'; el.classList.remove('active'); });
+  if (cliSortCol) {
+    const ind=document.getElementById('cliSortInd-'+cliSortCol);
+    if (ind){ ind.textContent=cliSortAsc?'▲':'▼'; ind.classList.add('active'); }
+  }
+
+  if(!DB.clientes.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--gray-400)">Nenhum cliente cadastrado.</td></tr>';renderTermometro();return;}
+  if(!stats.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--gray-400)">Nenhum cliente encontrado para esta pesquisa.</td></tr>';renderTermometro();return;}
+
+  tbody.innerHTML=stats.map(c=>{
+    const cls=c.classificacao;
     const contatos = [];
     if (c.whatsapp)  contatos.push('📱');
     if (c.email)     contatos.push('✉️');
@@ -3264,12 +3665,12 @@ function renderClientes(){
     const contatoStr = contatos.length ? contatos.join(' ') : '<span class="text-muted">—</span>';
     const temFicha = c.ficha ? '📋' : '';
     return`<tr>
-      <td><strong>${c.nome}</strong> ${temFicha}</td>
+      <td><strong>${c.nome}</strong> ${temFicha}${c.contato?`<br><span class="text-muted" style="font-size:11px">👤 ${c.contato}</span>`:''}</td>
       <td class="text-muted">${c.cidade||'—'}</td>
       <td style="font-size:15px">${contatoStr}</td>
       <td>${c.pedidos}</td>
       <td><strong>R$ ${c.total.toFixed(2)}</strong></td>
-      <td class="text-muted">${c.ultimo!=='—'?formatDate(c.ultimo):'—'}</td>
+      <td class="text-muted">${c.ultimo?formatDate(c.ultimo):'—'}</td>
       <td><span class="badge abc-${cls.toLowerCase()}">${cls}</span></td>
       <td style="white-space:nowrap">
         <button class="btn btn-sm btn-ghost" onclick="verFichaCliente(${c.id})" title="Ver ficha completa">📇</button>
@@ -3298,6 +3699,7 @@ function editarCliente(id) {
   document.getElementById('cliModalTitulo').textContent = 'Editar Cliente';
   document.getElementById('cliNome').value      = c.nome || '';
   document.getElementById('cliCidade').value    = c.cidade || '';
+  document.getElementById('cliContato').value   = c.contato || '';
   document.getElementById('cliWhatsapp').value  = c.whatsapp || '';
   document.getElementById('cliEmail').value     = c.email || '';
   document.getElementById('cliSite').value      = c.site || '';
@@ -3310,9 +3712,12 @@ function editarCliente(id) {
   openModal('modalCliente');
 }
 
+let fichaClienteAtualId = null;
+
 function verFichaCliente(id) {
   const c = DB.clientes.find(x => x.id === id);
   if (!c) return;
+  fichaClienteAtualId = id;
   const peds = DB.pedidos.filter(p => p.cliente.toLowerCase() === c.nome.toLowerCase());
   const total = peds.reduce((s,p) => s + p.valor, 0);
   const ultimo = peds.length ? peds.sort((a,b)=>b.data.localeCompare(a.data))[0].data : null;
@@ -3332,6 +3737,7 @@ function verFichaCliente(id) {
     <div style="background:var(--navy);color:#fff;padding:16px;border-radius:var(--radius-sm);margin-bottom:16px">
       <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--gold-light)">${c.nome}</div>
       <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px">📍 ${c.cidade||'Cidade não informada'}</div>
+      ${c.contato ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">👤 Contato: ${c.contato}</div>` : ''}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
@@ -3372,6 +3778,371 @@ function verFichaCliente(id) {
     editarCliente(id);
   };
   openModal('modalFichaCliente');
+}
+
+// ════════════════════════════════════════════════════
+// VINCULAR PEDIDOS DE OUTRO NOME A UM CLIENTE
+// ════════════════════════════════════════════════════
+function abrirVincularPedidos() {
+  const c = DB.clientes.find(x => x.id === fichaClienteAtualId);
+  if (!c) { showToast('⚠️ Cliente não identificado.','warning'); return; }
+
+  document.getElementById('vincClienteId').value = c.id;
+  document.getElementById('vincClienteNome').textContent = c.nome;
+  document.getElementById('vincClienteNome2').textContent = c.nome;
+
+  // Lista todos os nomes de cliente que aparecem em pedidos MAS não correspondem
+  // exatamente a este cliente (candidatos a vincular)
+  const nomesEmPedidos = [...new Set(DB.pedidos.map(p => p.cliente).filter(Boolean))];
+  const nomesClientes = new Set(DB.clientes.map(x => x.nome.toLowerCase()));
+
+  // Candidatos: nomes em pedidos que não são o nome atual deste cliente
+  const candidatos = nomesEmPedidos.filter(n => n.toLowerCase() !== c.nome.toLowerCase());
+
+  const list = document.getElementById('vincNomesList');
+  if (!candidatos.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:20px;font-size:13px">Não há outros nomes em pedidos para vincular.</div>';
+  } else {
+    list.innerHTML = candidatos.map((n, i) => {
+      const qtd = DB.pedidos.filter(p => p.cliente === n).length;
+      // Marca se esse nome NÃO tem cliente cadastrado (mais provável de ser órfão)
+      const semCliente = !nomesClientes.has(n.toLowerCase());
+      const dica = semCliente ? '<span style="color:var(--warning);font-size:11px"> · sem cadastro próprio</span>' : '<span style="color:var(--gray-400);font-size:11px"> · tem cadastro próprio</span>';
+      return `
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:8px;margin-bottom:8px;cursor:pointer">
+          <input type="checkbox" value="${n.replace(/"/g,'&quot;')}" style="cursor:pointer">
+          <div style="flex:1">
+            <strong style="font-size:13px">${n}</strong>${dica}
+            <div class="text-muted" style="font-size:11px">${qtd} pedido(s)</div>
+          </div>
+        </label>`;
+    }).join('');
+  }
+  closeModal('modalFichaCliente');
+  openModal('modalVincularPedidos');
+}
+
+function confirmarVincularPedidos() {
+  const id = parseInt(document.getElementById('vincClienteId').value);
+  const c = DB.clientes.find(x => x.id === id);
+  if (!c) return;
+
+  const marcados = [...document.querySelectorAll('#vincNomesList input:checked')].map(cb => cb.value);
+  if (!marcados.length) { showToast('⚠️ Selecione ao menos um nome.','warning'); return; }
+
+  let total = 0;
+  marcados.forEach(nomeAntigo => {
+    DB.pedidos.forEach(p => {
+      if (p.cliente === nomeAntigo) { p.cliente = c.nome; total++; }
+    });
+    // Remove eventual cliente duplicado com o nome antigo (se existir e for diferente)
+    const dup = DB.clientes.find(x => x.nome.toLowerCase() === nomeAntigo.toLowerCase() && x.id !== c.id);
+    if (dup) DB.clientes = DB.clientes.filter(x => x.id !== dup.id);
+  });
+
+  saveDB();
+  closeModal('modalVincularPedidos');
+  renderAll();
+  showToast(`✅ ${total} pedido(s) vinculado(s) a ${c.nome}.`);
+}
+
+
+
+// Descrições de tom para o prompt
+const TONS_REATIVACAO = {
+  amigavel:     'AMIGÁVEL E PRÓXIMO — caloroso, informal, como quem fala com um conhecido. Use no máximo 2-3 emojis.',
+  profissional: 'PROFISSIONAL E DIRETO — cordial mas objetivo, sem rodeios, linguagem de negócios. Use no máximo 1 emoji.',
+  promocional:  'PROMOCIONAL COM OFERTAS — animado e persuasivo, destacando vantagens e benefícios de comprar agora. Pode usar emojis de destaque.',
+  escassez:     'ESCASSEZ / URGÊNCIA — cria senso de oportunidade limitada (estoque, prazo, condição especial por tempo curto), incentivando ação rápida, mas sem ser agressivo ou falso.',
+  consultivo:   'CONSULTIVO — postura de especialista que entende o negócio do cliente, traz sugestões pensadas para o público e o momento dele, agrega valor antes de vender.'
+};
+
+function coletarDadosAnalise(c, peds) {
+  // Produtos comprados
+  const produtosComprados = {};
+  peds.forEach(p => {
+    const itens = (p.itens && p.itens.length) ? p.itens : [{produto: p.produto, qtd: p.qtd}];
+    itens.forEach(it => { produtosComprados[it.produto] = (produtosComprados[it.produto] || 0) + it.qtd; });
+  });
+  const hoje = new Date();
+  const ultimoPed = peds.length ? peds.sort((a,b) => b.data.localeCompare(a.data))[0] : null;
+  const diasSemComprar = ultimoPed ? Math.floor((hoje - parseLocalDate(ultimoPed.data)) / (1000*60*60*24)) : 0;
+  const total = peds.reduce((s,p) => s + p.valor, 0);
+  const ticketMedio = peds.length ? total / peds.length : 0;
+
+  return { produtosComprados, diasSemComprar, total, ticketMedio, numPedidos: peds.length };
+}
+
+function montarPromptReativacao(c, peds, tom) {
+  const d = coletarDadosAnalise(c, peds);
+  const listaProdutos = Object.entries(d.produtosComprados)
+    .map(([prod, qtd]) => `${prod} (${qtd} unid. no total)`).join(', ');
+  const tomDesc = TONS_REATIVACAO[tom] || TONS_REATIVACAO.amigavel;
+  const canal = document.getElementById('reativCanal').value;
+  const ehEmail = canal === 'email';
+
+  let ctx = `Você é o assistente comercial da Vangardis Expertise, uma empresa de Curitiba especializada em impressão 3D, corte a laser e ímãs NFC personalizados, que vende no atacado para lojistas.
+
+Preciso que você escreva ${ehEmail ? 'um E-MAIL' : 'uma mensagem de WhatsApp'} para reativar um cliente que está há um tempo sem comprar.
+
+TOM DA MENSAGEM: ${tomDesc}
+
+A mensagem deve:
+1. Cumprimentar pelo nome da pessoa de contato (se informada); caso contrário, usar o nome da loja
+2. Mencionar sutilmente que faz um tempo desde o último pedido (sem soar cobrando)
+3. Oferecer reposição dos produtos que ele já compra
+4. Sugerir 1 ou 2 produtos novos que façam sentido para o perfil dele
+5. Ter um chamado para ação claro
+${ehEmail
+  ? '6. Como é e-mail, comece com uma linha "Assunto: ..." com um assunto atrativo, depois pule uma linha e escreva o corpo. Pode ser um pouco mais estruturado que WhatsApp, mas ainda conciso (2-3 parágrafos curtos).'
+  : '6. Ser concisa (adequada para WhatsApp, no máximo 6-8 linhas)'}
+
+DADOS DO CLIENTE:
+- Nome da loja/cliente: ${c.nome}
+${c.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + c.contato : ''}
+- Cidade: ${c.cidade || 'não informada'}
+- Dias desde o último pedido: ${d.diasSemComprar} dias
+- Total de pedidos já feitos: ${d.numPedidos}
+- Ticket médio: R$ ${d.ticketMedio.toFixed(2)}
+- Produtos que já comprou: ${listaProdutos || 'não especificado'}`;
+
+  if (c.ficha) ctx += `\n\nINFORMAÇÕES ADICIONAIS SOBRE O CLIENTE (ficha):\n${c.ficha}`;
+
+  const redes = [];
+  if (c.instagram) redes.push('Instagram: ' + c.instagram);
+  if (c.facebook)  redes.push('Facebook: ' + c.facebook);
+  if (c.tiktok)    redes.push('TikTok: ' + c.tiktok);
+  if (c.site)      redes.push('Site: ' + c.site);
+  if (redes.length) ctx += `\n\nPresença online do cliente: ${redes.join(' | ')}`;
+
+  ctx += `\n\nEscreva APENAS o texto ${ehEmail ? 'do e-mail (com a linha de Assunto)' : 'da mensagem de WhatsApp'}, sem explicações antes ou depois, pronto para copiar e enviar. Não use aspas ao redor do texto.`;
+
+  return ctx;
+}
+
+function abrirReativacao(clienteId) {
+  const c = DB.clientes.find(x => x.id === clienteId);
+  if (!c) return;
+  const peds = DB.pedidos.filter(p => p.cliente.toLowerCase() === c.nome.toLowerCase());
+  reativClienteAtual = { cliente: c, pedidos: peds };
+
+  document.getElementById('reativClienteId').value = clienteId;
+  document.getElementById('reativClienteInfo').innerHTML = `
+    <strong style="color:var(--navy)">${c.nome}</strong>${c.contato ? ' · 👤 '+c.contato : ''} · ${c.cidade || 'Sem cidade'}<br>
+    <span class="text-muted">${peds.length} pedido(s) · ${c.whatsapp ? '📱 '+c.whatsapp : '⚠️ Sem WhatsApp'} · ${c.email ? '✉️ '+c.email : '⚠️ Sem e-mail'}</span>
+  `;
+
+  // Monta painel de transparência: o que a IA está usando
+  renderDadosAnalisados(c, peds);
+
+  // Reset estados
+  document.getElementById('reativResultado').style.display = 'none';
+  document.getElementById('reativErro').style.display = 'none';
+  document.getElementById('reativEnvioBtn').style.display = 'none';
+  document.getElementById('reativLoading').style.display = 'none';
+
+  atualizarBotaoEnvio();
+  renderHistoricoReativ(c, false); // mostra todo o histórico ao abrir
+
+  openModal('modalReativacao');
+}
+
+function renderDadosAnalisados(c, peds) {
+  const d = coletarDadosAnalise(c, peds);
+  const check = (v) => v ? '✅' : '<span style="color:var(--gray-400)">➖ não cadastrado</span>';
+  const produtos = Object.keys(d.produtosComprados);
+
+  document.getElementById('reativDadosAnalisados').innerHTML = `
+    <div><strong>Do dashboard:</strong></div>
+    <div>• Histórico: ${d.numPedidos} pedido(s), ticket médio R$ ${d.ticketMedio.toFixed(2)}, ${d.diasSemComprar} dias sem comprar</div>
+    <div>• Produtos que compra: ${produtos.length ? produtos.join(', ') : '<span style="color:var(--gray-400)">nenhum registrado</span>'}</div>
+    <div style="margin-top:6px"><strong>Da ficha e redes (enriqueça para melhorar a IA):</strong></div>
+    <div>• Ficha de anotações: ${check(c.ficha)}</div>
+    <div>• Instagram: ${c.instagram ? '✅ '+c.instagram : check(false)}</div>
+    <div>• Facebook: ${c.facebook ? '✅ '+c.facebook : check(false)}</div>
+    <div>• Site: ${c.site ? '✅ '+c.site : check(false)}</div>
+    ${(!c.ficha || !c.instagram && !c.facebook && !c.site)
+      ? '<div style="margin-top:6px;color:var(--warning);font-size:11px">💡 Dica: quanto mais preencher a ficha e redes do cliente, mais personalizada fica a mensagem. <a href="#" onclick="closeModal(\'modalReativacao\');editarCliente('+c.id+');return false;" style="color:var(--gold);font-weight:600">Editar ficha agora</a></div>'
+      : ''}
+  `;
+}
+
+async function gerarMensagemReativacao() {
+  const c = reativClienteAtual.cliente;
+  const peds = reativClienteAtual.pedidos;
+  const tom = document.getElementById('reativTom').value;
+  const canal = document.getElementById('reativCanal').value;
+  const prompt = montarPromptReativacao(c, peds, tom);
+
+  document.getElementById('reativLoading').style.display = 'block';
+  document.getElementById('reativResultado').style.display = 'none';
+  document.getElementById('reativErro').style.display = 'none';
+
+  try {
+    const res = await fetch(GS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'gerarMensagem', prompt })
+    });
+    const json = await res.json();
+    document.getElementById('reativLoading').style.display = 'none';
+
+    if (json.ok && json.mensagem) {
+      const msg = json.mensagem.trim();
+      document.getElementById('reativMensagem').value = msg;
+      document.getElementById('reativResultado').style.display = 'block';
+      // Salva no histórico
+      salvarHistoricoReativ(c, msg, tom, canal);
+      renderHistoricoReativ(c, true); // 1º item já está na textarea
+      atualizarBotaoEnvio();
+    } else {
+      mostrarErroReativ(json.error || 'Não foi possível gerar a mensagem.');
+    }
+  } catch (e) {
+    document.getElementById('reativLoading').style.display = 'none';
+    mostrarErroReativ('Erro de conexão com o servidor de IA. Verifique se a chave da API está configurada no Apps Script.');
+  }
+}
+
+// Guarda últimas 3 mensagens por cliente
+function salvarHistoricoReativ(c, msg, tom, canal) {
+  if (!c.historicoReativ) c.historicoReativ = [];
+  c.historicoReativ.unshift({
+    msg, tom, canal,
+    data: new Date().toISOString()
+  });
+  c.historicoReativ = c.historicoReativ.slice(0, 3); // mantém só os 3 últimos
+  saveDB();
+}
+
+const TOM_LABELS = {
+  amigavel:'😊 Amigável', profissional:'💼 Profissional', promocional:'🎯 Promocional',
+  escassez:'⏳ Escassez', consultivo:'🧠 Consultivo'
+};
+
+function renderHistoricoReativ(c, skipFirst) {
+  const wrap = document.getElementById('reativHistorico');
+  const list = document.getElementById('reativHistoricoList');
+  const hist = c.historicoReativ || [];
+
+  // skipFirst = true → o 1º item já está na textarea (acabou de gerar), mostra do 2º em diante
+  // skipFirst = false → abrindo do zero, mostra TODOS os itens do histórico
+  const itens = skipFirst ? hist.slice(1) : hist;
+
+  if (!itens.length) { wrap.style.display = 'none'; return; }
+
+  wrap.style.display = 'block';
+  const offset = skipFirst ? 1 : 0;
+  list.innerHTML = itens.map((h, i) => {
+    const dt = new Date(h.data);
+    const canalIcon = h.canal === 'email' ? '✉️' : '📱';
+    return `
+      <div style="background:var(--gray-100);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:600;color:var(--navy)">${canalIcon} ${TOM_LABELS[h.tom]||h.tom}</span>
+          <span class="text-muted" style="font-size:11px">${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div style="white-space:pre-wrap;color:var(--gray-600);line-height:1.5;max-height:80px;overflow-y:auto">${h.msg}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="usarDoHistorico(${c.id},${i+offset})">↑ Usar esta versão</button>
+      </div>`;
+  }).join('');
+}
+
+function usarDoHistorico(clienteId, idx) {
+  const c = DB.clientes.find(x => x.id === clienteId);
+  if (!c || !c.historicoReativ || !c.historicoReativ[idx]) return;
+  const h = c.historicoReativ[idx];
+  document.getElementById('reativMensagem').value = h.msg;
+  document.getElementById('reativResultado').style.display = 'block';
+  document.getElementById('reativTom').value = h.tom;
+  document.getElementById('reativCanal').value = h.canal;
+  atualizarBotaoEnvio();
+  showToast('Versão carregada do histórico.');
+}
+
+function mostrarErroReativ(msg) {
+  const el = document.getElementById('reativErro');
+  el.style.display = 'block';
+  el.innerHTML = '⚠️ ' + msg;
+}
+
+function copiarMensagemReativ() {
+  const txt = document.getElementById('reativMensagem').value;
+  navigator.clipboard.writeText(txt).then(() => showToast('📋 Mensagem copiada!'))
+  .catch(() => {
+    const ta = document.getElementById('reativMensagem');
+    ta.select(); document.execCommand('copy');
+    showToast('📋 Mensagem copiada!');
+  });
+}
+
+// Atualiza o botão de envio conforme o canal escolhido
+function atualizarBotaoEnvio() {
+  const canal = document.getElementById('reativCanal').value;
+  const btn = document.getElementById('reativEnvioBtn');
+  const c = reativClienteAtual ? reativClienteAtual.cliente : null;
+  const temResultado = document.getElementById('reativResultado').style.display !== 'none';
+
+  const label = document.getElementById('reativLabelMsg');
+  if (label) label.textContent = canal === 'email' ? 'E-mail gerado (edite se quiser)' : 'Mensagem gerada (edite se quiser)';
+
+  if (!temResultado || !c) { btn.style.display = 'none'; return; }
+
+  if (canal === 'email') {
+    btn.textContent = '✉️ Copiar e abrir Titan';
+    btn.style.display = c.email ? 'inline-block' : 'none';
+  } else {
+    btn.textContent = '📱 Abrir no WhatsApp';
+    btn.style.display = c.whatsapp ? 'inline-block' : 'none';
+  }
+}
+
+function enviarReativ() {
+  const canal = document.getElementById('reativCanal').value;
+  const c = reativClienteAtual.cliente;
+  const msg = document.getElementById('reativMensagem').value;
+
+  if (canal === 'email') {
+    if (!c.email) { showToast('⚠️ Cliente sem e-mail cadastrado.','warning'); return; }
+    // Separa assunto do corpo se a IA gerou linha "Assunto:"
+    let assunto = 'Novidades da Vangardis Expertise';
+    let corpo = msg;
+    const matchAssunto = msg.match(/^assunto:\s*(.+)$/im);
+    if (matchAssunto) {
+      assunto = matchAssunto[1].trim();
+      corpo = msg.replace(/^assunto:\s*.+$/im, '').trim();
+    }
+
+    // Monta texto completo para copiar (com destinatário e assunto identificados)
+    const textoCompleto =
+      `Para: ${c.email}\n` +
+      `Assunto: ${assunto}\n\n` +
+      corpo;
+
+    // Copia tudo para a área de transferência
+    navigator.clipboard.writeText(textoCompleto).then(() => {
+      abrirTitanWebmail(c.email);
+    }).catch(() => {
+      // Fallback de cópia
+      const ta = document.createElement('textarea');
+      ta.value = textoCompleto;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch(_) {}
+      document.body.removeChild(ta);
+      abrirTitanWebmail(c.email);
+    });
+  } else {
+    if (!c.whatsapp) { showToast('⚠️ Cliente sem WhatsApp cadastrado.','warning'); return; }
+    const numero = '55' + c.whatsapp.replace(/\D/g, '');
+    const url = `https://wa.me/${numero}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  }
+}
+
+function abrirTitanWebmail(emailDestino) {
+  // Abre o webmail do Titan numa nova aba
+  window.open('https://secureserver.titan.email/mail/', '_blank');
+  showToast('📋 E-mail copiado! Cole no Titan (Ctrl+V) e envie para ' + emailDestino, 'success');
 }
 
 // ════════════════════════════════════════════════════
@@ -3496,12 +4267,15 @@ function renderTermometro() {
           <div class="termo-detalhe">
             ${c.cidade||'—'} · ${c.numPedidos} pedido(s) · R$ ${c.total.toFixed(2)} total
             · Último: ${formatDate(c.ultimoPedido)}
-            ${c.whatsapp ? ` · <a href="https://wa.me/55${c.whatsapp.replace(/\D/g,'')}" target="_blank" style="color:#27AE60;text-decoration:none">📱 chamar</a>` : ''}
           </div>
         </div>
-        <div class="termo-dias" style="color:${f.cor}">
-          ${c.diasSemComprar}
-          <div class="termo-dias-label">dias</div>
+        <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px">
+          <div class="termo-dias" style="color:${f.cor}">
+            ${c.diasSemComprar}
+            <div class="termo-dias-label">dias</div>
+          </div>
+          <button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark);white-space:nowrap"
+            onclick="abrirReativacao(${c.id})" title="Gerar mensagem de reativação com IA">✨ Reativar</button>
         </div>
       </div>`;
   }).join('');
@@ -4026,7 +4800,16 @@ function getProdutoNames(){
   const names=new Set();
   DB.pedidos.forEach(p=>{if(p.produto)names.add(p.produto);});
   DB.produtos.forEach(p=>names.add(p.cat+(p.variacao?' · '+p.variacao:'')));
+  // Inclui produtos do Catálogo de Produtos
+  (DB.catalogo||[]).forEach(p=>{if(p.nome)names.add(p.nome);});
   return[...names].filter(Boolean).sort();
+}
+
+// Retorna o preço de um produto do catálogo pelo nome (ou null)
+function getPrecoCatalogo(nome){
+  if(!nome)return null;
+  const p=(DB.catalogo||[]).find(x=>x.nome.toLowerCase()===nome.toLowerCase().trim());
+  return p?p.valor:null;
 }
 let acSelectedIdx=-1;
 function acShow(inputId,listId,allItems){
@@ -4044,10 +4827,13 @@ function acShow(inputId,listId,allItems){
   if(!scored.length){list.classList.remove('open');return;}
   list.innerHTML=scored.map((x,i)=>{
     const simBadge=x.score<0.75?`<span class="ac-sim">~${Math.round(x.score*100)}%</span>`:'';
+    // Se o item é um produto do catálogo, mostra o preço
+    const precoCat=getPrecoCatalogo(x.item);
+    const precoBadge=precoCat!==null?`<span class="ac-sim" style="background:var(--gold);color:var(--navy-dark)">R$ ${precoCat.toFixed(2)}</span>`:'';
     return`<div class="autocomplete-item" data-value="${x.item.replace(/"/g,'&quot;')}"
       onmousedown="acSelect('${inputId}','${listId}',this)"
       onmouseover="acHover(${i},'${listId}')">
-      <div class="ac-main">${highlightMatch(x.item,query)}</div>${simBadge}
+      <div class="ac-main">${highlightMatch(x.item,query)}</div>${precoBadge||simBadge}
     </div>`;
   }).join('');
   list.classList.add('open');
@@ -4059,6 +4845,19 @@ function acSelect(inputId,listId,el){
   if(inputId==='pedCliente'){
     const cli=DB.clientes.find(c=>c.nome.toLowerCase()===val.toLowerCase());
     if(cli&&cli.cidade)document.getElementById('pedCidade').value=cli.cidade;
+  }
+  // Se for uma linha de produto de pedido, preenche o valor unitário do catálogo
+  const m=inputId.match(/^(ped|editPed)LinhaProd_(\d+)$/);
+  if(m){
+    const preco=getPrecoCatalogo(val);
+    if(preco!==null){
+      const px=m[1], idx=m[2];
+      const campoVal=document.getElementById(`${px}LinhaVal_${idx}`);
+      if(campoVal){
+        campoVal.value=preco.toFixed(2);
+        updatePedTotal(px); // recalcula o total do pedido
+      }
+    }
   }
 }
 function acKeyNav(e,listId){
@@ -4409,8 +5208,772 @@ function applyDedupProd(){
   showToast(`✅ ${dedupProdPendingGroups.length} grupo(s) de produtos corrigido(s)!`);
 }
 
+// ════════════════════════════════════════════════════
+// CATÁLOGO DE PRODUTOS
+// ════════════════════════════════════════════════════
+
+// Base pública das imagens no Cloudflare R2
+const R2_BASE = "https://img.vangardisexpertise.com.br";
+
+// Resolve o valor de uma imagem para uma URL exibível:
+// - Se for só o nome do arquivo → monta com a base do R2
+// - Se for link do Google Drive → converte para link direto
+// - Se já for uma URL completa (http) → usa como está
+function resolverImagem(valor) {
+  if (!valor) return '';
+  valor = valor.trim();
+  // Já é uma URL completa?
+  if (/^https?:\/\//i.test(valor)) {
+    return converterLinkDrive(valor); // trata Drive; R2/outros passam direto
+  }
+  // É só o nome do arquivo → monta com a base do R2
+  const nome = valor.replace(/^\/+/, ''); // remove barras iniciais
+  return `${R2_BASE}/${nome}`;
+}
+
+// Normaliza URL de imagem. Links do Google Drive são convertidos para
+// link direto; URLs do Cloudflare R2 e outras são usadas como estão.
+function converterLinkDrive(url) {
+  if (!url) return '';
+  url = url.trim();
+  // Só transforma se for realmente um link do Google Drive
+  if (/drive\.google\.com/i.test(url)) {
+    let id = null, m;
+    if ((m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/))) id = m[1];
+    else if ((m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/))) id = m[1];
+    else if ((m = url.match(/\/d\/([a-zA-Z0-9_-]+)/))) id = m[1];
+    if (id) return `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+  }
+  // Cloudflare R2, Imgur, ou qualquer outra URL direta: usa como está
+  return url;
+}
+
+let prodCatImagemCount = 0;
+
+function addLinhaImagem(valor) {
+  const list = document.getElementById('prodCatImagens');
+  const atuais = list.querySelectorAll('.prodcat-img-linha').length;
+  if (atuais >= 4) { showToast('⚠️ Máximo de 4 imagens.','warning'); return; }
+  const idx = prodCatImagemCount++;
+  const div = document.createElement('div');
+  div.className = 'prodcat-img-linha';
+  div.id = `prodCatImg_${idx}`;
+  div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+  div.innerHTML = `
+    <input type="text" id="prodCatImgUrl_${idx}" placeholder="Nome do arquivo (ex: capivara-gamer.jpg)" value="${valor||''}"
+      oninput="previewImagem(${idx})"
+      style="flex:1;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+    <div id="prodCatImgPrev_${idx}" style="width:40px;height:40px;border-radius:6px;background:var(--gray-100);flex:0 0 auto;background-size:cover;background-position:center;border:1px solid var(--gray-200)"></div>
+    <button class="btn btn-sm btn-danger" onclick="removeLinhaImagem('prodCatImg_${idx}')" title="Remover">✕</button>
+  `;
+  list.appendChild(div);
+  if (valor) previewImagem(idx);
+  atualizarBotaoAddImagem();
+}
+
+function removeLinhaImagem(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+  atualizarBotaoAddImagem();
+}
+
+function atualizarBotaoAddImagem() {
+  const list = document.getElementById('prodCatImagens');
+  const atuais = list.querySelectorAll('.prodcat-img-linha').length;
+  // Remove botão antigo
+  const btnAntigo = document.getElementById('addImgBtn');
+  if (btnAntigo) btnAntigo.remove();
+  if (atuais < 4) {
+    const btn = document.createElement('button');
+    btn.id = 'addImgBtn';
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.textContent = '+ Adicionar imagem';
+    btn.onclick = () => addLinhaImagem();
+    list.appendChild(btn);
+  }
+}
+
+function previewImagem(idx) {
+  const url = document.getElementById(`prodCatImgUrl_${idx}`).value;
+  const prev = document.getElementById(`prodCatImgPrev_${idx}`);
+  const linkDireto = resolverImagem(url);
+  if (linkDireto) {
+    prev.style.backgroundImage = `url('${linkDireto}')`;
+  } else {
+    prev.style.backgroundImage = '';
+  }
+}
+
+function getImagensProdCat() {
+  const list = document.getElementById('prodCatImagens');
+  const urls = [];
+  list.querySelectorAll('.prodcat-img-linha').forEach(div => {
+    const idx = div.id.split('_')[1];
+    const val = document.getElementById(`prodCatImgUrl_${idx}`).value.trim();
+    if (val) urls.push(val); // guarda o que o usuário digitou (nome ou URL)
+  });
+  return urls;
+}
+
+// Categorias selecionadas no modal atual (chips)
+let prodCatCategoriasSel = [];
+
+function renderChipsCategorias() {
+  const cont = document.getElementById('prodCatCategoriasChips');
+  // Todas as categorias já existentes no catálogo
+  const todas = getTodasCategorias();
+  // Une com as selecionadas (para incluir novas ainda não salvas)
+  const universo = [...new Set([...todas, ...prodCatCategoriasSel])];
+  if (!universo.length) {
+    cont.innerHTML = '<span class="text-muted" style="font-size:12px">Nenhuma categoria ainda. Adicione a primeira abaixo.</span>';
+    return;
+  }
+  cont.innerHTML = universo.map(cat => {
+    const sel = prodCatCategoriasSel.includes(cat);
+    return `<span onclick="toggleCategoriaChip('${cat.replace(/'/g,"\\'")}')"
+      style="cursor:pointer;padding:5px 12px;border-radius:16px;font-size:12px;font-weight:600;user-select:none;
+      ${sel ? 'background:var(--gold);color:var(--navy-dark)' : 'background:var(--gray-100);color:var(--gray-600);border:1px solid var(--gray-200)'}">
+      ${sel ? '✓ ' : ''}${cat}</span>`;
+  }).join('');
+}
+
+function toggleCategoriaChip(cat) {
+  const i = prodCatCategoriasSel.indexOf(cat);
+  if (i >= 0) prodCatCategoriasSel.splice(i, 1);
+  else prodCatCategoriasSel.push(cat);
+  renderChipsCategorias();
+}
+
+function adicionarNovaCategoria() {
+  const input = document.getElementById('prodCatNovaCategoria');
+  const nova = input.value.trim();
+  if (!nova) return;
+  if (!prodCatCategoriasSel.some(c => c.toLowerCase() === nova.toLowerCase())) {
+    prodCatCategoriasSel.push(nova);
+  }
+  input.value = '';
+  renderChipsCategorias();
+}
+
+// Retorna todas as categorias já usadas no catálogo (lida com array ou string antiga)
+function getTodasCategorias() {
+  const set = new Set();
+  (DB.catalogo||[]).forEach(p => {
+    getCategoriasProduto(p).forEach(c => set.add(c));
+  });
+  return [...set].sort();
+}
+
+// Normaliza: retorna sempre um array de categorias de um produto
+function getCategoriasProduto(p) {
+  if (Array.isArray(p.categorias)) return p.categorias.filter(Boolean);
+  if (p.categoria) return [p.categoria]; // compatibilidade com formato antigo
+  return [];
+}
+
+function abrirNovoProdutoCatalogo() {
+  document.getElementById('prodCatId').value = '';
+  document.getElementById('prodCatTitulo').textContent = 'Novo Produto';
+  ['prodCatNome','prodCatDimensoes','prodCatPeso','prodCatValor','prodCatDesc','prodCatNovaCategoria'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('prodCatPublicar').value = 'nao';
+  prodCatCategoriasSel = [];
+  renderChipsCategorias();
+  document.getElementById('prodCatImagens').innerHTML = '';
+  addLinhaImagem(); // começa com 1 linha
+  openModal('modalProdCatalogo');
+}
+
+function salvarProdutoCatalogo() {
+  const nome = document.getElementById('prodCatNome').value.trim();
+  if (!nome) { showToast('⚠️ Informe o nome do produto.','warning'); return; }
+
+  if (!DB.catalogo) DB.catalogo = [];
+  const dados = {
+    nome,
+    categorias: [...prodCatCategoriasSel],
+    dimensoes:  document.getElementById('prodCatDimensoes').value.trim(),
+    peso:       document.getElementById('prodCatPeso').value.trim(),
+    valor:      parseFloat(document.getElementById('prodCatValor').value) || 0,
+    desc:       document.getElementById('prodCatDesc').value.trim(),
+    publicar:   document.getElementById('prodCatPublicar').value === 'sim',
+    imagens:    getImagensProdCat()
+  };
+
+  const editId = document.getElementById('prodCatId').value;
+  if (editId) {
+    const p = DB.catalogo.find(x => x.id === parseInt(editId));
+    if (p) {
+      delete p.categoria; // remove campo antigo se existir
+      Object.assign(p, dados);
+    }
+    showToast('✅ Produto atualizado!');
+  } else {
+    DB.catalogo.push({ id: Date.now(), ...dados });
+    showToast('✅ Produto cadastrado no catálogo!');
+  }
+  saveDB();
+  closeModal('modalProdCatalogo');
+  renderCatalogo();
+}
+
+let catSelecionados = new Set();
+
+function editarProdutoCatalogo(id) {
+  const p = (DB.catalogo||[]).find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('prodCatId').value = id;
+  document.getElementById('prodCatTitulo').textContent = 'Editar Produto';
+  document.getElementById('prodCatNome').value      = p.nome || '';
+  document.getElementById('prodCatDimensoes').value = p.dimensoes || '';
+  document.getElementById('prodCatPeso').value      = p.peso || '';
+  document.getElementById('prodCatValor').value     = p.valor || '';
+  document.getElementById('prodCatDesc').value      = p.desc || '';
+  document.getElementById('prodCatPublicar').value  = p.publicar ? 'sim' : 'nao';
+  document.getElementById('prodCatNovaCategoria').value = '';
+  prodCatCategoriasSel = getCategoriasProduto(p);
+  renderChipsCategorias();
+  document.getElementById('prodCatImagens').innerHTML = '';
+  const imgs = p.imagens || [];
+  if (imgs.length) imgs.forEach(u => addLinhaImagem(u));
+  else addLinhaImagem();
+  openModal('modalProdCatalogo');
+}
+
+function delProdutoCatalogo(id) {
+  const p = (DB.catalogo||[]).find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Remover "${p.nome}" do catálogo?`)) return;
+  DB.catalogo = DB.catalogo.filter(x => x.id !== id);
+  catSelecionados.delete(id);
+  saveDB(); renderCatalogo();
+  showToast('Produto removido do catálogo.');
+}
+
+function limparFiltrosCatalogo() {
+  document.getElementById('catFiltroCategoria').value = '';
+  document.getElementById('catFiltroMin').value = '';
+  document.getElementById('catFiltroMax').value = '';
+  renderCatalogo();
+}
+
+// Exporta JSON apenas dos produtos marcados como Publicar = Sim
+function exportarProdutosPublicados() {
+  const publicados = (DB.catalogo||[]).filter(p => p.publicar);
+  if (!publicados.length) {
+    showToast('⚠️ Nenhum produto está marcado como "Publicar: Sim".','warning');
+    return;
+  }
+  // Monta um JSON limpo, só com os campos relevantes para publicação
+  const saida = publicados.map(p => ({
+    nome:       p.nome,
+    categorias: getCategoriasProduto(p),
+    dimensoes:  p.dimensoes || '',
+    peso:       p.peso || '',
+    valor:      p.valor || 0,
+    descricao:  p.desc || '',
+    imagens:    (p.imagens || []).map(resolverImagem)  // URLs completas
+  }));
+
+  const blob = new Blob([JSON.stringify(saida, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'produtos.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`✅ ${publicados.length} produto(s) publicado(s) exportado(s) em produtos.json.`);
+}
+
+function renderCatalogo() {
+  const catalogo = DB.catalogo || [];
+
+  // KPIs
+  const kpiEl = document.getElementById('kpiCatalogo');
+  const totalProd = catalogo.length;
+  const categorias = getTodasCategorias();
+  const comFoto = catalogo.filter(p => p.imagens && p.imagens.length).length;
+  const publicadosCount = catalogo.filter(p => p.publicar).length;
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid var(--gold)">
+      <div class="kpi-icon">📖</div>
+      <div class="kpi-label">Produtos no Catálogo</div>
+      <div class="kpi-value">${totalProd}</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #2980B9">
+      <div class="kpi-icon">🏷️</div>
+      <div class="kpi-label">Categorias</div>
+      <div class="kpi-value">${categorias.length}</div>
+      <div class="kpi-sub">${categorias.join(', ')||'—'}</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #27AE60">
+      <div class="kpi-icon">📤</div>
+      <div class="kpi-label">Publicados</div>
+      <div class="kpi-value">${publicadosCount}/${totalProd}</div>
+      <div class="kpi-sub">com Publicar = Sim</div>
+    </div>
+  `;
+
+  // Preenche o dropdown de filtro de categorias (mantendo seleção)
+  const filtroCatEl = document.getElementById('catFiltroCategoria');
+  if (filtroCatEl) {
+    const selAtual = filtroCatEl.value;
+    filtroCatEl.innerHTML = '<option value="">Todas as categorias</option>' +
+      categorias.map(c => `<option value="${c}"${c===selAtual?' selected':''}>${c}</option>`).join('');
+  }
+  // Preenche o datalist de categorias para edição em lote (sugestões)
+  const batchCatList = document.getElementById('catBatchCatList');
+  if (batchCatList) {
+    batchCatList.innerHTML = categorias.map(c => `<option value="${c}">`).join('');
+  }
+
+  // Aplica filtros
+  const fCat = filtroCatEl ? filtroCatEl.value : '';
+  const fMin = parseFloat(document.getElementById('catFiltroMin').value);
+  const fMax = parseFloat(document.getElementById('catFiltroMax').value);
+
+  let lista = catalogo.filter(p => {
+    // Produto passa se QUALQUER uma de suas categorias for a filtrada
+    if (fCat && !getCategoriasProduto(p).includes(fCat)) return false;
+    if (!isNaN(fMin) && p.valor < fMin) return false;
+    if (!isNaN(fMax) && p.valor > fMax) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('catalogoTbody');
+  if (!catalogo.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:40px">Nenhum produto no catálogo. Clique em "+ Novo Produto" ou importe um catálogo PDF.</td></tr>';
+    atualizarBatchBar();
+    return;
+  }
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:30px">Nenhum produto encontrado com os filtros aplicados.</td></tr>';
+    atualizarBatchBar();
+    return;
+  }
+
+  tbody.innerHTML = lista.map(p => {
+    const nImgs = (p.imagens||[]).length;
+    const checked = catSelecionados.has(p.id) ? 'checked' : '';
+    const cats = getCategoriasProduto(p);
+    const catsBadges = cats.length
+      ? cats.map(c => `<span class="badge badge-navy" style="margin:1px">${c}</span>`).join(' ')
+      : '<span class="text-muted">—</span>';
+    const pubBadge = p.publicar
+      ? '<span class="badge badge-success">✓ Sim</span>'
+      : '<span class="badge" style="background:var(--gray-200);color:var(--gray-600)">Não</span>';
+    // Miniatura da primeira imagem
+    const img1 = nImgs ? resolverImagem(p.imagens[0]) : '';
+    const thumb = img1
+      ? `<div onclick="verProdutoCatalogo(${p.id})" style="width:40px;height:40px;border-radius:6px;background:var(--gray-100) url('${img1}');background-size:cover;background-position:center;border:1px solid var(--gray-200);cursor:pointer" title="Ver produto"></div>`
+      : `<div style="width:40px;height:40px;border-radius:6px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:16px">📦</div>`;
+    return `<tr>
+      <td><input type="checkbox" ${checked} onchange="toggleSelectCat(${p.id},this)" style="cursor:pointer"></td>
+      <td>${thumb}</td>
+      <td>
+        <strong style="color:var(--navy)">${p.nome}</strong>
+        ${nImgs ? `<span class="text-muted" style="font-size:11px"> · 🖼️ ${nImgs}</span>` : ''}
+      </td>
+      <td>${catsBadges}</td>
+      <td class="text-muted" style="font-size:12px">${p.dimensoes||'—'}</td>
+      <td class="text-muted" style="font-size:12px">${p.peso||'—'}</td>
+      <td><strong style="color:var(--gold)">R$ ${p.valor.toFixed(2)}</strong></td>
+      <td>${pubBadge}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-ghost" onclick="verProdutoCatalogo(${p.id})" title="Ver com fotos">👁️</button>
+        <button class="btn btn-sm btn-ghost" onclick="editarProdutoCatalogo(${p.id})" title="Editar">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="delProdutoCatalogo(${p.id})" title="Excluir">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  atualizarBatchBar();
+}
+
+// ── Seleção múltipla ──
+function toggleSelectCat(id, cb) {
+  if (cb.checked) catSelecionados.add(id);
+  else catSelecionados.delete(id);
+  atualizarBatchBar();
+}
+
+function toggleSelectAllCat(cb) {
+  // Seleciona/desseleciona os visíveis (filtrados)
+  const catalogo = DB.catalogo || [];
+  const fCat = document.getElementById('catFiltroCategoria').value;
+  const fMin = parseFloat(document.getElementById('catFiltroMin').value);
+  const fMax = parseFloat(document.getElementById('catFiltroMax').value);
+  const visiveis = catalogo.filter(p => {
+    if (fCat && !getCategoriasProduto(p).includes(fCat)) return false;
+    if (!isNaN(fMin) && p.valor < fMin) return false;
+    if (!isNaN(fMax) && p.valor > fMax) return false;
+    return true;
+  });
+  if (cb.checked) visiveis.forEach(p => catSelecionados.add(p.id));
+  else visiveis.forEach(p => catSelecionados.delete(p.id));
+  renderCatalogo();
+}
+
+function atualizarBatchBar() {
+  const bar = document.getElementById('catBatchBar');
+  const count = catSelecionados.size;
+  if (count > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('catBatchCount').textContent = `${count} produto(s) selecionado(s)`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+// ── Ações em lote ──
+function aplicarCategoriaLote() {
+  const cat = document.getElementById('catBatchCategoria').value.trim();
+  if (!cat) { showToast('⚠️ Digite ou escolha uma categoria.','warning'); return; }
+  if (!catSelecionados.size) return;
+  const modo = document.getElementById('catBatchCatModo').value; // 'add' ou 'replace'
+  DB.catalogo.forEach(p => {
+    if (!catSelecionados.has(p.id)) return;
+    let cats = getCategoriasProduto(p);
+    delete p.categoria; // remove campo antigo
+    if (modo === 'replace') {
+      cats = [cat];
+    } else {
+      // adiciona se ainda não tiver
+      if (!cats.some(c => c.toLowerCase() === cat.toLowerCase())) cats.push(cat);
+    }
+    p.categorias = cats;
+  });
+  saveDB();
+  const verbo = modo === 'replace' ? 'definida como única categoria' : 'adicionada';
+  showToast(`✅ Categoria "${cat}" ${verbo} em ${catSelecionados.size} produto(s).`);
+  document.getElementById('catBatchCategoria').value = '';
+  renderCatalogo();
+}
+
+function aplicarPrecoLote() {
+  const val = parseFloat(document.getElementById('catBatchPreco').value);
+  if (isNaN(val)) { showToast('⚠️ Informe um valor.','warning'); return; }
+  const tipo = document.getElementById('catBatchPrecoTipo').value;
+  if (!catSelecionados.size) return;
+
+  DB.catalogo.forEach(p => {
+    if (!catSelecionados.has(p.id)) return;
+    if (tipo === 'fixo') p.valor = val;
+    else if (tipo === 'mais') p.valor += val;
+    else if (tipo === 'menos') p.valor = Math.max(0, p.valor - val);
+    else if (tipo === 'perc_mais') p.valor = p.valor * (1 + val/100);
+    else if (tipo === 'perc_menos') p.valor = p.valor * (1 - val/100);
+    p.valor = Math.round(p.valor * 100) / 100; // 2 casas
+  });
+  saveDB();
+  showToast(`✅ Preço ajustado em ${catSelecionados.size} produto(s).`);
+  renderCatalogo();
+}
+
+function excluirLote() {
+  const n = catSelecionados.size;
+  if (!n) return;
+  if (!confirm(`Excluir ${n} produto(s) selecionado(s) do catálogo? Esta ação não pode ser desfeita.`)) return;
+  DB.catalogo = DB.catalogo.filter(p => !catSelecionados.has(p.id));
+  catSelecionados.clear();
+  saveDB();
+  showToast(`${n} produto(s) excluído(s).`);
+  renderCatalogo();
+}
+
+function publicarLote(valor) {
+  const n = catSelecionados.size;
+  if (!n) return;
+  DB.catalogo.forEach(p => { if (catSelecionados.has(p.id)) p.publicar = valor; });
+  saveDB();
+  showToast(`✅ ${n} produto(s) marcado(s) como Publicar: ${valor ? 'Sim' : 'Não'}.`);
+  renderCatalogo();
+}
+
+// ── Visualização individual com fotos ──
+function verProdutoCatalogo(id) {
+  const p = (DB.catalogo||[]).find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('verProdNome').textContent = p.nome;
+
+  const imgs = (p.imagens || []).map(resolverImagem);
+  let galeria = '';
+  if (imgs.length) {
+    galeria = `
+      <div style="margin-bottom:16px">
+        <div id="verProdImgPrincipal" style="width:100%;height:280px;border-radius:8px;background:var(--gray-100) url('${imgs[0]}');background-size:contain;background-repeat:no-repeat;background-position:center;border:1px solid var(--gray-200)"></div>
+        ${imgs.length > 1 ? `
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            ${imgs.map((u,i) => `
+              <div onclick="document.getElementById('verProdImgPrincipal').style.backgroundImage=\`url('${u}')\`"
+                style="width:56px;height:56px;border-radius:6px;background:var(--gray-100) url('${u}');background-size:cover;background-position:center;border:1.5px solid var(--gray-200);cursor:pointer"></div>
+            `).join('')}
+          </div>` : ''}
+      </div>`;
+  } else {
+    galeria = `<div style="width:100%;height:180px;border-radius:8px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;color:var(--gray-400);font-size:13px;margin-bottom:16px">Sem imagens cadastradas</div>`;
+  }
+
+  const catsView = getCategoriasProduto(p);
+  const catsViewHtml = catsView.length
+    ? `<div style="margin-bottom:12px">${catsView.map(c => `<span class="badge badge-navy" style="display:inline-block;margin:2px">${c}</span>`).join('')}</div>`
+    : '';
+  document.getElementById('verProdBody').innerHTML = `
+    ${galeria}
+    ${catsViewHtml}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="background:var(--gray-100);padding:10px;border-radius:8px">
+        <div style="font-size:11px;color:var(--gray-600)">📐 Dimensões</div>
+        <div style="font-weight:600;font-size:13px">${p.dimensoes||'—'}</div>
+      </div>
+      <div style="background:var(--gray-100);padding:10px;border-radius:8px">
+        <div style="font-size:11px;color:var(--gray-600)">⚖️ Peso</div>
+        <div style="font-weight:600;font-size:13px">${p.peso||'—'}</div>
+      </div>
+    </div>
+    ${p.desc ? `<div style="background:var(--gray-100);padding:10px;border-radius:8px;margin-bottom:12px"><div style="font-size:11px;color:var(--gray-600)">Material / Descrição</div><div style="font-size:13px">${p.desc}</div></div>` : ''}
+    <div style="text-align:right"><span style="font-size:12px;color:var(--gray-600)">Valor unitário</span><br><strong style="color:var(--gold);font-size:24px">R$ ${p.valor.toFixed(2)}</strong></div>
+  `;
+
+  document.getElementById('verProdEditBtn').onclick = () => {
+    closeModal('modalVerProduto');
+    editarProdutoCatalogo(id);
+  };
+  openModal('modalVerProduto');
+}
+
+// ── Importação de catálogo PDF ──
+let catProdutosExtraidos = [];
+
+async function importarCatalogoPDF(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!window.pdfjsLib) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(); };
+      s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  showToast('⏳ Lendo o catálogo...', 'warning');
+
+  // Lê texto página por página
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const pdf = await pdfjsLib.getDocument({data: e.target.result}).promise;
+      const paginas = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        // Captura cada item com posição (x,y) e altura da fonte
+        const items = content.items.map(it => ({
+          str: it.str,
+          x: it.transform[4],
+          y: it.transform[5],
+          h: Math.abs(it.transform[0]) || Math.abs(it.transform[3]) || 0  // tamanho da fonte
+        })).filter(it => it.str && it.str.trim());
+        paginas.push(items);
+      }
+      catProdutosExtraidos = extrairProdutosDoCatalogo(paginas);
+      mostrarReviewCatalogo();
+    } catch(err) {
+      showToast('⚠️ Erro ao ler o PDF: ' + err.message, 'danger');
+    }
+    event.target.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function extrairProdutosDoCatalogo(paginas) {
+  const produtos = [];
+  paginas.forEach(items => {
+    // items = [{str, x, y, h}] com posição e tamanho de fonte
+    const texto = items.map(it => it.str).join(' ');
+
+    // Ignora capa (COLEÇÃO sem FICHA) e sumário
+    if (/SUM[ÁA]RIO/i.test(texto)) return;
+    if (/COLE[ÇC][ÃA]O/i.test(texto) && !/FICHA/i.test(texto)) return;
+    if (!/R\$/.test(texto)) return; // sem preço = não é produto
+
+    // ── NOME: o texto de MAIOR fonte no topo, excluindo valor/número/CAPIMANIA ──
+    const candidatos = items.filter(it => {
+      const s = it.str.trim();
+      if (it.h < 16) return false;          // só fontes grandes (títulos)
+      if (/R\$/.test(s)) return false;       // exclui o valor (fonte grande também)
+      if (/^\d+$/.test(s)) return false;     // exclui número "01"
+      if (/CAPIMANIA/i.test(s)) return false;
+      if (/^[\d,\s×cmg.]+$/.test(s)) return false; // exclui dimensões/peso
+      return true;
+    });
+    let nome = '';
+    if (candidatos.length) {
+      // Maior fonte; em empate, o mais ao topo (maior y no PDF.js)
+      candidatos.sort((a,b) => (b.h - a.h) || (b.y - a.y));
+      nome = candidatos[0].str.trim();
+    }
+
+    // ── CATEGORIA: texto maiúsculo (fonte menor que título) ──
+    let categoria = '';
+    for (const it of items) {
+      const s = it.str.trim();
+      if (s === nome) continue;
+      if (/CAPIMANIA|FICHA|DIMENS|PERSONALIZ|VALOR/i.test(s)) continue;
+      if (/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ\s]{4,}$/.test(s) && it.h < 16) {
+        const up = s.toUpperCase();
+        if (up.includes('ESCULTURA')) categoria = 'Escultura';
+        else if (up.includes('PAPELARIA')) categoria = 'Papelaria';
+        else if (up.includes('CHAVEIRO')) categoria = 'Chaveiro';
+        else if (up.includes('KIT')) categoria = 'Kit';
+        else if (up.includes('CORTE')) categoria = 'Corte a Laser';
+        else if (up.includes('EDIÇÃO') || up.includes('EDICAO')) categoria = 'Chaveiro';
+        if (categoria) break;
+      }
+    }
+
+    // ── VALOR ──
+    let valor = 0;
+    const vm = texto.match(/R\$\s*([\d.,]+)/);
+    if (vm) valor = parseFloat(vm[1].replace(/\./g,'').replace(',','.')) || 0;
+
+    // ── DIMENSÕES ──
+    let dimensoes = '';
+    const dm = texto.match(/([\d,]+\s*×\s*[\d,]+\s*×\s*[\d,]+\s*cm)/i);
+    if (dm) dimensoes = dm[1].replace(/\s+/g,' ').trim();
+
+    // ── PESO ──
+    let peso = '';
+    const pm = texto.match(/(\d+[,.]?\d*\s*g(?:\/un\.?)?)\b/i);
+    if (pm) peso = pm[1].trim();
+
+    // ── MATERIAL: entre peso e "Diversas/Única cores" ──
+    let material = '';
+    const mm = texto.match(/g\s+(PLA \+ [^·]+?|PLA Premium|Acrílico|MDF \+ [^·]+?)\s+(?:Diversas|Única)/i);
+    if (mm) {
+      material = mm[1].trim();
+    } else {
+      const mm2 = texto.match(/\b(PLA \+ [A-Za-zÀ-ú]+(?:\s[A-Za-zÀ-ú]+)?|PLA Premium|Acrílico|MDF \+ [A-Za-zÀ-ú]+(?:\s[A-Za-zÀ-ú]+)?)\b/i);
+      if (mm2) material = mm2[1].trim();
+    }
+
+    produtos.push({
+      nome: nome || 'Produto sem nome',
+      categoria, dimensoes, peso, valor,
+      desc: material,
+      skip: false
+    });
+  });
+  return produtos;
+}
+
+// ── Revisão produto por produto ──
+let catRevIndice = 0;
+let catRevAprovados = [];
+
+function mostrarReviewCatalogo() {
+  const empty = document.getElementById('catReviewEmpty');
+  const single = document.getElementById('catReviewSingle');
+
+  if (!catProdutosExtraidos.length) {
+    empty.style.display = 'block';
+    single.style.display = 'none';
+    document.getElementById('catAprovarBtn').style.display = 'none';
+    openModal('modalImportCatalogo');
+    return;
+  }
+
+  empty.style.display = 'none';
+  single.style.display = 'block';
+  document.getElementById('catAprovarBtn').style.display = 'inline-block';
+  catRevIndice = 0;
+  catRevAprovados = [];
+  // Popula sugestões de categoria para o campo da revisão
+  const dl = document.getElementById('catCategorias');
+  if (dl) dl.innerHTML = getTodasCategorias().map(c => `<option value="${c}">`).join('');
+  carregarProdutoRevisao();
+  openModal('modalImportCatalogo');
+}
+
+function carregarProdutoRevisao() {
+  const total = catProdutosExtraidos.length;
+  const p = catProdutosExtraidos[catRevIndice];
+  if (!p) { finalizarImportCatalogo(); return; }
+
+  document.getElementById('catReviewProgresso').textContent = `Produto ${catRevIndice+1} de ${total}`;
+  document.getElementById('catProgressBar').style.width = ((catRevIndice)/total*100) + '%';
+
+  document.getElementById('catRevNome').value      = p.nome || '';
+  document.getElementById('catRevCategoria').value = p.categoria || '';
+  document.getElementById('catRevDimensoes').value = p.dimensoes || '';
+  document.getElementById('catRevPeso').value      = p.peso || '';
+  document.getElementById('catRevValor').value     = p.valor || '';
+  document.getElementById('catRevDesc').value      = p.desc || '';
+
+  // Botão muda no último
+  const btn = document.getElementById('catAprovarBtn');
+  btn.textContent = (catRevIndice === total - 1) ? '✅ Aprovar e finalizar' : '✅ Aprovar e próximo';
+}
+
+function aprovarProdutoRevisao() {
+  const nome = document.getElementById('catRevNome').value.trim();
+  if (!nome) { showToast('⚠️ Informe o nome do produto ou pule.','warning'); return; }
+
+  const catVal = document.getElementById('catRevCategoria').value.trim();
+  catRevAprovados.push({
+    id: Date.now() + catRevIndice,
+    nome,
+    categorias: catVal ? [catVal] : [],
+    dimensoes: document.getElementById('catRevDimensoes').value.trim(),
+    peso:      document.getElementById('catRevPeso').value.trim(),
+    valor:     parseFloat(document.getElementById('catRevValor').value) || 0,
+    desc:      document.getElementById('catRevDesc').value.trim(),
+    publicar:  false,
+    imagens:   []
+  });
+  avancarRevisao();
+}
+
+function pularProdutoRevisao() {
+  avancarRevisao();
+}
+
+function avancarRevisao() {
+  catRevIndice++;
+  if (catRevIndice >= catProdutosExtraidos.length) {
+    finalizarImportCatalogo();
+  } else {
+    carregarProdutoRevisao();
+  }
+}
+
+function finalizarImportCatalogo() {
+  if (!DB.catalogo) DB.catalogo = [];
+  if (catRevAprovados.length) {
+    DB.catalogo.push(...catRevAprovados);
+    saveDB();
+    renderCatalogo();
+  }
+  closeModal('modalImportCatalogo');
+  const n = catRevAprovados.length;
+  if (n) showToast(`✅ ${n} produto(s) cadastrado(s)! Adicione as imagens editando cada um.`);
+  else showToast('Nenhum produto foi cadastrado.');
+}
+
+function cancelarImportCatalogo() {
+  if (catRevAprovados.length && !confirm(`Você já aprovou ${catRevAprovados.length} produto(s). Cancelar tudo e descartar?`)) return;
+  closeModal('modalImportCatalogo');
+  showToast('Importação cancelada.');
+}
+
 function renderAll(){
-  renderOverview();renderFilamentos();renderProdutos();
+  renderOverview();renderFilamentos();renderProdutos();renderCatalogo();
   renderPedidos();renderFilaProducao();renderClientes();renderFinanceiro();renderABC();
 }
 
