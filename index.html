@@ -664,6 +664,10 @@ th.sortable:hover { background: var(--navy-mid); }
               <button class="btn btn-sm" style="background:#27AE60;color:#fff" onclick="publicarLote(true)" title="Marcar como Publicar = Sim">📤 Publicar</button>
               <button class="btn btn-sm" style="background:var(--gray-400);color:#fff" onclick="publicarLote(false)" title="Marcar como Publicar = Não">Despublicar</button>
             </div>
+            <div style="display:flex;gap:4px">
+              <button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark)" onclick="destaqueLote(true)" title="Marcar como Destaque = Sim">⭐ Destacar</button>
+              <button class="btn btn-sm" style="background:var(--gray-400);color:#fff" onclick="destaqueLote(false)" title="Remover destaque">Tirar destaque</button>
+            </div>
           </div>
 
           <!-- Lista de produtos -->
@@ -671,12 +675,12 @@ th.sortable:hover { background: var(--navy-mid); }
             <thead><tr>
               <th style="width:36px"><input type="checkbox" id="catSelectAll" onchange="toggleSelectAllCat(this)" style="cursor:pointer"></th>
               <th style="width:52px">Foto</th>
-              <th>Produto</th>
-              <th>Categoria</th>
+              <th class="sortable" onclick="sortCatalogo('nome')">Produto<span class="sort-ind" id="catSortInd-nome"></span></th>
+              <th class="sortable" onclick="sortCatalogo('categoria')">Categoria<span class="sort-ind" id="catSortInd-categoria"></span></th>
               <th>Dimensões</th>
               <th>Peso</th>
-              <th>Valor</th>
-              <th>Publicar</th>
+              <th class="sortable" onclick="sortCatalogo('valor')">Valor<span class="sort-ind" id="catSortInd-valor"></span></th>
+              <th class="sortable" onclick="sortCatalogo('publicar')">Publicar<span class="sort-ind" id="catSortInd-publicar"></span></th>
               <th style="width:120px">Ações</th>
             </tr></thead>
             <tbody id="catalogoTbody"></tbody>
@@ -1704,6 +1708,13 @@ th.sortable:hover { background: var(--navy-mid); }
           <option value="sim">Sim</option>
         </select>
       </div>
+      <div class="form-group">
+        <label>⭐ Destaque?</label>
+        <select id="prodCatDestaque">
+          <option value="nao">Não</option>
+          <option value="sim">Sim</option>
+        </select>
+      </div>
     </div>
 
     <!-- Categorias (múltiplas) -->
@@ -1729,9 +1740,14 @@ th.sortable:hover { background: var(--navy-mid); }
       </div>
     </div>
     <div class="form-group">
-      <label>Material / Descrição</label>
-      <textarea id="prodCatDesc" rows="2" placeholder="Ex: PLA Premium · descrição do produto"
-        style="width:100%;padding:10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical"></textarea>
+      <label>Material</label>
+      <input type="text" id="prodCatDesc" placeholder="Ex: PLA Premium"
+        style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+    </div>
+    <div class="form-group">
+      <label>Descrição do produto <span class="text-muted" style="font-weight:400;font-size:11px">(texto que aparece no site)</span></label>
+      <textarea id="prodCatDescricao" rows="3" placeholder="Escreva uma descrição atrativa sobre o produto: o que é, para que serve, diferenciais, ocasiões de uso..."
+        style="width:100%;padding:10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;line-height:1.5"></textarea>
     </div>
 
     <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 8px">Imagens (até 4 · digite o nome do arquivo)</div>
@@ -3850,9 +3866,9 @@ function confirmarVincularPedidos() {
 
 // Descrições de tom para o prompt
 const TONS_REATIVACAO = {
-  amigavel:     'AMIGÁVEL E PRÓXIMO — caloroso, informal, como quem fala com um conhecido. Use no máximo 2-3 emojis.',
-  profissional: 'PROFISSIONAL E DIRETO — cordial mas objetivo, sem rodeios, linguagem de negócios. Use no máximo 1 emoji.',
-  promocional:  'PROMOCIONAL COM OFERTAS — animado e persuasivo, destacando vantagens e benefícios de comprar agora. Pode usar emojis de destaque.',
+  amigavel:     'AMIGÁVEL E PRÓXIMO — caloroso, informal, como quem fala com um conhecido.',
+  profissional: 'PROFISSIONAL E DIRETO — cordial mas objetivo, sem rodeios, linguagem de negócios.',
+  promocional:  'PROMOCIONAL COM OFERTAS — animado e persuasivo, destacando vantagens e benefícios de comprar agora.',
   escassez:     'ESCASSEZ / URGÊNCIA — cria senso de oportunidade limitada (estoque, prazo, condição especial por tempo curto), incentivando ação rápida, mas sem ser agressivo ou falso.',
   consultivo:   'CONSULTIVO — postura de especialista que entende o negócio do cliente, traz sugestões pensadas para o público e o momento dele, agrega valor antes de vender.'
 };
@@ -3891,11 +3907,12 @@ A mensagem deve:
 1. Cumprimentar pelo nome da pessoa de contato (se informada); caso contrário, usar o nome da loja
 2. Mencionar sutilmente que faz um tempo desde o último pedido (sem soar cobrando)
 3. Oferecer reposição dos produtos que ele já compra
-4. Sugerir 1 ou 2 produtos novos que façam sentido para o perfil dele
+4. Sugerir 1 ou 2 produtos ADICIONAIS que façam sentido para o perfil dele, escolhidos ESTRITAMENTE dentre os itens listados em "PRODUTOS DISPONÍVEIS NO CATÁLOGO" abaixo. Nunca invente, generalize ou cite produtos que não estejam nessa lista. Se nenhum item do catálogo fizer sentido para esse cliente, não sugira produto novo nenhum — ofereça apenas a reposição do item 3.
 5. Ter um chamado para ação claro
+6. NÃO usar emojis em NENHUMA parte da mensagem (nem no assunto do e-mail, nem no corpo, nem como marcadores de lista), independentemente do tom escolhido. Use apenas texto puro.
 ${ehEmail
-  ? '6. Como é e-mail, comece com uma linha "Assunto: ..." com um assunto atrativo, depois pule uma linha e escreva o corpo. Pode ser um pouco mais estruturado que WhatsApp, mas ainda conciso (2-3 parágrafos curtos).'
-  : '6. Ser concisa (adequada para WhatsApp, no máximo 6-8 linhas)'}
+  ? '7. Como é e-mail, comece com uma linha "Assunto: ..." com um assunto atrativo, depois pule uma linha e escreva o corpo. Pode ser um pouco mais estruturado que WhatsApp, mas ainda conciso (2-3 parágrafos curtos).'
+  : '7. Ser concisa (adequada para WhatsApp, no máximo 6-8 linhas)'}
 
 DADOS DO CLIENTE:
 - Nome da loja/cliente: ${c.nome}
@@ -3906,6 +3923,11 @@ ${c.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + c.contato : 
 - Ticket médio: R$ ${d.ticketMedio.toFixed(2)}
 - Produtos que já comprou: ${listaProdutos || 'não especificado'}`;
 
+  const catalogoDisponivel = (DB.catalogo || []).filter(p => p.nome).map(p => p.nome);
+  ctx += catalogoDisponivel.length
+    ? `\n\nPRODUTOS DISPONÍVEIS NO CATÁLOGO (única fonte permitida para a sugestão do item 4):\n- ${catalogoDisponivel.join('\n- ')}`
+    : `\n\nNão há produtos cadastrados no catálogo no momento — não sugira nenhum produto novo, apenas ofereça reposição dos que ele já compra.`;
+
   if (c.ficha) ctx += `\n\nINFORMAÇÕES ADICIONAIS SOBRE O CLIENTE (ficha):\n${c.ficha}`;
 
   const redes = [];
@@ -3915,7 +3937,7 @@ ${c.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + c.contato : 
   if (c.site)      redes.push('Site: ' + c.site);
   if (redes.length) ctx += `\n\nPresença online do cliente: ${redes.join(' | ')}`;
 
-  ctx += `\n\nEscreva APENAS o texto ${ehEmail ? 'do e-mail (com a linha de Assunto)' : 'da mensagem de WhatsApp'}, sem explicações antes ou depois, pronto para copiar e enviar. Não use aspas ao redor do texto.`;
+  ctx += `\n\nEscreva APENAS o texto ${ehEmail ? 'do e-mail (com a linha de Assunto)' : 'da mensagem de WhatsApp'}, sem explicações antes ou depois, pronto para copiar e enviar. Não use aspas ao redor do texto. Não use nenhum emoji em nenhuma hipótese.`;
 
   return ctx;
 }
@@ -3987,7 +4009,7 @@ async function gerarMensagemReativacao() {
     document.getElementById('reativLoading').style.display = 'none';
 
     if (json.ok && json.mensagem) {
-      const msg = json.mensagem.trim();
+      const msg = removerEmojis(json.mensagem.trim());
       document.getElementById('reativMensagem').value = msg;
       document.getElementById('reativResultado').style.display = 'block';
       // Salva no histórico
@@ -4001,6 +4023,15 @@ async function gerarMensagemReativacao() {
     document.getElementById('reativLoading').style.display = 'none';
     mostrarErroReativ('Erro de conexão com o servidor de IA. Verifique se a chave da API está configurada no Apps Script.');
   }
+}
+
+// Remove emojis do texto gerado (rede de segurança, além da instrução no prompt)
+function removerEmojis(str) {
+  return str
+    .replace(/[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
 }
 
 // Guarda últimas 3 mensagens por cliente
@@ -4042,9 +4073,22 @@ function renderHistoricoReativ(c, skipFirst) {
           <span class="text-muted" style="font-size:11px">${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
         </div>
         <div style="white-space:pre-wrap;color:var(--gray-600);line-height:1.5;max-height:80px;overflow-y:auto">${h.msg}</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="usarDoHistorico(${c.id},${i+offset})">↑ Usar esta versão</button>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn btn-ghost btn-sm" onclick="usarDoHistorico(${c.id},${i+offset})">↑ Usar esta versão</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--warning)" onclick="excluirHistoricoReativ(${c.id},${i+offset})">🗑️ Excluir</button>
+        </div>
       </div>`;
   }).join('');
+}
+
+function excluirHistoricoReativ(clienteId, idx) {
+  const c = DB.clientes.find(x => x.id === clienteId);
+  if (!c || !c.historicoReativ || !c.historicoReativ[idx]) return;
+  if (!confirm('Excluir esta abordagem do histórico?')) return;
+  c.historicoReativ.splice(idx, 1);
+  saveDB();
+  renderHistoricoReativ(c, false);
+  showToast('🗑️ Abordagem excluída do histórico.');
 }
 
 function usarDoHistorico(clienteId, idx) {
@@ -5260,21 +5304,58 @@ function addLinhaImagem(valor) {
   div.id = `prodCatImg_${idx}`;
   div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
   div.innerHTML = `
-    <input type="text" id="prodCatImgUrl_${idx}" placeholder="Nome do arquivo (ex: capivara-gamer.jpg)" value="${valor||''}"
-      oninput="previewImagem(${idx})"
-      style="flex:1;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
-    <div id="prodCatImgPrev_${idx}" style="width:40px;height:40px;border-radius:6px;background:var(--gray-100);flex:0 0 auto;background-size:cover;background-position:center;border:1px solid var(--gray-200)"></div>
+    <div style="display:flex;flex-direction:column;gap:2px;flex:0 0 auto">
+      <button class="btn btn-sm btn-ghost" style="padding:2px 6px;line-height:1" onclick="moverImagem('prodCatImg_${idx}',-1)" title="Mover para cima">▲</button>
+      <button class="btn btn-sm btn-ghost" style="padding:2px 6px;line-height:1" onclick="moverImagem('prodCatImg_${idx}',1)" title="Mover para baixo">▼</button>
+    </div>
+    <div id="prodCatImgPrev_${idx}" style="width:44px;height:44px;border-radius:6px;background:var(--gray-100);flex:0 0 auto;background-size:cover;background-position:center;border:1px solid var(--gray-200);position:relative"></div>
+    <div style="flex:1">
+      <span class="prodcat-img-label" style="font-size:10px;color:var(--gray-400);font-weight:600"></span>
+      <input type="text" id="prodCatImgUrl_${idx}" placeholder="Nome do arquivo (ex: capivara-gamer.jpg)" value="${valor||''}"
+        oninput="previewImagem(${idx})"
+        style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+    </div>
     <button class="btn btn-sm btn-danger" onclick="removeLinhaImagem('prodCatImg_${idx}')" title="Remover">✕</button>
   `;
   list.appendChild(div);
   if (valor) previewImagem(idx);
   atualizarBotaoAddImagem();
+  atualizarLabelsImagens();
+}
+
+// Move uma linha de imagem para cima (-1) ou para baixo (1)
+function moverImagem(id, dir) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (dir === -1 && el.previousElementSibling && el.previousElementSibling.classList.contains('prodcat-img-linha')) {
+    el.parentNode.insertBefore(el, el.previousElementSibling);
+  } else if (dir === 1 && el.nextElementSibling && el.nextElementSibling.classList.contains('prodcat-img-linha')) {
+    el.parentNode.insertBefore(el.nextElementSibling, el);
+  }
+  atualizarLabelsImagens();
+}
+
+// Atualiza os rótulos: a 1ª imagem é a "Principal"
+function atualizarLabelsImagens() {
+  const list = document.getElementById('prodCatImagens');
+  const linhas = list.querySelectorAll('.prodcat-img-linha');
+  linhas.forEach((div, i) => {
+    const label = div.querySelector('.prodcat-img-label');
+    const prev = div.querySelector('[id^="prodCatImgPrev_"]');
+    if (label) {
+      label.textContent = i === 0 ? '★ Imagem principal' : `Imagem ${i+1}`;
+      label.style.color = i === 0 ? 'var(--gold)' : 'var(--gray-400)';
+    }
+    // Borda dourada na miniatura principal
+    if (prev) prev.style.border = i === 0 ? '2px solid var(--gold)' : '1px solid var(--gray-200)';
+  });
 }
 
 function removeLinhaImagem(id) {
   const el = document.getElementById(id);
   if (el) el.remove();
   atualizarBotaoAddImagem();
+  atualizarLabelsImagens();
 }
 
 function atualizarBotaoAddImagem() {
@@ -5374,10 +5455,11 @@ function getCategoriasProduto(p) {
 function abrirNovoProdutoCatalogo() {
   document.getElementById('prodCatId').value = '';
   document.getElementById('prodCatTitulo').textContent = 'Novo Produto';
-  ['prodCatNome','prodCatDimensoes','prodCatPeso','prodCatValor','prodCatDesc','prodCatNovaCategoria'].forEach(id => {
+  ['prodCatNome','prodCatDimensoes','prodCatPeso','prodCatValor','prodCatDesc','prodCatDescricao','prodCatNovaCategoria'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('prodCatPublicar').value = 'nao';
+  document.getElementById('prodCatDestaque').value = 'nao';
   prodCatCategoriasSel = [];
   renderChipsCategorias();
   document.getElementById('prodCatImagens').innerHTML = '';
@@ -5397,7 +5479,9 @@ function salvarProdutoCatalogo() {
     peso:       document.getElementById('prodCatPeso').value.trim(),
     valor:      parseFloat(document.getElementById('prodCatValor').value) || 0,
     desc:       document.getElementById('prodCatDesc').value.trim(),
+    descricao:  document.getElementById('prodCatDescricao').value.trim(),
     publicar:   document.getElementById('prodCatPublicar').value === 'sim',
+    destaque:   document.getElementById('prodCatDestaque').value === 'sim',
     imagens:    getImagensProdCat()
   };
 
@@ -5419,6 +5503,14 @@ function salvarProdutoCatalogo() {
 }
 
 let catSelecionados = new Set();
+let catSortCol = null;
+let catSortAsc = true;
+
+function sortCatalogo(col) {
+  if (catSortCol === col) catSortAsc = !catSortAsc;
+  else { catSortCol = col; catSortAsc = true; }
+  renderCatalogo();
+}
 
 function editarProdutoCatalogo(id) {
   const p = (DB.catalogo||[]).find(x => x.id === id);
@@ -5430,7 +5522,9 @@ function editarProdutoCatalogo(id) {
   document.getElementById('prodCatPeso').value      = p.peso || '';
   document.getElementById('prodCatValor').value     = p.valor || '';
   document.getElementById('prodCatDesc').value      = p.desc || '';
+  document.getElementById('prodCatDescricao').value = p.descricao || '';
   document.getElementById('prodCatPublicar').value  = p.publicar ? 'sim' : 'nao';
+  document.getElementById('prodCatDestaque').value  = p.destaque ? 'sim' : 'nao';
   document.getElementById('prodCatNovaCategoria').value = '';
   prodCatCategoriasSel = getCategoriasProduto(p);
   renderChipsCategorias();
@@ -5472,7 +5566,9 @@ function exportarProdutosPublicados() {
     dimensoes:  p.dimensoes || '',
     peso:       p.peso || '',
     valor:      p.valor || 0,
-    descricao:  p.desc || '',
+    material:   p.desc || '',
+    descricao:  p.descricao || '',
+    destaque:   !!p.destaque,
     imagens:    (p.imagens || []).map(resolverImagem)  // URLs completas
   }));
 
@@ -5543,6 +5639,36 @@ function renderCatalogo() {
     return true;
   });
 
+  // Ordenação
+  if (catSortCol) {
+    lista.sort((a,b)=>{
+      let va, vb;
+      if (catSortCol==='valor') {
+        va=a.valor||0; vb=b.valor||0;
+        return catSortAsc?va-vb:vb-va;
+      }
+      if (catSortCol==='publicar') {
+        va=a.publicar?1:0; vb=b.publicar?1:0;
+        return catSortAsc?va-vb:vb-va;
+      }
+      if (catSortCol==='categoria') {
+        va=(getCategoriasProduto(a)[0]||'').toLowerCase();
+        vb=(getCategoriasProduto(b)[0]||'').toLowerCase();
+        return catSortAsc?va.localeCompare(vb):vb.localeCompare(va);
+      }
+      // nome
+      va=(a.nome||'').toLowerCase(); vb=(b.nome||'').toLowerCase();
+      return catSortAsc?va.localeCompare(vb):vb.localeCompare(va);
+    });
+  }
+
+  // Indicadores visuais de ordenação
+  document.querySelectorAll('[id^="catSortInd-"]').forEach(el=>{ el.textContent='⇅'; el.classList.remove('active'); });
+  if (catSortCol) {
+    const ind=document.getElementById('catSortInd-'+catSortCol);
+    if (ind){ ind.textContent=catSortAsc?'▲':'▼'; ind.classList.add('active'); }
+  }
+
   const tbody = document.getElementById('catalogoTbody');
   if (!catalogo.length) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:40px">Nenhum produto no catálogo. Clique em "+ Novo Produto" ou importe um catálogo PDF.</td></tr>';
@@ -5574,7 +5700,7 @@ function renderCatalogo() {
       <td><input type="checkbox" ${checked} onchange="toggleSelectCat(${p.id},this)" style="cursor:pointer"></td>
       <td>${thumb}</td>
       <td>
-        <strong style="color:var(--navy)">${p.nome}</strong>
+        ${p.destaque ? '<span title="Produto em destaque" style="color:var(--gold)">⭐</span> ' : ''}<strong style="color:var(--navy)">${p.nome}</strong>
         ${nImgs ? `<span class="text-muted" style="font-size:11px"> · 🖼️ ${nImgs}</span>` : ''}
       </td>
       <td>${catsBadges}</td>
@@ -5693,6 +5819,15 @@ function publicarLote(valor) {
   renderCatalogo();
 }
 
+function destaqueLote(valor) {
+  const n = catSelecionados.size;
+  if (!n) return;
+  DB.catalogo.forEach(p => { if (catSelecionados.has(p.id)) p.destaque = valor; });
+  saveDB();
+  showToast(`✅ ${n} produto(s) marcado(s) como Destaque: ${valor ? 'Sim' : 'Não'}.`);
+  renderCatalogo();
+}
+
 // ── Visualização individual com fotos ──
 function verProdutoCatalogo(id) {
   const p = (DB.catalogo||[]).find(x => x.id === id);
@@ -5734,7 +5869,8 @@ function verProdutoCatalogo(id) {
         <div style="font-weight:600;font-size:13px">${p.peso||'—'}</div>
       </div>
     </div>
-    ${p.desc ? `<div style="background:var(--gray-100);padding:10px;border-radius:8px;margin-bottom:12px"><div style="font-size:11px;color:var(--gray-600)">Material / Descrição</div><div style="font-size:13px">${p.desc}</div></div>` : ''}
+    ${p.desc ? `<div style="background:var(--gray-100);padding:10px;border-radius:8px;margin-bottom:12px"><div style="font-size:11px;color:var(--gray-600)">Material</div><div style="font-size:13px">${p.desc}</div></div>` : ''}
+    ${p.descricao ? `<div style="background:var(--gray-100);padding:10px;border-radius:8px;margin-bottom:12px"><div style="font-size:11px;color:var(--gray-600)">Descrição</div><div style="font-size:13px;line-height:1.5;white-space:pre-wrap">${p.descricao}</div></div>` : ''}
     <div style="text-align:right"><span style="font-size:12px;color:var(--gray-600)">Valor unitário</span><br><strong style="color:var(--gold);font-size:24px">R$ ${p.valor.toFixed(2)}</strong></div>
   `;
 
@@ -5934,7 +6070,9 @@ function aprovarProdutoRevisao() {
     peso:      document.getElementById('catRevPeso').value.trim(),
     valor:     parseFloat(document.getElementById('catRevValor').value) || 0,
     desc:      document.getElementById('catRevDesc').value.trim(),
+    descricao: '',
     publicar:  false,
+    destaque:  false,
     imagens:   []
   });
   avancarRevisao();
