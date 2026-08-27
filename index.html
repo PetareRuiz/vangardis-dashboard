@@ -1211,6 +1211,10 @@ th.sortable:hover { background: var(--navy-mid); }
         <label>👤 Pessoa de Contato</label>
         <input type="text" id="cliContato" placeholder="Nome de quem você fala na loja">
       </div>
+      <div class="form-group">
+        <label>🏷️ Segmento / Ramo</label>
+        <input type="text" id="cliSegmento" placeholder="Ex: bebidas e destilados, papelaria, pet shop...">
+      </div>
     </div>
 
     <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px">Contato</div>
@@ -1671,6 +1675,15 @@ th.sortable:hover { background: var(--navy-mid); }
         style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;line-height:1.5;margin-top:6px"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="copiarMensagemReativ()">📋 Copiar</button>
+      </div>
+
+      <!-- Panfleto de produtos em PDF -->
+      <div id="reativPanfletoSection" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--gray-300)">
+        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📄 Panfleto de produtos para o cliente</div>
+        <div style="font-size:11px;color:var(--gray-600);margin-bottom:8px">Produtos do catálogo identificados na mensagem já vêm marcados. Ajuste a seleção se quiser.</div>
+        <div id="reativPanfletoProdutos" style="max-height:150px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
+        <button class="btn btn-gold btn-sm" style="margin-top:10px" id="reativPanfletoBtn" onclick="gerarPanfletoReativacao()">📄 Gerar Panfleto PDF</button>
+        <div id="reativPanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
       </div>
     </div>
 
@@ -2347,7 +2360,7 @@ function clearPedidoForm() {
 }
 
 function clearClienteForm() {
-  ['cliNome','cliCidade','cliContato','cliWhatsapp','cliEmail','cliSite','cliTelefone',
+  ['cliNome','cliCidade','cliContato','cliSegmento','cliWhatsapp','cliEmail','cliSite','cliTelefone',
    'cliInstagram','cliFacebook','cliTiktok','cliOutraRede','cliFicha'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -3539,6 +3552,7 @@ function addCliente(){
     nome,
     cidade:    document.getElementById('cliCidade').value.trim(),
     contato:   document.getElementById('cliContato').value.trim(),
+    segmento:  document.getElementById('cliSegmento').value.trim(),
     whatsapp:  document.getElementById('cliWhatsapp').value.trim(),
     email:     document.getElementById('cliEmail').value.trim(),
     site:      document.getElementById('cliSite').value.trim(),
@@ -3631,7 +3645,7 @@ function renderClientes(){
   const q = (document.getElementById('clienteSearch')?.value || '').trim().toLowerCase();
   if (q) {
     stats = stats.filter(c => {
-      return [c.nome, c.cidade, c.contato, c.whatsapp, c.email, c.telefone,
+      return [c.nome, c.cidade, c.contato, c.segmento, c.whatsapp, c.email, c.telefone,
               c.instagram, c.facebook, c.tiktok, c.ficha]
         .filter(Boolean).some(v => v.toLowerCase().includes(q));
     });
@@ -3716,6 +3730,7 @@ function editarCliente(id) {
   document.getElementById('cliNome').value      = c.nome || '';
   document.getElementById('cliCidade').value    = c.cidade || '';
   document.getElementById('cliContato').value   = c.contato || '';
+  document.getElementById('cliSegmento').value  = c.segmento || '';
   document.getElementById('cliWhatsapp').value  = c.whatsapp || '';
   document.getElementById('cliEmail').value     = c.email || '';
   document.getElementById('cliSite').value      = c.site || '';
@@ -3754,6 +3769,7 @@ function verFichaCliente(id) {
       <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--gold-light)">${c.nome}</div>
       <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px">📍 ${c.cidade||'Cidade não informada'}</div>
       ${c.contato ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">👤 Contato: ${c.contato}</div>` : ''}
+      ${c.segmento ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">🏷️ ${c.segmento}</div>` : ''}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
@@ -3907,7 +3923,7 @@ A mensagem deve:
 1. Cumprimentar pelo nome da pessoa de contato (se informada); caso contrário, usar o nome da loja
 2. Mencionar sutilmente que faz um tempo desde o último pedido (sem soar cobrando)
 3. Oferecer reposição dos produtos que ele já compra
-4. Sugerir 1 ou 2 produtos ADICIONAIS que façam sentido para o perfil dele, escolhidos ESTRITAMENTE dentre os itens listados em "PRODUTOS DISPONÍVEIS NO CATÁLOGO" abaixo. Nunca invente, generalize ou cite produtos que não estejam nessa lista. Se nenhum item do catálogo fizer sentido para esse cliente, não sugira produto novo nenhum — ofereça apenas a reposição do item 3.
+4. Sugerir 1 ou 2 produtos ADICIONAIS que façam sentido para o perfil e RAMO DE ATIVIDADE dele, escolhidos ESTRITAMENTE dentre os itens listados em "PRODUTOS DISPONÍVEIS NO CATÁLOGO" abaixo. Nunca invente, generalize ou cite produtos que não estejam nessa lista. Se nenhum item do catálogo fizer sentido para o ramo desse cliente, não sugira produto novo nenhum — ofereça apenas a reposição do item 3.
 5. Ter um chamado para ação claro
 6. NÃO usar emojis em NENHUMA parte da mensagem (nem no assunto do e-mail, nem no corpo, nem como marcadores de lista), independentemente do tom escolhido. Use apenas texto puro.
 ${ehEmail
@@ -3918,6 +3934,7 @@ DADOS DO CLIENTE:
 - Nome da loja/cliente: ${c.nome}
 ${c.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + c.contato : ''}
 - Cidade: ${c.cidade || 'não informada'}
+- Segmento/ramo de atividade do cliente: ${c.segmento || 'NÃO INFORMADO — nesse caso, seja conservador e não force produtos que não tenham relação clara com o que ele já compra'}
 - Dias desde o último pedido: ${d.diasSemComprar} dias
 - Total de pedidos já feitos: ${d.numPedidos}
 - Ticket médio: R$ ${d.ticketMedio.toFixed(2)}
@@ -3925,7 +3942,7 @@ ${c.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + c.contato : 
 
   const catalogoDisponivel = (DB.catalogo || []).filter(p => p.nome).map(p => p.nome);
   ctx += catalogoDisponivel.length
-    ? `\n\nPRODUTOS DISPONÍVEIS NO CATÁLOGO (única fonte permitida para a sugestão do item 4):\n- ${catalogoDisponivel.join('\n- ')}`
+    ? `\n\nPRODUTOS DISPONÍVEIS NO CATÁLOGO (única fonte permitida para a sugestão do item 4 — escolha considerando o segmento/ramo do cliente informado acima):\n- ${catalogoDisponivel.join('\n- ')}`
     : `\n\nNão há produtos cadastrados no catálogo no momento — não sugira nenhum produto novo, apenas ofereça reposição dos que ele já compra.`;
 
   if (c.ficha) ctx += `\n\nINFORMAÇÕES ADICIONAIS SOBRE O CLIENTE (ficha):\n${c.ficha}`;
@@ -3950,7 +3967,7 @@ function abrirReativacao(clienteId) {
 
   document.getElementById('reativClienteId').value = clienteId;
   document.getElementById('reativClienteInfo').innerHTML = `
-    <strong style="color:var(--navy)">${c.nome}</strong>${c.contato ? ' · 👤 '+c.contato : ''} · ${c.cidade || 'Sem cidade'}<br>
+    <strong style="color:var(--navy)">${c.nome}</strong>${c.contato ? ' · 👤 '+c.contato : ''} · ${c.cidade || 'Sem cidade'}${c.segmento ? ' · 🏷️ '+c.segmento : ''}<br>
     <span class="text-muted">${peds.length} pedido(s) · ${c.whatsapp ? '📱 '+c.whatsapp : '⚠️ Sem WhatsApp'} · ${c.email ? '✉️ '+c.email : '⚠️ Sem e-mail'}</span>
   `;
 
@@ -3962,6 +3979,8 @@ function abrirReativacao(clienteId) {
   document.getElementById('reativErro').style.display = 'none';
   document.getElementById('reativEnvioBtn').style.display = 'none';
   document.getElementById('reativLoading').style.display = 'none';
+  document.getElementById('reativPanfletoProdutos').innerHTML = '';
+  document.getElementById('reativPanfletoStatus').textContent = '';
 
   atualizarBotaoEnvio();
   renderHistoricoReativ(c, false); // mostra todo o histórico ao abrir
@@ -3976,6 +3995,7 @@ function renderDadosAnalisados(c, peds) {
 
   document.getElementById('reativDadosAnalisados').innerHTML = `
     <div><strong>Do dashboard:</strong></div>
+    <div>• Segmento/ramo: ${c.segmento ? '✅ '+c.segmento : '<span style="color:var(--warning)">⚠️ não cadastrado — a IA pode sugerir produtos fora do perfil do cliente</span>'}</div>
     <div>• Histórico: ${d.numPedidos} pedido(s), ticket médio R$ ${d.ticketMedio.toFixed(2)}, ${d.diasSemComprar} dias sem comprar</div>
     <div>• Produtos que compra: ${produtos.length ? produtos.join(', ') : '<span style="color:var(--gray-400)">nenhum registrado</span>'}</div>
     <div style="margin-top:6px"><strong>Da ficha e redes (enriqueça para melhorar a IA):</strong></div>
@@ -3983,8 +4003,8 @@ function renderDadosAnalisados(c, peds) {
     <div>• Instagram: ${c.instagram ? '✅ '+c.instagram : check(false)}</div>
     <div>• Facebook: ${c.facebook ? '✅ '+c.facebook : check(false)}</div>
     <div>• Site: ${c.site ? '✅ '+c.site : check(false)}</div>
-    ${(!c.ficha || !c.instagram && !c.facebook && !c.site)
-      ? '<div style="margin-top:6px;color:var(--warning);font-size:11px">💡 Dica: quanto mais preencher a ficha e redes do cliente, mais personalizada fica a mensagem. <a href="#" onclick="closeModal(\'modalReativacao\');editarCliente('+c.id+');return false;" style="color:var(--gold);font-weight:600">Editar ficha agora</a></div>'
+    ${(!c.segmento || !c.ficha || !c.instagram && !c.facebook && !c.site)
+      ? '<div style="margin-top:6px;color:var(--warning);font-size:11px">💡 Dica: preencher o segmento/ramo e a ficha do cliente é o que mais melhora a qualidade das sugestões da IA. <a href="#" onclick="closeModal(\'modalReativacao\');editarCliente('+c.id+');return false;" style="color:var(--gold);font-weight:600">Editar ficha agora</a></div>'
       : ''}
   `;
 }
@@ -4016,6 +4036,7 @@ async function gerarMensagemReativacao() {
       salvarHistoricoReativ(c, msg, tom, canal);
       renderHistoricoReativ(c, true); // 1º item já está na textarea
       atualizarBotaoEnvio();
+      renderSelecaoPanfleto(msg);
     } else {
       mostrarErroReativ(json.error || 'Não foi possível gerar a mensagem.');
     }
@@ -4100,7 +4121,250 @@ function usarDoHistorico(clienteId, idx) {
   document.getElementById('reativTom').value = h.tom;
   document.getElementById('reativCanal').value = h.canal;
   atualizarBotaoEnvio();
+  renderSelecaoPanfleto(h.msg);
   showToast('Versão carregada do histórico.');
+}
+
+// ════════════════════════════════════════════════════
+// PANFLETO DE REATIVAÇÃO — PDF com produtos sugeridos
+// ════════════════════════════════════════════════════
+
+// Detecta quais produtos do catálogo foram citados no texto da mensagem
+function extrairProdutosSugeridosDaMensagem(msg) {
+  if (!msg) return [];
+  const texto = msg.toLowerCase();
+  return (DB.catalogo || []).filter(p => p.nome && texto.includes(p.nome.toLowerCase()));
+}
+
+// Monta a lista de checkboxes de produtos do catálogo para o panfleto,
+// pré-marcando os que foram identificados no texto da mensagem
+function renderSelecaoPanfleto(msg) {
+  const wrap = document.getElementById('reativPanfletoProdutos');
+  const statusEl = document.getElementById('reativPanfletoStatus');
+  if (!wrap) return;
+  statusEl.textContent = '';
+
+  const catalogo = (DB.catalogo || []).filter(p => p.nome);
+  if (!catalogo.length) {
+    wrap.innerHTML = '<span style="color:var(--gray-400)">Nenhum produto cadastrado no catálogo ainda.</span>';
+    return;
+  }
+
+  const sugeridos = new Set(extrairProdutosSugeridosDaMensagem(msg).map(p => p.id));
+
+  wrap.innerHTML = catalogo.map(p => `
+    <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+      <input type="checkbox" value="${p.id}" ${sugeridos.has(p.id) ? 'checked' : ''} style="cursor:pointer">
+      <span>${p.nome}${p.valor ? ' — R$ ' + Number(p.valor).toFixed(2) : ''}</span>
+    </label>
+  `).join('');
+
+  if (!sugeridos.size) {
+    statusEl.innerHTML = '<span style="color:var(--warning)">⚠️ Não identifiquei automaticamente produtos do catálogo no texto da mensagem — selecione manualmente os que quiser incluir.</span>';
+  }
+}
+
+// Carrega uma imagem de URL externa e converte para base64, junto com suas
+// dimensões reais (para manter a proporção no PDF). Retorna null se falhar
+// (ex: CORS bloqueado, imagem fora do ar) — nesse caso o panfleto segue sem foto.
+function carregarImagemInfo(url) {
+  return new Promise((resolve) => {
+    if (!url) { resolve(null); return; }
+    fetch(url, { mode: 'cors' })
+      .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .then(blob => new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onloadend = () => res(reader.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(blob);
+      }))
+      .then(dataUrl => {
+        const img = new Image();
+        img.onload = () => resolve({ dataUrl, w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+        img.onerror = () => resolve(null);
+        img.src = dataUrl;
+      })
+      .catch(() => resolve(null));
+  });
+}
+
+async function gerarPanfletoReativacao() {
+  const c = reativClienteAtual ? reativClienteAtual.cliente : null;
+  if (!c) return;
+  if (!window.jspdf) { showToast('⚠️ Biblioteca PDF não carregada. Recarregue a página.', 'warning'); return; }
+
+  const idsSelecionados = Array.from(document.querySelectorAll('#reativPanfletoProdutos input[type=checkbox]:checked'))
+    .map(el => parseInt(el.value));
+  if (!idsSelecionados.length) {
+    showToast('⚠️ Selecione ao menos um produto para o panfleto.', 'warning');
+    return;
+  }
+  const produtos = (DB.catalogo || []).filter(p => idsSelecionados.includes(p.id));
+
+  const statusEl = document.getElementById('reativPanfletoStatus');
+  const btn = document.getElementById('reativPanfletoBtn');
+  btn.disabled = true;
+  statusEl.textContent = '⏳ Buscando fotos e montando o panfleto...';
+
+  // Carrega a primeira imagem de cada produto (com fallback silencioso)
+  const imagensInfo = await Promise.all(produtos.map(p => {
+    const url = (p.imagens && p.imagens[0]) ? resolverImagem(p.imagens[0]) : null;
+    return carregarImagemInfo(url);
+  }));
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, H = 297;
+  const navy = [27, 42, 74];
+  const gold = [201, 148, 10];
+  const goldLight = [232, 201, 106];
+  const grayLight = [242, 237, 230];
+  const darkText = [26, 26, 26];
+  const margin = 15;
+  const boxImg = 36; // mm — lado da área quadrada reservada para a foto
+  const cardH = 46;  // altura de cada card de produto
+
+  function desenharCabecalho(continuacao) {
+    doc.setFillColor(navy[0], navy[1], navy[2]);
+    doc.rect(0, 0, W, continuacao ? 28 : 45, 'F');
+    doc.setFillColor(gold[0], gold[1], gold[2]);
+    doc.rect(0, 0, W, 3, 'F');
+    try { doc.addImage(VANGARDIS_LOGO, 'JPEG', margin, 8, continuacao ? 26 : 40, continuacao ? 17 : 26); } catch (e) {}
+    doc.setFont('times', 'bold');
+    doc.setTextColor(goldLight[0], goldLight[1], goldLight[2]);
+    doc.setFontSize(continuacao ? 15 : 19);
+    doc.text('SELEÇÃO ESPECIAL PARA VOCÊ', W - margin, continuacao ? 13 : 20, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text(c.nome, W - margin, continuacao ? 21 : 29, { align: 'right' });
+    if (!continuacao) {
+      doc.setFontSize(9);
+      doc.setTextColor(200, 200, 200);
+      doc.text('Vangardis Expertise', W - margin, 37, { align: 'right' });
+    }
+    return continuacao ? 36 : 56;
+  }
+
+  function desenharRodape() {
+    const footerY = H - 24;
+    doc.setDrawColor(gold[0], gold[1], gold[2]);
+    doc.setLineWidth(0.5);
+    doc.line(margin, footerY, W - margin, footerY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(navy[0], navy[1], navy[2]);
+    doc.text('Vangardis Expertise', W / 2, footerY + 7, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text('WhatsApp (41) 99613-9000  ·  petare@vangardisexpertise.com.br  ·  www.vangardisexpertise.com.br', W / 2, footerY + 12, { align: 'center' });
+    doc.text('Rua Alfredo Bufren, 51 — Centro, Curitiba/PR  ·  @vangardisexpertise', W / 2, footerY + 16.5, { align: 'center' });
+    doc.setFillColor(gold[0], gold[1], gold[2]);
+    doc.rect(0, H - 3, W, 3, 'F');
+  }
+
+  let y = desenharCabecalho(false);
+
+  produtos.forEach((p, i) => {
+    if (y + cardH > H - 30) {
+      desenharRodape();
+      doc.addPage();
+      y = desenharCabecalho(true);
+    }
+
+    // Moldura do card
+    doc.setDrawColor(230, 225, 215);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, W - margin * 2, cardH, 2, 2, 'S');
+
+    // Foto (ou placeholder)
+    const info = imagensInfo[i];
+    const boxX = margin + 4, boxY = y + (cardH - boxImg) / 2;
+    if (info) {
+      let iw = boxImg, ih = boxImg;
+      const ratio = info.w / info.h;
+      if (ratio > 1) ih = boxImg / ratio; else iw = boxImg * ratio;
+      const ix = boxX + (boxImg - iw) / 2, iy = boxY + (boxImg - ih) / 2;
+      const fmt = info.dataUrl.indexOf('image/png') !== -1 ? 'PNG' : 'JPEG';
+      try { doc.addImage(info.dataUrl, fmt, ix, iy, iw, ih); } catch (e) {
+        desenharPlaceholderFoto(doc, boxX, boxY, boxImg, grayLight);
+      }
+    } else {
+      desenharPlaceholderFoto(doc, boxX, boxY, boxImg, grayLight);
+    }
+
+    // Texto do produto
+    const textX = boxX + boxImg + 8;
+    const textW = (W - margin) - textX - 4;
+    let ty = y + 9;
+
+    doc.setFont('times', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(navy[0], navy[1], navy[2]);
+    doc.text(p.nome, textX, ty, { maxWidth: textW });
+
+    const categorias = getCategoriasProduto(p);
+    ty += 6;
+    if (categorias.length) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(150, 150, 150);
+      doc.text(categorias.join(' · '), textX, ty);
+      ty += 5;
+    }
+
+    const specs = [];
+    if (p.dimensoes) specs.push('Dimensões: ' + p.dimensoes);
+    if (p.peso) specs.push('Peso: ' + p.peso);
+    if (p.desc) specs.push('Material: ' + p.desc);
+    if (specs.length) {
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 100, 100);
+      doc.text(specs.join('   |   '), textX, ty, { maxWidth: textW });
+      ty += 5;
+    }
+
+    if (p.descricao) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+      const linhas = doc.splitTextToSize(p.descricao, textW).slice(0, 2);
+      doc.text(linhas, textX, ty);
+    }
+
+    if (p.valor) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(gold[0], gold[1], gold[2]);
+      doc.text('R$ ' + Number(p.valor).toFixed(2), (W - margin) - 4, y + cardH - 6, { align: 'right' });
+    }
+
+    y += cardH + 4;
+  });
+
+  desenharRodape();
+
+  const nomeArq = 'Panfleto_' + c.nome.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
+  doc.save(nomeArq);
+
+  btn.disabled = false;
+  const semFoto = imagensInfo.filter(x => !x).length;
+  statusEl.innerHTML = semFoto
+    ? `✅ Panfleto gerado! ${semFoto} de ${produtos.length} produto(s) ficaram sem foto (imagem indisponível ou bloqueada por CORS) — vale conferir manualmente.`
+    : '✅ Panfleto gerado com sucesso!';
+  showToast('📄 Panfleto gerado! Verifique seus downloads.');
+}
+
+function desenharPlaceholderFoto(doc, x, y, size, grayLight) {
+  doc.setFillColor(grayLight[0], grayLight[1], grayLight[2]);
+  doc.setDrawColor(210, 205, 195);
+  doc.roundedRect(x, y, size, size, 2, 2, 'FD');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(160, 160, 160);
+  doc.text('Foto não', x + size / 2, y + size / 2 - 2, { align: 'center' });
+  doc.text('disponível', x + size / 2, y + size / 2 + 3, { align: 'center' });
 }
 
 function mostrarErroReativ(msg) {
