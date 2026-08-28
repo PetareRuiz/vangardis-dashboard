@@ -3904,6 +3904,13 @@ function montarPromptReativacao(c, peds, tom) {
   const canal = document.getElementById('reativCanal').value;
   const ehEmail = canal === 'email';
 
+  const nomeClienteLower = c.nome.trim().toLowerCase();
+  const nomesComprados = new Set(Object.keys(d.produtosComprados).map(n => n.trim().toLowerCase()));
+  const exclusivosDoCliente = (DB.catalogo || []).filter(p =>
+    p.nome && p.exclusivo && p.clienteExclusivo && p.clienteExclusivo.trim().toLowerCase() === nomeClienteLower
+  );
+  const exclusivosNaoComprados = exclusivosDoCliente.filter(p => !nomesComprados.has(p.nome.trim().toLowerCase()));
+
   let ctx = `Você é o assistente comercial da Vangardis Expertise, uma empresa de Curitiba especializada em impressão 3D, corte a laser e ímãs NFC personalizados, que vende no atacado para lojistas.
 
 Preciso que você escreva ${ehEmail ? 'um E-MAIL' : 'uma mensagem de WhatsApp'} para reativar um cliente que está há um tempo sem comprar.
@@ -3914,7 +3921,7 @@ A mensagem deve:
 1. Cumprimentar pelo nome da pessoa de contato (se informada); caso contrário, usar o nome da loja
 2. Mencionar sutilmente que faz um tempo desde o último pedido (sem soar cobrando)
 3. Oferecer reposição dos produtos que ele já compra
-4. Sugerir 1 ou 2 produtos ADICIONAIS que façam sentido para o perfil e RAMO DE ATIVIDADE dele, escolhidos ESTRITAMENTE dentre os itens listados em "PRODUTOS DISPONÍVEIS NO CATÁLOGO" abaixo. Nunca invente, generalize ou cite produtos que não estejam nessa lista. Se nenhum item do catálogo fizer sentido para o ramo desse cliente, não sugira produto novo nenhum — ofereça apenas a reposição do item 3.
+4. Sugerir 1 ou 2 produtos ADICIONAIS que façam sentido para o perfil e RAMO DE ATIVIDADE dele, escolhidos ESTRITAMENTE dentre os itens listados em "PRODUTOS DISPONÍVEIS NO CATÁLOGO" abaixo. Nunca invente, generalize ou cite produtos que não estejam nessa lista.${exclusivosNaoComprados.length ? ' Dê PRIORIDADE a sugerir os itens listados em "PRODUTOS EXCLUSIVOS DESTE CLIENTE AINDA NÃO COMPRADOS" abaixo — eles foram reservados especialmente para esse cliente e ainda não foram comprados por ele.' : ''} Se nenhum item do catálogo fizer sentido para o ramo desse cliente, não sugira produto novo nenhum — ofereça apenas a reposição do item 3.
 5. Ter um chamado para ação claro
 6. NÃO usar emojis em NENHUMA parte da mensagem (nem no assunto do e-mail, nem no corpo, nem como marcadores de lista), independentemente do tom escolhido. Use apenas texto puro.
 ${ehEmail
@@ -3933,11 +3940,15 @@ ${c.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + c.contato : 
 
   const catalogoDisponivel = (DB.catalogo || [])
     .filter(p => p.nome)
-    .filter(p => !p.exclusivo || (p.clienteExclusivo && p.clienteExclusivo.trim().toLowerCase() === c.nome.trim().toLowerCase()))
+    .filter(p => !p.exclusivo || (p.clienteExclusivo && p.clienteExclusivo.trim().toLowerCase() === nomeClienteLower))
     .map(p => p.nome);
   ctx += catalogoDisponivel.length
     ? `\n\nPRODUTOS DISPONÍVEIS NO CATÁLOGO (única fonte permitida para a sugestão do item 4 — escolha considerando o segmento/ramo do cliente informado acima):\n- ${catalogoDisponivel.join('\n- ')}`
     : `\n\nNão há produtos cadastrados no catálogo no momento — não sugira nenhum produto novo, apenas ofereça reposição dos que ele já compra.`;
+
+  if (exclusivosNaoComprados.length) {
+    ctx += `\n\nPRODUTOS EXCLUSIVOS DESTE CLIENTE AINDA NÃO COMPRADOS (reservados especialmente para ${c.nome} — priorize sugerir estes antes de qualquer outro item do catálogo geral):\n- ${exclusivosNaoComprados.map(p => p.nome).join('\n- ')}`;
+  }
 
   if (c.ficha) ctx += `\n\nINFORMAÇÕES ADICIONAIS SOBRE O CLIENTE (ficha):\n${c.ficha}`;
 
@@ -4149,10 +4160,27 @@ function renderSelecaoPanfleto(msg) {
 
   const sugeridos = new Set(extrairProdutosSugeridosDaMensagem(msg).map(p => p.id));
 
+  // Pré-marca também produtos exclusivos deste cliente que ele ainda não comprou,
+  // mesmo que a redação da mensagem não cite o nome exato do produto
+  if (reativClienteAtual) {
+    const nomesComprados = new Set(
+      (reativClienteAtual.pedidos || []).flatMap(p =>
+        ((p.itens && p.itens.length) ? p.itens : [{produto: p.produto}]).map(it => (it.produto || '').trim().toLowerCase())
+      )
+    );
+    catalogo.forEach(p => {
+      const ehExclusivoDele = p.exclusivo && p.clienteExclusivo && p.clienteExclusivo.trim().toLowerCase() === nomeClienteAtual;
+      if (ehExclusivoDele && !nomesComprados.has(p.nome.trim().toLowerCase())) {
+        sugeridos.add(p.id);
+      }
+    });
+  }
+
   wrap.innerHTML = catalogo.map(p => `
     <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
       <input type="checkbox" value="${p.id}" ${sugeridos.has(p.id) ? 'checked' : ''} style="cursor:pointer">
       <span>${p.nome}${p.valor ? ' — R$ ' + Number(p.valor).toFixed(2) : ''}</span>
+      ${p.exclusivo ? '<span style="font-size:10px;color:#B23B3B;font-weight:700">🔒 exclusivo</span>' : ''}
     </label>
   `).join('');
 
