@@ -3015,12 +3015,32 @@ function prazo15Badge(pz) {
 // ════════════════════════════════════════════════════
 // GERAR RECIBO DE ENTREGA — PDF (venda a prazo)
 // ════════════════════════════════════════════════════
-const VANGARDIS_LOGO = "data:image/jpeg;base64,";
+// Nome do arquivo da logo no bucket R2 (mesmo local das fotos de produto).
+// Suba um arquivo com esse nome exato para que apareça no Recibo e no Panfleto.
+const LOGO_FILENAME = 'logo-vangardis.png';
+let logoInfoCache = null;
+async function carregarLogoInfo() {
+  if (logoInfoCache !== null) return logoInfoCache; // já tentou antes nesta sessão
+  logoInfoCache = await carregarImagemInfo(resolverImagem(LOGO_FILENAME));
+  return logoInfoCache;
+}
+// Desenha a logo respeitando a proporção original dentro de uma caixa (boxW × boxH)
+function desenharLogo(doc, logoInfo, x, y, boxW, boxH) {
+  if (!logoInfo) return;
+  let lw = boxW, lh = boxH;
+  const ratio = logoInfo.w / logoInfo.h;
+  if (ratio > boxW / boxH) { lh = boxW / ratio; } else { lw = boxH * ratio; }
+  const lx = x + (boxW - lw) / 2, ly = y + (boxH - lh) / 2;
+  const fmt = logoInfo.dataUrl.indexOf('image/png') !== -1 ? 'PNG' : 'JPEG';
+  try { doc.addImage(logoInfo.dataUrl, fmt, lx, ly, lw, lh); } catch (e) {}
+}
 
-function gerarReciboPDF(id) {
+async function gerarReciboPDF(id) {
   const p = DB.pedidos.find(x => x.id === id);
   if (!p) return;
   if (!window.jspdf) { showToast("⚠️ Biblioteca PDF não carregada. Recarregue a página.", "warning"); return; }
+
+  const logoInfo = await carregarLogoInfo();
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -3041,7 +3061,7 @@ function gerarReciboPDF(id) {
   doc.rect(0, 0, W, 3, "F");
 
   // Logo
-  try { doc.addImage(VANGARDIS_LOGO, "JPEG", 15, 10, 40, 26); } catch(e) {}
+  desenharLogo(doc, logoInfo, 15, 10, 40, 26);
 
   // Título do documento
   doc.setTextColor(goldLight[0], goldLight[1], goldLight[2]);
@@ -4231,11 +4251,14 @@ async function gerarPanfletoReativacao() {
   btn.disabled = true;
   statusEl.textContent = '⏳ Buscando fotos e montando o panfleto...';
 
-  // Carrega a primeira imagem de cada produto (com fallback silencioso)
-  const imagensInfo = await Promise.all(produtos.map(p => {
-    const url = (p.imagens && p.imagens[0]) ? resolverImagem(p.imagens[0]) : null;
-    return carregarImagemInfo(url);
-  }));
+  // Carrega a logo (do bucket) e a primeira imagem de cada produto (com fallback silencioso)
+  const [logoInfo, ...imagensInfo] = await Promise.all([
+    carregarLogoInfo(),
+    ...produtos.map(p => {
+      const url = (p.imagens && p.imagens[0]) ? resolverImagem(p.imagens[0]) : null;
+      return carregarImagemInfo(url);
+    })
+  ]);
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -4268,7 +4291,7 @@ async function gerarPanfletoReativacao() {
     doc.rect(0, 0, W, alturaHeader, 'F');
     doc.setFillColor(gold[0], gold[1], gold[2]);
     doc.rect(0, alturaHeader, W, 2, 'F');
-    try { doc.addImage(VANGARDIS_LOGO, 'JPEG', margin, continuacao ? 4 : 7, continuacao ? 20 : 34, continuacao ? 13 : 22); } catch (e) {}
+    desenharLogo(doc, logoInfo, margin, continuacao ? 4 : 7, continuacao ? 20 : 34, continuacao ? 13 : 22);
     doc.setFont('times', 'bold');
     doc.setTextColor(navy[0], navy[1], navy[2]);
     doc.setFontSize(continuacao ? 14 : 18);
