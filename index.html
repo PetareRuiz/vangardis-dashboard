@@ -4249,26 +4249,40 @@ async function gerarPanfletoReativacao() {
   const boxImg = 36; // mm — lado da área quadrada reservada para a foto
   const cardH = 46;  // altura de cada card de produto
 
-  function desenharCabecalho(continuacao) {
+  // Fundo azul-marinho em toda a página (o design inverteu: fundo agora é azul,
+  // e o que antes era o bloco azul do cabeçalho agora é branco)
+  function pintarFundoPagina() {
     doc.setFillColor(navy[0], navy[1], navy[2]);
-    doc.rect(0, 0, W, continuacao ? 28 : 45, 'F');
+    doc.rect(0, 0, W, H, 'F');
+  }
+  function novaPagina() {
+    doc.addPage();
+    pintarFundoPagina();
+  }
+  pintarFundoPagina();
+
+  function desenharCabecalho(continuacao) {
+    const alturaHeader = continuacao ? 26 : 42;
+    // Cabeçalho com fundo BRANCO (antes era azul)
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, W, alturaHeader, 'F');
     doc.setFillColor(gold[0], gold[1], gold[2]);
-    doc.rect(0, 0, W, 3, 'F');
-    try { doc.addImage(VANGARDIS_LOGO, 'JPEG', margin, 8, continuacao ? 26 : 40, continuacao ? 17 : 26); } catch (e) {}
+    doc.rect(0, alturaHeader, W, 2, 'F');
+    try { doc.addImage(VANGARDIS_LOGO, 'JPEG', margin, continuacao ? 4 : 7, continuacao ? 20 : 34, continuacao ? 13 : 22); } catch (e) {}
     doc.setFont('times', 'bold');
-    doc.setTextColor(goldLight[0], goldLight[1], goldLight[2]);
-    doc.setFontSize(continuacao ? 15 : 19);
-    doc.text('SELEÇÃO ESPECIAL PARA VOCÊ', W - margin, continuacao ? 13 : 20, { align: 'right' });
+    doc.setTextColor(navy[0], navy[1], navy[2]);
+    doc.setFontSize(continuacao ? 14 : 18);
+    doc.text('SELEÇÃO ESPECIAL PARA VOCÊ', W - margin, continuacao ? 12 : 18, { align: 'right' });
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    doc.setTextColor(255, 255, 255);
-    doc.text(c.nome, W - margin, continuacao ? 21 : 29, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setTextColor(90, 90, 90);
+    doc.text(c.nome, W - margin, continuacao ? 19 : 26, { align: 'right' });
     if (!continuacao) {
-      doc.setFontSize(9);
-      doc.setTextColor(200, 200, 200);
-      doc.text('Vangardis Expertise', W - margin, 37, { align: 'right' });
+      doc.setFontSize(8.5);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Vangardis Expertise', W - margin, 34, { align: 'right' });
     }
-    return continuacao ? 36 : 56;
+    return alturaHeader + 14;
   }
 
   function desenharRodape() {
@@ -4278,11 +4292,11 @@ async function gerarPanfletoReativacao() {
     doc.line(margin, footerY, W - margin, footerY);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.setTextColor(navy[0], navy[1], navy[2]);
+    doc.setTextColor(goldLight[0], goldLight[1], goldLight[2]);
     doc.text('Vangardis Expertise', W / 2, footerY + 7, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.setTextColor(120, 120, 120);
+    doc.setTextColor(215, 215, 215);
     doc.text('WhatsApp (41) 99613-9000  ·  petare@vangardisexpertise.com.br  ·  www.vangardisexpertise.com.br', W / 2, footerY + 12, { align: 'center' });
     doc.text('Rua Alfredo Bufren, 51 — Centro, Curitiba/PR  ·  @vangardisexpertise', W / 2, footerY + 16.5, { align: 'center' });
     doc.setFillColor(gold[0], gold[1], gold[2]);
@@ -4294,14 +4308,15 @@ async function gerarPanfletoReativacao() {
   produtos.forEach((p, i) => {
     if (y + cardH > H - 30) {
       desenharRodape();
-      doc.addPage();
+      novaPagina();
       y = desenharCabecalho(true);
     }
 
-    // Moldura do card
+    // Card com fundo BRANCO (antes era só um contorno na página branca)
+    doc.setFillColor(255, 255, 255);
     doc.setDrawColor(230, 225, 215);
     doc.setLineWidth(0.3);
-    doc.roundedRect(margin, y, W - margin * 2, cardH, 2, 2, 'S');
+    doc.roundedRect(margin, y, W - margin * 2, cardH, 2, 2, 'FD');
 
     // Foto (ou placeholder)
     const info = imagensInfo[i];
