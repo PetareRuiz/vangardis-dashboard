@@ -612,8 +612,6 @@ th.sortable:hover { background: var(--navy-mid); }
           <div class="card-title">📖 Catálogo de Produtos</div>
           <div class="flex" style="gap:8px">
             <button class="btn btn-ghost" onclick="exportarProdutosPublicados()" title="Gerar JSON apenas dos produtos com Publicar = Sim">📤 Exportar Publicados (JSON)</button>
-            <button class="btn btn-ghost" onclick="document.getElementById('importCatalogoInput').click()" title="Importar produtos de um catálogo PDF">📄 Importar Catálogo PDF</button>
-            <input type="file" id="importCatalogoInput" accept=".pdf" style="display:none" onchange="importarCatalogoPDF(event)">
             <button class="btn btn-gold" onclick="abrirNovoProdutoCatalogo()">+ Novo Produto</button>
           </div>
         </div>
@@ -1730,6 +1728,24 @@ th.sortable:hover { background: var(--navy-mid); }
       </div>
     </div>
 
+    <div class="form-row">
+      <div class="form-group">
+        <label>🔒 Produto Exclusivo?</label>
+        <select id="prodCatExclusivo" onchange="toggleClienteExclusivo()">
+          <option value="nao">Não</option>
+          <option value="sim">Sim</option>
+        </select>
+      </div>
+      <div class="form-group" id="prodCatClienteExclusivoWrap" style="display:none;flex:2">
+        <label>Vinculado ao cliente</label>
+        <input type="text" id="prodCatClienteExclusivo" list="prodCatClientesList" placeholder="Nome do cliente">
+        <datalist id="prodCatClientesList"></datalist>
+      </div>
+    </div>
+    <div id="prodCatExclusivoAviso" style="display:none;background:#FDEAEA;border:1px dashed #D98E8E;border-radius:8px;padding:8px 12px;font-size:11px;color:#8a2020;margin:-4px 0 12px">
+      🔒 Produtos exclusivos não são sugeridos pela IA (reativação/panfleto) para outros clientes e ficam sinalizados no catálogo.
+    </div>
+
     <!-- Categorias (múltiplas) -->
     <div class="form-group">
       <label>Categorias <span class="text-muted" style="font-weight:400;font-size:11px">(marque uma ou mais, ou adicione novas)</span></label>
@@ -1776,62 +1792,6 @@ th.sortable:hover { background: var(--navy-mid); }
   </div>
 </div>
 
-<!-- ═══════ MODAL IMPORTAR CATÁLOGO PDF (revisão 1 a 1) ═══════ -->
-<div class="modal-overlay" id="modalImportCatalogo">
-  <div class="modal" style="max-width:600px">
-    <div class="modal-title">📄 Importar Catálogo — <span id="catReviewProgresso">Produto 1 de 1</span></div>
-    <div id="catReviewEmpty" style="display:none" class="alert alert-warning">⚠️ Nenhum produto pôde ser extraído do PDF.</div>
-
-    <div id="catReviewSingle">
-      <!-- Barra de progresso -->
-      <div style="background:var(--gray-200);height:6px;border-radius:3px;margin-bottom:16px;overflow:hidden">
-        <div id="catProgressBar" style="height:100%;background:var(--gold);width:0%;transition:width 0.3s"></div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group" style="flex:2">
-          <label>Nome do Produto</label>
-          <input type="text" id="catRevNome" style="font-size:14px;font-weight:600">
-        </div>
-        <div class="form-group">
-          <label>Categoria</label>
-          <input type="text" id="catRevCategoria" list="catCategorias">
-          <datalist id="catCategorias"></datalist>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Dimensões</label>
-          <input type="text" id="catRevDimensoes">
-        </div>
-        <div class="form-group">
-          <label>Peso</label>
-          <input type="text" id="catRevPeso">
-        </div>
-        <div class="form-group" style="max-width:120px">
-          <label>Valor (R$)</label>
-          <input type="number" id="catRevValor" step="0.01">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Material / Descrição</label>
-        <input type="text" id="catRevDesc">
-      </div>
-
-      <div style="background:#F8F6F1;border:1px dashed var(--gray-300);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--gray-600);margin-top:6px">
-        💡 As imagens você adiciona depois, editando o produto no catálogo. Confira os dados e aprove.
-      </div>
-    </div>
-
-    <div class="modal-footer" style="justify-content:space-between">
-      <button class="btn btn-ghost" onclick="pularProdutoRevisao()">⏭️ Pular este</button>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-ghost" onclick="cancelarImportCatalogo()">Cancelar tudo</button>
-        <button class="btn btn-gold" id="catAprovarBtn" onclick="aprovarProdutoRevisao()">✅ Aprovar e próximo</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- ═══════ DEDUP MODAL ═══════ -->
 <div class="modal-overlay" id="modalDedup">
@@ -3940,7 +3900,10 @@ ${c.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + c.contato : 
 - Ticket médio: R$ ${d.ticketMedio.toFixed(2)}
 - Produtos que já comprou: ${listaProdutos || 'não especificado'}`;
 
-  const catalogoDisponivel = (DB.catalogo || []).filter(p => p.nome).map(p => p.nome);
+  const catalogoDisponivel = (DB.catalogo || [])
+    .filter(p => p.nome)
+    .filter(p => !p.exclusivo || (p.clienteExclusivo && p.clienteExclusivo.trim().toLowerCase() === c.nome.trim().toLowerCase()))
+    .map(p => p.nome);
   ctx += catalogoDisponivel.length
     ? `\n\nPRODUTOS DISPONÍVEIS NO CATÁLOGO (única fonte permitida para a sugestão do item 4 — escolha considerando o segmento/ramo do cliente informado acima):\n- ${catalogoDisponivel.join('\n- ')}`
     : `\n\nNão há produtos cadastrados no catálogo no momento — não sugira nenhum produto novo, apenas ofereça reposição dos que ele já compra.`;
@@ -4144,9 +4107,12 @@ function renderSelecaoPanfleto(msg) {
   if (!wrap) return;
   statusEl.textContent = '';
 
-  const catalogo = (DB.catalogo || []).filter(p => p.nome);
+  const nomeClienteAtual = (reativClienteAtual && reativClienteAtual.cliente.nome || '').trim().toLowerCase();
+  const catalogo = (DB.catalogo || [])
+    .filter(p => p.nome)
+    .filter(p => !p.exclusivo || (p.clienteExclusivo && p.clienteExclusivo.trim().toLowerCase() === nomeClienteAtual));
   if (!catalogo.length) {
-    wrap.innerHTML = '<span style="color:var(--gray-400)">Nenhum produto cadastrado no catálogo ainda.</span>';
+    wrap.innerHTML = '<span style="color:var(--gray-400)">Nenhum produto do catálogo disponível para sugerir a este cliente.</span>';
     return;
   }
 
@@ -5716,14 +5682,28 @@ function getCategoriasProduto(p) {
   return [];
 }
 
+function toggleClienteExclusivo() {
+  const sim = document.getElementById('prodCatExclusivo').value === 'sim';
+  document.getElementById('prodCatClienteExclusivoWrap').style.display = sim ? 'block' : 'none';
+  document.getElementById('prodCatExclusivoAviso').style.display = sim ? 'block' : 'none';
+}
+
+function popularClientesDatalistExclusivo() {
+  const dl = document.getElementById('prodCatClientesList');
+  if (dl) dl.innerHTML = (DB.clientes || []).map(c => `<option value="${c.nome}">`).join('');
+}
+
 function abrirNovoProdutoCatalogo() {
   document.getElementById('prodCatId').value = '';
   document.getElementById('prodCatTitulo').textContent = 'Novo Produto';
-  ['prodCatNome','prodCatDimensoes','prodCatPeso','prodCatValor','prodCatDesc','prodCatDescricao','prodCatNovaCategoria'].forEach(id => {
+  ['prodCatNome','prodCatDimensoes','prodCatPeso','prodCatValor','prodCatDesc','prodCatDescricao','prodCatNovaCategoria','prodCatClienteExclusivo'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('prodCatPublicar').value = 'nao';
   document.getElementById('prodCatDestaque').value = 'nao';
+  document.getElementById('prodCatExclusivo').value = 'nao';
+  popularClientesDatalistExclusivo();
+  toggleClienteExclusivo();
   prodCatCategoriasSel = [];
   renderChipsCategorias();
   document.getElementById('prodCatImagens').innerHTML = '';
@@ -5734,6 +5714,13 @@ function abrirNovoProdutoCatalogo() {
 function salvarProdutoCatalogo() {
   const nome = document.getElementById('prodCatNome').value.trim();
   if (!nome) { showToast('⚠️ Informe o nome do produto.','warning'); return; }
+
+  const exclusivo = document.getElementById('prodCatExclusivo').value === 'sim';
+  const clienteExclusivo = document.getElementById('prodCatClienteExclusivo').value.trim();
+  if (exclusivo && !clienteExclusivo) {
+    showToast('⚠️ Informe o nome do cliente ao marcar o produto como exclusivo.','warning');
+    return;
+  }
 
   if (!DB.catalogo) DB.catalogo = [];
   const dados = {
@@ -5746,6 +5733,8 @@ function salvarProdutoCatalogo() {
     descricao:  document.getElementById('prodCatDescricao').value.trim(),
     publicar:   document.getElementById('prodCatPublicar').value === 'sim',
     destaque:   document.getElementById('prodCatDestaque').value === 'sim',
+    exclusivo,
+    clienteExclusivo: exclusivo ? clienteExclusivo : '',
     imagens:    getImagensProdCat()
   };
 
@@ -5789,6 +5778,10 @@ function editarProdutoCatalogo(id) {
   document.getElementById('prodCatDescricao').value = p.descricao || '';
   document.getElementById('prodCatPublicar').value  = p.publicar ? 'sim' : 'nao';
   document.getElementById('prodCatDestaque').value  = p.destaque ? 'sim' : 'nao';
+  document.getElementById('prodCatExclusivo').value = p.exclusivo ? 'sim' : 'nao';
+  document.getElementById('prodCatClienteExclusivo').value = p.clienteExclusivo || '';
+  popularClientesDatalistExclusivo();
+  toggleClienteExclusivo();
   document.getElementById('prodCatNovaCategoria').value = '';
   prodCatCategoriasSel = getCategoriasProduto(p);
   renderChipsCategorias();
@@ -5833,6 +5826,8 @@ function exportarProdutosPublicados() {
     material:   p.desc || '',
     descricao:  p.descricao || '',
     destaque:   !!p.destaque,
+    exclusivo:  !!p.exclusivo,
+    clienteExclusivo: p.exclusivo ? (p.clienteExclusivo || '') : '',
     imagens:    (p.imagens || []).map(resolverImagem)  // URLs completas
   }));
 
@@ -5935,7 +5930,7 @@ function renderCatalogo() {
 
   const tbody = document.getElementById('catalogoTbody');
   if (!catalogo.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:40px">Nenhum produto no catálogo. Clique em "+ Novo Produto" ou importe um catálogo PDF.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gray-400);padding:40px">Nenhum produto no catálogo. Clique em "+ Novo Produto" para começar.</td></tr>';
     atualizarBatchBar();
     return;
   }
@@ -5966,6 +5961,7 @@ function renderCatalogo() {
       <td>
         ${p.destaque ? '<span title="Produto em destaque" style="color:var(--gold)">⭐</span> ' : ''}<strong style="color:var(--navy)">${p.nome}</strong>
         ${nImgs ? `<span class="text-muted" style="font-size:11px"> · 🖼️ ${nImgs}</span>` : ''}
+        ${p.exclusivo ? `<div style="font-size:10px;color:#B23B3B;font-weight:700;margin-top:2px">🔒 Exclusivo: ${p.clienteExclusivo || '—'}</div>` : ''}
       </td>
       <td>${catsBadges}</td>
       <td class="text-muted" style="font-size:12px">${p.dimensoes||'—'}</td>
@@ -6121,6 +6117,7 @@ function verProdutoCatalogo(id) {
     ? `<div style="margin-bottom:12px">${catsView.map(c => `<span class="badge badge-navy" style="display:inline-block;margin:2px">${c}</span>`).join('')}</div>`
     : '';
   document.getElementById('verProdBody').innerHTML = `
+    ${p.exclusivo ? `<div style="background:#FDEAEA;border:1px solid #E8B4B4;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#8a2020"><strong>🔒 Produto exclusivo</strong> — vinculado a <strong>${p.clienteExclusivo || 'um cliente específico'}</strong>. Não deve ser oferecido a outros clientes.</div>` : ''}
     ${galeria}
     ${catsViewHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
@@ -6143,235 +6140,6 @@ function verProdutoCatalogo(id) {
     editarProdutoCatalogo(id);
   };
   openModal('modalVerProduto');
-}
-
-// ── Importação de catálogo PDF ──
-let catProdutosExtraidos = [];
-
-async function importarCatalogoPDF(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  if (!window.pdfjsLib) {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-      s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(); };
-      s.onerror = rej;
-      document.head.appendChild(s);
-    });
-  }
-
-  showToast('⏳ Lendo o catálogo...', 'warning');
-
-  // Lê texto página por página
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const pdf = await pdfjsLib.getDocument({data: e.target.result}).promise;
-      const paginas = [];
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        // Captura cada item com posição (x,y) e altura da fonte
-        const items = content.items.map(it => ({
-          str: it.str,
-          x: it.transform[4],
-          y: it.transform[5],
-          h: Math.abs(it.transform[0]) || Math.abs(it.transform[3]) || 0  // tamanho da fonte
-        })).filter(it => it.str && it.str.trim());
-        paginas.push(items);
-      }
-      catProdutosExtraidos = extrairProdutosDoCatalogo(paginas);
-      mostrarReviewCatalogo();
-    } catch(err) {
-      showToast('⚠️ Erro ao ler o PDF: ' + err.message, 'danger');
-    }
-    event.target.value = '';
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function extrairProdutosDoCatalogo(paginas) {
-  const produtos = [];
-  paginas.forEach(items => {
-    // items = [{str, x, y, h}] com posição e tamanho de fonte
-    const texto = items.map(it => it.str).join(' ');
-
-    // Ignora capa (COLEÇÃO sem FICHA) e sumário
-    if (/SUM[ÁA]RIO/i.test(texto)) return;
-    if (/COLE[ÇC][ÃA]O/i.test(texto) && !/FICHA/i.test(texto)) return;
-    if (!/R\$/.test(texto)) return; // sem preço = não é produto
-
-    // ── NOME: o texto de MAIOR fonte no topo, excluindo valor/número/CAPIMANIA ──
-    const candidatos = items.filter(it => {
-      const s = it.str.trim();
-      if (it.h < 16) return false;          // só fontes grandes (títulos)
-      if (/R\$/.test(s)) return false;       // exclui o valor (fonte grande também)
-      if (/^\d+$/.test(s)) return false;     // exclui número "01"
-      if (/CAPIMANIA/i.test(s)) return false;
-      if (/^[\d,\s×cmg.]+$/.test(s)) return false; // exclui dimensões/peso
-      return true;
-    });
-    let nome = '';
-    if (candidatos.length) {
-      // Maior fonte; em empate, o mais ao topo (maior y no PDF.js)
-      candidatos.sort((a,b) => (b.h - a.h) || (b.y - a.y));
-      nome = candidatos[0].str.trim();
-    }
-
-    // ── CATEGORIA: texto maiúsculo (fonte menor que título) ──
-    let categoria = '';
-    for (const it of items) {
-      const s = it.str.trim();
-      if (s === nome) continue;
-      if (/CAPIMANIA|FICHA|DIMENS|PERSONALIZ|VALOR/i.test(s)) continue;
-      if (/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ\s]{4,}$/.test(s) && it.h < 16) {
-        const up = s.toUpperCase();
-        if (up.includes('ESCULTURA')) categoria = 'Escultura';
-        else if (up.includes('PAPELARIA')) categoria = 'Papelaria';
-        else if (up.includes('CHAVEIRO')) categoria = 'Chaveiro';
-        else if (up.includes('KIT')) categoria = 'Kit';
-        else if (up.includes('CORTE')) categoria = 'Corte a Laser';
-        else if (up.includes('EDIÇÃO') || up.includes('EDICAO')) categoria = 'Chaveiro';
-        if (categoria) break;
-      }
-    }
-
-    // ── VALOR ──
-    let valor = 0;
-    const vm = texto.match(/R\$\s*([\d.,]+)/);
-    if (vm) valor = parseFloat(vm[1].replace(/\./g,'').replace(',','.')) || 0;
-
-    // ── DIMENSÕES ──
-    let dimensoes = '';
-    const dm = texto.match(/([\d,]+\s*×\s*[\d,]+\s*×\s*[\d,]+\s*cm)/i);
-    if (dm) dimensoes = dm[1].replace(/\s+/g,' ').trim();
-
-    // ── PESO ──
-    let peso = '';
-    const pm = texto.match(/(\d+[,.]?\d*\s*g(?:\/un\.?)?)\b/i);
-    if (pm) peso = pm[1].trim();
-
-    // ── MATERIAL: entre peso e "Diversas/Única cores" ──
-    let material = '';
-    const mm = texto.match(/g\s+(PLA \+ [^·]+?|PLA Premium|Acrílico|MDF \+ [^·]+?)\s+(?:Diversas|Única)/i);
-    if (mm) {
-      material = mm[1].trim();
-    } else {
-      const mm2 = texto.match(/\b(PLA \+ [A-Za-zÀ-ú]+(?:\s[A-Za-zÀ-ú]+)?|PLA Premium|Acrílico|MDF \+ [A-Za-zÀ-ú]+(?:\s[A-Za-zÀ-ú]+)?)\b/i);
-      if (mm2) material = mm2[1].trim();
-    }
-
-    produtos.push({
-      nome: nome || 'Produto sem nome',
-      categoria, dimensoes, peso, valor,
-      desc: material,
-      skip: false
-    });
-  });
-  return produtos;
-}
-
-// ── Revisão produto por produto ──
-let catRevIndice = 0;
-let catRevAprovados = [];
-
-function mostrarReviewCatalogo() {
-  const empty = document.getElementById('catReviewEmpty');
-  const single = document.getElementById('catReviewSingle');
-
-  if (!catProdutosExtraidos.length) {
-    empty.style.display = 'block';
-    single.style.display = 'none';
-    document.getElementById('catAprovarBtn').style.display = 'none';
-    openModal('modalImportCatalogo');
-    return;
-  }
-
-  empty.style.display = 'none';
-  single.style.display = 'block';
-  document.getElementById('catAprovarBtn').style.display = 'inline-block';
-  catRevIndice = 0;
-  catRevAprovados = [];
-  // Popula sugestões de categoria para o campo da revisão
-  const dl = document.getElementById('catCategorias');
-  if (dl) dl.innerHTML = getTodasCategorias().map(c => `<option value="${c}">`).join('');
-  carregarProdutoRevisao();
-  openModal('modalImportCatalogo');
-}
-
-function carregarProdutoRevisao() {
-  const total = catProdutosExtraidos.length;
-  const p = catProdutosExtraidos[catRevIndice];
-  if (!p) { finalizarImportCatalogo(); return; }
-
-  document.getElementById('catReviewProgresso').textContent = `Produto ${catRevIndice+1} de ${total}`;
-  document.getElementById('catProgressBar').style.width = ((catRevIndice)/total*100) + '%';
-
-  document.getElementById('catRevNome').value      = p.nome || '';
-  document.getElementById('catRevCategoria').value = p.categoria || '';
-  document.getElementById('catRevDimensoes').value = p.dimensoes || '';
-  document.getElementById('catRevPeso').value      = p.peso || '';
-  document.getElementById('catRevValor').value     = p.valor || '';
-  document.getElementById('catRevDesc').value      = p.desc || '';
-
-  // Botão muda no último
-  const btn = document.getElementById('catAprovarBtn');
-  btn.textContent = (catRevIndice === total - 1) ? '✅ Aprovar e finalizar' : '✅ Aprovar e próximo';
-}
-
-function aprovarProdutoRevisao() {
-  const nome = document.getElementById('catRevNome').value.trim();
-  if (!nome) { showToast('⚠️ Informe o nome do produto ou pule.','warning'); return; }
-
-  const catVal = document.getElementById('catRevCategoria').value.trim();
-  catRevAprovados.push({
-    id: Date.now() + catRevIndice,
-    nome,
-    categorias: catVal ? [catVal] : [],
-    dimensoes: document.getElementById('catRevDimensoes').value.trim(),
-    peso:      document.getElementById('catRevPeso').value.trim(),
-    valor:     parseFloat(document.getElementById('catRevValor').value) || 0,
-    desc:      document.getElementById('catRevDesc').value.trim(),
-    descricao: '',
-    publicar:  false,
-    destaque:  false,
-    imagens:   []
-  });
-  avancarRevisao();
-}
-
-function pularProdutoRevisao() {
-  avancarRevisao();
-}
-
-function avancarRevisao() {
-  catRevIndice++;
-  if (catRevIndice >= catProdutosExtraidos.length) {
-    finalizarImportCatalogo();
-  } else {
-    carregarProdutoRevisao();
-  }
-}
-
-function finalizarImportCatalogo() {
-  if (!DB.catalogo) DB.catalogo = [];
-  if (catRevAprovados.length) {
-    DB.catalogo.push(...catRevAprovados);
-    saveDB();
-    renderCatalogo();
-  }
-  closeModal('modalImportCatalogo');
-  const n = catRevAprovados.length;
-  if (n) showToast(`✅ ${n} produto(s) cadastrado(s)! Adicione as imagens editando cada um.`);
-  else showToast('Nenhum produto foi cadastrado.');
-}
-
-function cancelarImportCatalogo() {
-  if (catRevAprovados.length && !confirm(`Você já aprovou ${catRevAprovados.length} produto(s). Cancelar tudo e descartar?`)) return;
-  closeModal('modalImportCatalogo');
-  showToast('Importação cancelada.');
 }
 
 function renderAll(){
