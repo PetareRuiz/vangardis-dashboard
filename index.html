@@ -4172,7 +4172,8 @@ function renderSelecaoPanfleto(msg) {
   const nomeClienteAtual = (reativClienteAtual && reativClienteAtual.cliente.nome || '').trim().toLowerCase();
   const catalogo = (DB.catalogo || [])
     .filter(p => p.nome)
-    .filter(p => !p.exclusivo || (p.clienteExclusivo && p.clienteExclusivo.trim().toLowerCase() === nomeClienteAtual));
+    .filter(p => !p.exclusivo || (p.clienteExclusivo && p.clienteExclusivo.trim().toLowerCase() === nomeClienteAtual))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   if (!catalogo.length) {
     wrap.innerHTML = '<span style="color:var(--gray-400)">Nenhum produto do catálogo disponível para sugerir a este cliente.</span>';
     return;
