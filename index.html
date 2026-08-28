@@ -1915,6 +1915,7 @@ let lastSyncTime  = null;
 // Salva localmente SEMPRE (instantâneo) e agenda sync na nuvem
 function saveDB() {
   localStorage.setItem('vangardis_db', JSON.stringify(DB));
+  localStorage.setItem('vangardis_db_dirty', '1'); // marca que há alterações ainda não confirmadas na nuvem
   scheduleSyncToCloud();
 }
 
@@ -1938,6 +1939,7 @@ async function syncToCloud() {
       lastSyncTime = new Date();
       setSyncStatus('☁️ Sincronizado ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), 'success');
       syncPending = false;
+      localStorage.removeItem('vangardis_db_dirty');
     } else {
       setSyncStatus('⚠️ Erro ao sincronizar', 'danger');
     }
@@ -1946,11 +1948,36 @@ async function syncToCloud() {
   }
 }
 
+// Envio "best effort" ao sair/fechar a aba — usa sendBeacon, que o navegador
+// tenta entregar mesmo com a página sendo fechada (diferente de fetch normal).
+function flushPendingSyncOnExit() {
+  if (localStorage.getItem('vangardis_db_dirty') !== '1') return;
+  try {
+    const blob = new Blob([JSON.stringify({ action: 'save', data: DB })], { type: 'text/plain;charset=UTF-8' });
+    navigator.sendBeacon(GS_URL, blob);
+  } catch (e) {}
+}
+window.addEventListener('pagehide', flushPendingSyncOnExit);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushPendingSyncOnExit();
+});
+
 // Carrega da nuvem; usa localStorage como fallback offline
 async function loadDB() {
   // Primeiro carrega local para mostrar algo imediatamente
   const local = localStorage.getItem('vangardis_db');
+  const havialteracoesPendentes = localStorage.getItem('vangardis_db_dirty') === '1';
   if (local) { try { DB = { barcodes:{}, ...JSON.parse(local) }; } catch(_){} }
+
+  // Se a última sessão fechou antes de confirmar o envio à nuvem, os dados locais
+  // são a versão mais recente — envia-os agora em vez de arriscar sobrescrevê-los
+  // com a cópia (desatualizada) que está guardada na nuvem.
+  if (havialteracoesPendentes) {
+    setSyncStatus('⏳ Havia alterações pendentes da sessão anterior — sincronizando…', 'warning');
+    await syncToCloud();
+    renderAll();
+    return;
+  }
 
   setSyncStatus('🔄 Carregando da nuvem…', 'warning');
   try {
@@ -1980,6 +2007,9 @@ function setSyncStatus(msg, type) {
 
 // Força sincronização manual
 async function forceSyncFromCloud() {
+  if (localStorage.getItem('vangardis_db_dirty') === '1') {
+    if (!confirm('Há alterações feitas neste dispositivo que ainda não foram confirmadas como salvas na nuvem. Buscar a versão da nuvem agora pode substituir essas alterações. Deseja continuar mesmo assim?')) return;
+  }
   setSyncStatus('🔄 Sincronizando…', 'warning');
   try {
     const res  = await fetch(GS_URL + '?action=load');
@@ -1987,6 +2017,7 @@ async function forceSyncFromCloud() {
     if (json && json.pedidos !== undefined) {
       DB = { barcodes:{}, ...json };
       localStorage.setItem('vangardis_db', JSON.stringify(DB));
+      localStorage.removeItem('vangardis_db_dirty');
       lastSyncTime = new Date();
       setSyncStatus('☁️ Sincronizado ' + lastSyncTime.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), 'success');
       renderAll();
