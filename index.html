@@ -1214,6 +1214,17 @@ th.sortable:hover { background: var(--navy-mid); }
         <input type="text" id="cliSegmento" placeholder="Ex: bebidas e destilados, papelaria, pet shop...">
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>🔁 Tipo de Cliente</label>
+        <select id="cliTipoCliente">
+          <option value="">Não classificado</option>
+          <option value="recorrente">🔁 Lojista recorrente</option>
+          <option value="eventual">🎲 Comprador eventual / pontual</option>
+        </select>
+        <div class="text-muted" style="font-size:11px;margin-top:4px">Ajuda a decidir quem faz sentido reativar — lojistas recorrentes costumam responder melhor que compras pontuais.</div>
+      </div>
+    </div>
 
     <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px">Contato</div>
     <div class="form-row">
@@ -2351,7 +2362,7 @@ function clearPedidoForm() {
 }
 
 function clearClienteForm() {
-  ['cliNome','cliCidade','cliContato','cliSegmento','cliWhatsapp','cliEmail','cliSite','cliTelefone',
+  ['cliNome','cliCidade','cliContato','cliSegmento','cliTipoCliente','cliWhatsapp','cliEmail','cliSite','cliTelefone',
    'cliInstagram','cliFacebook','cliTiktok','cliOutraRede','cliFicha'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -3564,6 +3575,7 @@ function addCliente(){
     cidade:    document.getElementById('cliCidade').value.trim(),
     contato:   document.getElementById('cliContato').value.trim(),
     segmento:  document.getElementById('cliSegmento').value.trim(),
+    tipoCliente: document.getElementById('cliTipoCliente').value,
     whatsapp:  document.getElementById('cliWhatsapp').value.trim(),
     email:     document.getElementById('cliEmail').value.trim(),
     site:      document.getElementById('cliSite').value.trim(),
@@ -3742,6 +3754,7 @@ function editarCliente(id) {
   document.getElementById('cliCidade').value    = c.cidade || '';
   document.getElementById('cliContato').value   = c.contato || '';
   document.getElementById('cliSegmento').value  = c.segmento || '';
+  document.getElementById('cliTipoCliente').value = c.tipoCliente || '';
   document.getElementById('cliWhatsapp').value  = c.whatsapp || '';
   document.getElementById('cliEmail').value     = c.email || '';
   document.getElementById('cliSite').value      = c.site || '';
@@ -3781,6 +3794,7 @@ function verFichaCliente(id) {
       <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px">📍 ${c.cidade||'Cidade não informada'}</div>
       ${c.contato ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">👤 Contato: ${c.contato}</div>` : ''}
       ${c.segmento ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">🏷️ ${c.segmento}</div>` : ''}
+      ${c.tipoCliente ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">${TIPO_CLIENTE_LABELS[c.tipoCliente]}</div>` : ''}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
@@ -3992,8 +4006,10 @@ function abrirReativacao(clienteId) {
 
   document.getElementById('reativClienteId').value = clienteId;
   document.getElementById('reativClienteInfo').innerHTML = `
-    <strong style="color:var(--navy)">${c.nome}</strong>${c.contato ? ' · 👤 '+c.contato : ''} · ${c.cidade || 'Sem cidade'}${c.segmento ? ' · 🏷️ '+c.segmento : ''}<br>
+    <strong style="color:var(--navy)">${c.nome}</strong>${c.contato ? ' · 👤 '+c.contato : ''} · ${c.cidade || 'Sem cidade'}${c.segmento ? ' · 🏷️ '+c.segmento : ''}${c.tipoCliente ? ' · '+TIPO_CLIENTE_LABELS[c.tipoCliente] : ''}<br>
     <span class="text-muted">${peds.length} pedido(s) · ${c.whatsapp ? '📱 '+c.whatsapp : '⚠️ Sem WhatsApp'} · ${c.email ? '✉️ '+c.email : '⚠️ Sem e-mail'}</span>
+    ${!c.tipoCliente ? '<div style="margin-top:6px;color:var(--warning);font-size:11px">💡 Este cliente ainda não tem um "Tipo de Cliente" definido — classificar como recorrente ou eventual ajuda a decidir se vale a pena reativá-lo.</div>' : ''}
+    ${c.tipoCliente === 'eventual' ? '<div style="margin-top:6px;color:var(--warning);font-size:11px">⚠️ Cliente classificado como comprador eventual/pontual — considere se a reativação faz sentido para esse perfil.</div>' : ''}
   `;
 
   // Monta painel de transparência: o que a IA está usando
@@ -4085,15 +4101,38 @@ function salvarHistoricoReativ(c, msg, tom, canal) {
   if (!c.historicoReativ) c.historicoReativ = [];
   c.historicoReativ.unshift({
     msg, tom, canal,
+    feedback: '',
     data: new Date().toISOString()
   });
-  c.historicoReativ = c.historicoReativ.slice(0, 3); // mantém só os 3 últimos
+  c.historicoReativ = c.historicoReativ.slice(0, 8); // mantém os 8 últimos
   saveDB();
 }
 
 const TOM_LABELS = {
   amigavel:'😊 Amigável', profissional:'💼 Profissional', promocional:'🎯 Promocional',
   escassez:'⏳ Escassez', consultivo:'🧠 Consultivo'
+};
+
+const TIPO_CLIENTE_LABELS = {
+  recorrente: '🔁 Lojista recorrente',
+  eventual:   '🎲 Comprador eventual'
+};
+
+const FEEDBACK_REATIV_LABELS = {
+  '':              '— Sem feedback ainda —',
+  funcionou:       '✅ Funcionou',
+  respondeu:       '💬 Respondeu, sem compra ainda',
+  sem_resposta:    '🔇 Sem resposta',
+  nao_funcionou:   '👎 Não funcionou',
+  parar:           '🚫 Parar de tentar com este cliente'
+};
+const FEEDBACK_REATIV_CORES = {
+  '': '#999',
+  funcionou: '#27AE60',
+  respondeu: '#2980B9',
+  sem_resposta: '#999',
+  nao_funcionou: '#E67E22',
+  parar: '#C0392B'
 };
 
 function renderHistoricoReativ(c, skipFirst) {
@@ -4112,6 +4151,8 @@ function renderHistoricoReativ(c, skipFirst) {
   list.innerHTML = itens.map((h, i) => {
     const dt = new Date(h.data);
     const canalIcon = h.canal === 'email' ? '✉️' : '📱';
+    const idxReal = i + offset;
+    const feedbackAtual = h.feedback || '';
     return `
       <div style="background:var(--gray-100);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -4119,9 +4160,18 @@ function renderHistoricoReativ(c, skipFirst) {
           <span class="text-muted" style="font-size:11px">${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
         </div>
         <div style="white-space:pre-wrap;color:var(--gray-600);line-height:1.5;max-height:80px;overflow-y:auto">${h.msg}</div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button class="btn btn-ghost btn-sm" onclick="usarDoHistorico(${c.id},${i+offset})">↑ Usar esta versão</button>
-          <button class="btn btn-ghost btn-sm" style="color:var(--warning)" onclick="excluirHistoricoReativ(${c.id},${i+offset})">🗑️ Excluir</button>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-ghost btn-sm" onclick="usarDoHistorico(${c.id},${idxReal})">↑ Usar esta versão</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--warning)" onclick="excluirHistoricoReativ(${c.id},${idxReal})">🗑️ Excluir</button>
+        </div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--gray-200)">
+          <label style="font-size:10px;color:var(--gray-600);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;display:block;margin-bottom:3px">Como essa abordagem foi?</label>
+          <select onchange="definirFeedbackReativ(${c.id},${idxReal},this.value)"
+            style="font-size:11px;padding:4px 6px;border:1px solid var(--gray-200);border-radius:6px;color:${FEEDBACK_REATIV_CORES[feedbackAtual]};font-weight:${feedbackAtual ? '600' : '400'}">
+            ${Object.entries(FEEDBACK_REATIV_LABELS).map(([val, label]) =>
+              `<option value="${val}" ${feedbackAtual === val ? 'selected' : ''}>${label}</option>`
+            ).join('')}
+          </select>
         </div>
       </div>`;
   }).join('');
@@ -4135,6 +4185,15 @@ function excluirHistoricoReativ(clienteId, idx) {
   saveDB();
   renderHistoricoReativ(c, false);
   showToast('🗑️ Abordagem excluída do histórico.');
+}
+
+function definirFeedbackReativ(clienteId, idx, valor) {
+  const c = DB.clientes.find(x => x.id === clienteId);
+  if (!c || !c.historicoReativ || !c.historicoReativ[idx]) return;
+  c.historicoReativ[idx].feedback = valor;
+  saveDB();
+  renderHistoricoReativ(c, false);
+  if (valor) showToast('Feedback salvo: ' + FEEDBACK_REATIV_LABELS[valor]);
 }
 
 function usarDoHistorico(clienteId, idx) {
@@ -4631,11 +4690,13 @@ function renderTermometro() {
 
   el.innerHTML = clientesComPedido.map(c => {
     const f = corFaixa(c.diasSemComprar);
+    const ultimoHist = (c.historicoReativ && c.historicoReativ[0]) || null;
+    const naoInsistir = ultimoHist && ultimoHist.feedback === 'parar';
     return `
       <div class="termo-item">
         <div class="termo-bolha" style="background:${f.cor}">${f.label.charAt(0)}</div>
         <div class="termo-info">
-          <div class="termo-nome">${c.nome} <span class="badge" style="background:${f.cor};color:#fff;font-size:10px">${f.label}</span></div>
+          <div class="termo-nome">${c.nome} <span class="badge" style="background:${f.cor};color:#fff;font-size:10px">${f.label}</span>${c.tipoCliente ? ` <span class="badge" style="background:var(--gray-200);color:var(--navy);font-size:10px">${TIPO_CLIENTE_LABELS[c.tipoCliente]}</span>` : ''}${naoInsistir ? ' <span class="badge" style="background:#7B241C;color:#fff;font-size:10px" title="Você marcou o último contato como \'parar de tentar\' para este cliente">🚫 Não insistir</span>' : ''}</div>
           <div class="termo-detalhe">
             ${c.cidade||'—'} · ${c.numPedidos} pedido(s) · R$ ${c.total.toFixed(2)} total
             · Último: ${formatDate(c.ultimoPedido)}
