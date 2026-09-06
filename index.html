@@ -1086,6 +1086,12 @@ th.sortable:hover { background: var(--navy-mid); }
         <button class="btn btn-sm btn-gold" onclick="addLinhaProduto()">+ Adicionar produto</button>
       </div>
       <div id="pedProdutosList"></div>
+      <div class="form-row" style="margin-top:10px;align-items:flex-end">
+        <div class="form-group" style="max-width:180px">
+          <label>💸 Desconto (R$)</label>
+          <input type="number" id="pedDesconto" step="0.01" min="0" value="0" oninput="updatePedTotal('ped')">
+        </div>
+      </div>
       <div class="flex-between" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-200)">
         <span style="font-size:12px;color:var(--gray-600);font-weight:600">Valor Total do Pedido</span>
         <strong id="pedValorTotalDisplay" style="font-size:16px;color:var(--gold)">R$ 0,00</strong>
@@ -1444,6 +1450,12 @@ th.sortable:hover { background: var(--navy-mid); }
         <button class="btn btn-sm btn-gold" onclick="addLinhaProduto('editPed')">+ Adicionar produto</button>
       </div>
       <div id="editPedProdutosList"></div>
+      <div class="form-row" style="margin-top:10px;align-items:flex-end">
+        <div class="form-group" style="max-width:180px">
+          <label>💸 Desconto (R$)</label>
+          <input type="number" id="editPedDesconto" step="0.01" min="0" value="0" oninput="updatePedTotal('editPed')">
+        </div>
+      </div>
       <div class="flex-between" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-200)">
         <span style="font-size:12px;color:var(--gray-600);font-weight:600">Valor Total do Pedido</span>
         <strong id="editPedValorTotalDisplay" style="font-size:16px;color:var(--gold)">R$ 0,00</strong>
@@ -2349,6 +2361,7 @@ function clearPedidoForm() {
   // Reset produtos — limpa lista e adiciona 1 linha vazia
   document.getElementById('pedProdutosList').innerHTML = '';
   addLinhaProduto('ped');
+  document.getElementById('pedDesconto').value = 0;
   // Reset condição de pagamento
   document.getElementById('pedCondicao').value = 'avista';
   document.getElementById('ped15diasBox').style.display   = 'none';
@@ -2894,9 +2907,18 @@ function getLinhasProduto(px) {
 
 function updatePedTotal(px) {
   const linhas = getLinhasProduto(px);
-  const total = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  const subtotal = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  const descontoEl = document.getElementById(px + 'Desconto');
+  let desconto = descontoEl ? (parseFloat(descontoEl.value) || 0) : 0;
+  if (desconto < 0) desconto = 0;
+  if (desconto > subtotal) desconto = subtotal;
+  const total = subtotal - desconto;
   const disp = document.getElementById(px + 'ValorTotalDisplay');
-  if (disp) disp.textContent = `R$ ${total.toFixed(2)}`;
+  if (disp) {
+    disp.innerHTML = desconto > 0
+      ? `<span style="text-decoration:line-through;color:var(--gray-400);font-size:12px;font-weight:400;margin-right:6px">R$ ${subtotal.toFixed(2)}</span>R$ ${total.toFixed(2)}`
+      : `R$ ${total.toFixed(2)}`;
+  }
   // Atualiza parcelas se 50+50 estiver ativo
   updateCondicaoValores(px, total);
 }
@@ -2917,8 +2939,10 @@ function toggleCondicao(px) {
   document.getElementById(px+'15diasBox').style.display   = cond === '15dias' ? 'block' : 'none';
   document.getElementById(px+'ParceladoBox').style.display = cond === '5050'  ? 'block' : 'none';
   if (cond === '5050') {
-    const total = getLinhasProduto(px).reduce((s,l) => s + l.qtd*l.valor, 0);
-    updateCondicaoValores(px, total);
+    const subtotal = getLinhasProduto(px).reduce((s,l) => s + l.qtd*l.valor, 0);
+    const descontoEl = document.getElementById(px + 'Desconto');
+    const desconto = descontoEl ? Math.min(parseFloat(descontoEl.value) || 0, subtotal) : 0;
+    updateCondicaoValores(px, subtotal - desconto);
   }
   // Auto-preenche data prevista de 15 dias a partir de hoje
   if (cond === '15dias') {
@@ -2943,7 +2967,10 @@ function addPedido() {
   if (!existing) DB.clientes.push({id: Date.now(), nome: clienteNome, cidade});
   else if (cidade && !existing.cidade) existing.cidade = cidade;
 
-  const valor = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  const subtotal = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  const descontoInput = parseFloat(document.getElementById('pedDesconto').value) || 0;
+  const desconto = Math.min(Math.max(descontoInput, 0), subtotal);
+  const valor = subtotal - desconto;
   const qtdTotal = linhas.reduce((s,l) => s + l.qtd, 0);
   const cond = document.getElementById('pedCondicao').value;
 
@@ -2973,6 +3000,8 @@ function addPedido() {
     produto: produtoResumo,
     itens: linhas,            // ← lista completa de produtos
     qtd: qtdTotal,
+    subtotal,
+    desconto,
     valor,
     pgto:   document.getElementById('pedPgto').value,
     condicao: cond,
@@ -3194,6 +3223,20 @@ async function gerarReciboPDF(id) {
     doc.text("R$ " + subtotal.toFixed(2), W - 18, y + 5.5, { align: "right" });
     y += 8;
   });
+
+  // ── Subtotal / Desconto (só aparece se houve desconto) ──
+  if (p.desconto && p.desconto > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Subtotal:", W - 87, y + 5);
+    doc.text("R$ " + (p.subtotal != null ? p.subtotal : p.valor + p.desconto).toFixed(2), W - 18, y + 5, { align: "right" });
+    y += 6;
+    doc.setTextColor(180, 60, 60);
+    doc.text("Desconto:", W - 87, y + 5);
+    doc.text("- R$ " + p.desconto.toFixed(2), W - 18, y + 5, { align: "right" });
+    y += 8;
+  }
 
   // ── Total ──
   doc.setFillColor(gold[0], gold[1], gold[2]);
@@ -3473,6 +3516,7 @@ function renderPedidos(){
     <td>${p.produto}</td><td>${p.qtd}</td>
     <td>
       <strong>R$ ${p.valor.toFixed(2)}</strong>
+      ${p.desconto > 0 ? `<br><span class="text-muted" style="font-size:10px">💸 desconto de R$ ${p.desconto.toFixed(2)}</span>` : ''}
       ${p.parcelas ? '<br>'+parcelaBadge(p.parcelas) : ''}
       ${p.prazo15 ? '<br>'+prazo15Badge(p.prazo15) : ''}
     </td>
@@ -5031,6 +5075,8 @@ function editPedido(id) {
   const itens = (p.itens && p.itens.length) ? p.itens
     : [{ produto: p.produto, qtd: p.qtd, valor: p.valor / (p.qtd||1) }];
   itens.forEach(it => addLinhaProduto('editPed', it.produto, it.qtd, it.valor));
+  document.getElementById('editPedDesconto').value = p.desconto || 0;
+  updatePedTotal('editPed');
 
   // Determina condição
   let cond = p.condicao;
@@ -5066,7 +5112,12 @@ function saveEditPedido() {
   if (!existing && novoCliente) DB.clientes.push({ id: Date.now(), nome: novoCliente, cidade: novaCidade });
 
   p.itens = linhas;
-  p.valor = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  const subtotalEdit = linhas.reduce((s,l) => s + l.qtd * l.valor, 0);
+  const descontoEditInput = parseFloat(document.getElementById('editPedDesconto').value) || 0;
+  const descontoEdit = Math.min(Math.max(descontoEditInput, 0), subtotalEdit);
+  p.subtotal = subtotalEdit;
+  p.desconto = descontoEdit;
+  p.valor = subtotalEdit - descontoEdit;
   p.qtd   = linhas.reduce((s,l) => s + l.qtd, 0);
   p.produto = linhas.length === 1 ? linhas[0].produto : `${linhas[0].produto} +${linhas.length-1} item(ns)`;
   p.pgto    = document.getElementById('editPedPgto').value;
