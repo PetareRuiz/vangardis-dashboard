@@ -4047,6 +4047,8 @@ function abrirReativacao(clienteId) {
   if (!c) return;
   const peds = DB.pedidos.filter(p => p.cliente.toLowerCase() === c.nome.toLowerCase());
   reativClienteAtual = { cliente: c, pedidos: peds };
+  reativHistoricoIndexAtual = null; // ainda não há mensagem carregada nesta abertura
+  panfletoExtraTexto = ''; // limpa o rastreio do trecho mecânico de produtos extras
 
   document.getElementById('reativClienteId').value = clienteId;
   document.getElementById('reativClienteInfo').innerHTML = `
@@ -4119,9 +4121,12 @@ async function gerarMensagemReativacao() {
       document.getElementById('reativResultado').style.display = 'block';
       // Salva no histórico
       salvarHistoricoReativ(c, msg, tom, canal);
+      reativHistoricoIndexAtual = 0; // a mensagem recém-gerada é sempre o item 0 do histórico
+      panfletoExtraTexto = ''; // nova mensagem, ainda sem trecho mecânico de produtos extras
       renderHistoricoReativ(c, true); // 1º item já está na textarea
       atualizarBotaoEnvio();
       renderSelecaoPanfleto(msg);
+      sincronizarProdutosNaMensagem(); // cobre produtos pré-marcados (ex: exclusivos ainda não citados)
     } else {
       mostrarErroReativ(json.error || 'Não foi possível gerar a mensagem.');
     }
@@ -4248,8 +4253,11 @@ function usarDoHistorico(clienteId, idx) {
   document.getElementById('reativResultado').style.display = 'block';
   document.getElementById('reativTom').value = h.tom;
   document.getElementById('reativCanal').value = h.canal;
+  reativHistoricoIndexAtual = idx; // agora é este item que deve ser atualizado ao editar/usar
+  panfletoExtraTexto = ''; // texto trocado — zera o rastreio do trecho mecânico anterior
   atualizarBotaoEnvio();
   renderSelecaoPanfleto(h.msg);
+  sincronizarProdutosNaMensagem();
   showToast('Versão carregada do histórico.');
 }
 
@@ -4302,7 +4310,7 @@ function renderSelecaoPanfleto(msg) {
 
   wrap.innerHTML = catalogo.map(p => `
     <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
-      <input type="checkbox" value="${p.id}" ${sugeridos.has(p.id) ? 'checked' : ''} style="cursor:pointer">
+      <input type="checkbox" value="${p.id}" ${sugeridos.has(p.id) ? 'checked' : ''} style="cursor:pointer" onchange="sincronizarProdutosNaMensagem()">
       <span>${p.nome}${p.valor ? ' — R$ ' + Number(p.valor).toFixed(2) : ''}</span>
       ${p.exclusivo ? '<span style="font-size:10px;color:#B23B3B;font-weight:700">🔒 exclusivo</span>' : ''}
     </label>
@@ -4311,6 +4319,42 @@ function renderSelecaoPanfleto(msg) {
   if (!sugeridos.size) {
     statusEl.innerHTML = '<span style="color:var(--warning)">⚠️ Não identifiquei automaticamente produtos do catálogo no texto da mensagem — selecione manualmente os que quiser incluir.</span>';
   }
+}
+
+// Mantém o texto da mensagem em sincronia com os produtos marcados para o panfleto.
+// Produtos selecionados que ainda não aparecem no texto ganham uma linha extra
+// ("Também separamos para você: ..."); se forem desmarcados, saem dessa linha.
+// Produtos já mencionados naturalmente pela IA no corpo da mensagem não são duplicados.
+let panfletoExtraTexto = '';
+function sincronizarProdutosNaMensagem() {
+  const textarea = document.getElementById('reativMensagem');
+  const wrap = document.getElementById('reativPanfletoProdutos');
+  if (!textarea || !wrap) return;
+
+  let texto = textarea.value;
+
+  // Remove o trecho mecânico inserido anteriormente (se houver), para reconstruí-lo do zero
+  if (panfletoExtraTexto && texto.includes(panfletoExtraTexto)) {
+    texto = texto.split(panfletoExtraTexto).join('');
+  }
+  texto = texto.replace(/\s+$/, ''); // remove espaços/quebras de linha soltos no final
+
+  const idsSelecionados = Array.from(wrap.querySelectorAll('input[type=checkbox]:checked'))
+    .map(el => parseInt(el.value));
+  const textoLower = texto.toLowerCase();
+
+  const extras = (DB.catalogo || [])
+    .filter(p => idsSelecionados.includes(p.id))
+    .filter(p => p.nome && !textoLower.includes(p.nome.toLowerCase()));
+
+  if (extras.length) {
+    panfletoExtraTexto = `\n\nTambém separamos para você: ${extras.map(p => p.nome).join(', ')}.`;
+    texto += panfletoExtraTexto;
+  } else {
+    panfletoExtraTexto = '';
+  }
+
+  textarea.value = texto;
 }
 
 // Carrega uma imagem de URL externa e converte para base64, junto com suas
@@ -4541,6 +4585,7 @@ function mostrarErroReativ(msg) {
 }
 
 function copiarMensagemReativ() {
+  persistirEdicaoReativ();
   const txt = document.getElementById('reativMensagem').value;
   navigator.clipboard.writeText(txt).then(() => showToast('📋 Mensagem copiada!'))
   .catch(() => {
@@ -4548,6 +4593,20 @@ function copiarMensagemReativ() {
     ta.select(); document.execCommand('copy');
     showToast('📋 Mensagem copiada!');
   });
+}
+
+// Grava no histórico o texto atual da textarea (com edições manuais incluídas),
+// atualizando o item correspondente em vez de criar uma entrada duplicada.
+function persistirEdicaoReativ() {
+  if (!reativClienteAtual || reativHistoricoIndexAtual === null) return;
+  const c = reativClienteAtual.cliente;
+  if (!c.historicoReativ || !c.historicoReativ[reativHistoricoIndexAtual]) return;
+  const textoAtual = document.getElementById('reativMensagem').value;
+  if (c.historicoReativ[reativHistoricoIndexAtual].msg !== textoAtual) {
+    c.historicoReativ[reativHistoricoIndexAtual].msg = textoAtual;
+    saveDB();
+    renderHistoricoReativ(c, false);
+  }
 }
 
 // Atualiza o botão de envio conforme o canal escolhido
@@ -4572,6 +4631,7 @@ function atualizarBotaoEnvio() {
 }
 
 function enviarReativ() {
+  persistirEdicaoReativ();
   const canal = document.getElementById('reativCanal').value;
   const c = reativClienteAtual.cliente;
   const msg = document.getElementById('reativMensagem').value;
