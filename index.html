@@ -4042,13 +4042,16 @@ ${c.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + c.contato : 
   return ctx;
 }
 
+// ── Estado da tela de Reativação de Cliente ──
+let reativClienteAtual = null;       // { cliente, pedidos } do cliente aberto no modal
+let reativHistoricoIndexAtual = null; // índice, no histórico, da mensagem que está na textarea
+
 function abrirReativacao(clienteId) {
   const c = DB.clientes.find(x => x.id === clienteId);
   if (!c) return;
   const peds = DB.pedidos.filter(p => p.cliente.toLowerCase() === c.nome.toLowerCase());
   reativClienteAtual = { cliente: c, pedidos: peds };
   reativHistoricoIndexAtual = null; // ainda não há mensagem carregada nesta abertura
-  panfletoExtraTexto = ''; // limpa o rastreio do trecho mecânico de produtos extras
 
   document.getElementById('reativClienteId').value = clienteId;
   document.getElementById('reativClienteInfo').innerHTML = `
@@ -4122,7 +4125,6 @@ async function gerarMensagemReativacao() {
       // Salva no histórico
       salvarHistoricoReativ(c, msg, tom, canal);
       reativHistoricoIndexAtual = 0; // a mensagem recém-gerada é sempre o item 0 do histórico
-      panfletoExtraTexto = ''; // nova mensagem, ainda sem trecho mecânico de produtos extras
       renderHistoricoReativ(c, true); // 1º item já está na textarea
       atualizarBotaoEnvio();
       renderSelecaoPanfleto(msg);
@@ -4254,7 +4256,6 @@ function usarDoHistorico(clienteId, idx) {
   document.getElementById('reativTom').value = h.tom;
   document.getElementById('reativCanal').value = h.canal;
   reativHistoricoIndexAtual = idx; // agora é este item que deve ser atualizado ao editar/usar
-  panfletoExtraTexto = ''; // texto trocado — zera o rastreio do trecho mecânico anterior
   atualizarBotaoEnvio();
   renderSelecaoPanfleto(h.msg);
   sincronizarProdutosNaMensagem();
@@ -4325,19 +4326,20 @@ function renderSelecaoPanfleto(msg) {
 // Produtos selecionados que ainda não aparecem no texto ganham uma linha extra
 // ("Também separamos para você: ..."); se forem desmarcados, saem dessa linha.
 // Produtos já mencionados naturalmente pela IA no corpo da mensagem não são duplicados.
-let panfletoExtraTexto = '';
+const PANFLETO_PREFIXO = 'Também separamos para você:';
+// Regex tolerante: encontra a linha automática mesmo que o usuário tenha editado
+// outras partes do texto ao redor dela (evita duplicar a linha).
+const PANFLETO_REGEX = /\n*Também separamos para você:[^\n]*\n?/g;
+
 function sincronizarProdutosNaMensagem() {
   const textarea = document.getElementById('reativMensagem');
   const wrap = document.getElementById('reativPanfletoProdutos');
   if (!textarea || !wrap) return;
 
-  let texto = textarea.value;
-
-  // Remove o trecho mecânico inserido anteriormente (se houver), para reconstruí-lo do zero
-  if (panfletoExtraTexto && texto.includes(panfletoExtraTexto)) {
-    texto = texto.split(panfletoExtraTexto).join('');
-  }
-  texto = texto.replace(/\s+$/, ''); // remove espaços/quebras de linha soltos no final
+  // Remove qualquer linha automática anterior (por padrão, não por igualdade exata),
+  // para reconstruí-la do zero — assim edições manuais no resto do texto não quebram nada
+  let texto = textarea.value.replace(PANFLETO_REGEX, '');
+  texto = texto.replace(/\s+$/, ''); // limpa espaços/quebras sobrando no final
 
   const idsSelecionados = Array.from(wrap.querySelectorAll('input[type=checkbox]:checked'))
     .map(el => parseInt(el.value));
@@ -4348,10 +4350,7 @@ function sincronizarProdutosNaMensagem() {
     .filter(p => p.nome && !textoLower.includes(p.nome.toLowerCase()));
 
   if (extras.length) {
-    panfletoExtraTexto = `\n\nTambém separamos para você: ${extras.map(p => p.nome).join(', ')}.`;
-    texto += panfletoExtraTexto;
-  } else {
-    panfletoExtraTexto = '';
+    texto += `\n\n${PANFLETO_PREFIXO} ${extras.map(p => p.nome).join(', ')}.`;
   }
 
   textarea.value = texto;
