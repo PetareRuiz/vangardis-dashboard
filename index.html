@@ -487,6 +487,7 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="nav-item" onclick="goTab('produtos')"><span class="icon">📦</span> Produtos Acabados</div>
     <div class="nav-item" onclick="goTab('catalogo')"><span class="icon">📖</span> Catálogo de Produtos</div>
     <div class="nav-section">Comercial</div>
+    <div class="nav-item" onclick="goTab('prospeccao')"><span class="icon">🎯</span> Prospecção</div>
     <div class="nav-item" onclick="goTab('pedidos')"><span class="icon">🛒</span> Pedidos</div>
     <div class="nav-item" onclick="goTab('fila')"><span class="icon">🏭</span> Fila de Produção</div>
     <div class="nav-item" onclick="goTab('clientes')"><span class="icon">🏪</span> Clientes</div>
@@ -695,6 +696,63 @@ th.sortable:hover { background: var(--navy-mid); }
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick="closeModal('modalVerProduto')">Fechar</button>
           <button class="btn btn-gold" id="verProdEditBtn">✏️ Editar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PROSPECÇÃO ═══════════════ -->
+    <div class="tab" id="tab-prospeccao">
+      <div id="kpiLeads" class="kpi-grid" style="margin-bottom:20px"></div>
+
+      <!-- Próximos contatos / leads parados -->
+      <div class="card" id="cardLeadsAtencao" style="margin-bottom:20px;display:none">
+        <div class="card-header">
+          <div class="card-title">⏰ Precisam de atenção</div>
+        </div>
+        <div class="card-body">
+          <div id="leadsAtencaoList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Leads</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-gold" onclick="abrirNovoLead()">+ Novo Lead</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- Filtros -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+            <input type="text" id="leadBusca" placeholder="🔎 Buscar por nome, cidade, contato…" oninput="renderLeads()"
+              style="flex:1;min-width:200px;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+            <select id="leadFiltroEstagio" onchange="renderLeads()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+              <option value="">Todos os estágios</option>
+            </select>
+            <select id="leadFiltroCidade" onchange="renderLeads()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+              <option value="">Todas as cidades</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="limparFiltrosLead()">Limpar</button>
+          </div>
+
+          <!-- Trilha do funil (clicável) -->
+          <div id="funilTrilha" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Loja</th>
+                  <th>Cidade</th>
+                  <th>Segmento</th>
+                  <th>Estágio</th>
+                  <th>Próximo contato</th>
+                  <th style="width:190px">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaLeads"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -1721,6 +1779,121 @@ th.sortable:hover { background: var(--navy-mid); }
   </div>
 </div>
 
+<!-- ═══════ MODAL LEAD (ficha de prospecção) ═══════ -->
+<div class="modal-overlay" id="modalLead">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-title" id="leadTitulo">Novo Lead</div>
+    <input type="hidden" id="leadId">
+
+    <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Identificação</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>🏪 Nome da Loja *</label>
+        <input type="text" id="leadNome" placeholder="Nome do estabelecimento">
+      </div>
+      <div class="form-group">
+        <label>🏷️ Segmento / Ramo</label>
+        <input type="text" id="leadSegmento" list="leadSegmentosList" placeholder="Ex: bebidas e destilados">
+        <datalist id="leadSegmentosList"></datalist>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Cidade</label>
+        <input type="text" id="leadCidade" placeholder="Cidade">
+      </div>
+      <div class="form-group">
+        <label>Bairro</label>
+        <input type="text" id="leadBairro" placeholder="Bairro">
+      </div>
+      <div class="form-group">
+        <label>👤 Pessoa de Contato</label>
+        <input type="text" id="leadContato" placeholder="Quem atende">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Endereço</label>
+      <input type="text" id="leadEndereco" placeholder="Rua, número">
+    </div>
+
+    <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px">Contato</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>📱 WhatsApp</label>
+        <input type="text" id="leadWhatsapp" placeholder="41999999999">
+      </div>
+      <div class="form-group">
+        <label>✉️ E-mail</label>
+        <input type="email" id="leadEmail" placeholder="contato@loja.com.br">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>🌐 Site</label>
+        <input type="text" id="leadSite" placeholder="www.loja.com.br">
+      </div>
+      <div class="form-group">
+        <label>📷 Instagram</label>
+        <input type="text" id="leadInstagram" placeholder="@loja">
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 10px">Funil</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Estágio</label>
+        <select id="leadEstagio" onchange="toggleMotivoPerdido()"></select>
+      </div>
+      <div class="form-group">
+        <label>Origem</label>
+        <select id="leadOrigem">
+          <option value="manual">Cadastro manual</option>
+          <option value="busca">Busca por região</option>
+          <option value="indicacao">Indicação</option>
+          <option value="feira">Feira / evento</option>
+          <option value="instagram">Instagram</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>📅 Próximo contato</label>
+        <input type="date" id="leadProximoContato">
+      </div>
+    </div>
+    <div class="form-group" id="leadMotivoWrap" style="display:none">
+      <label>Motivo</label>
+      <select id="leadMotivo">
+        <option value="">— selecione —</option>
+        <option value="sem_interesse">Sem interesse</option>
+        <option value="preco">Achou caro</option>
+        <option value="ja_tem_fornecedor">Já tem fornecedor</option>
+        <option value="sem_resposta">Não respondeu</option>
+        <option value="fechou">Loja fechou / não existe mais</option>
+        <option value="fora_perfil">Fora do perfil</option>
+      </select>
+      <div class="text-muted" style="font-size:11px;margin-top:4px">O motivo é o que permite reciclar o lead depois. "Já tem fornecedor" é um não com prazo de validade.</div>
+    </div>
+
+    <div class="form-group">
+      <label>📝 Anotações</label>
+      <textarea id="leadFicha" rows="3" placeholder="O que a loja vende, o que conversaram, observações…"></textarea>
+    </div>
+
+    <!-- Histórico de contatos -->
+    <div id="leadHistoricoWrap" style="display:none">
+      <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px">Histórico de contatos</div>
+      <div id="leadHistoricoList" style="max-height:150px;overflow-y:auto;font-size:12px"></div>
+    </div>
+
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" id="leadConverterBtn" style="display:none;color:var(--success);font-weight:700" onclick="converterLeadEmCliente()">🤝 Virou cliente</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-ghost" onclick="closeModal('modalLead')">Cancelar</button>
+        <button class="btn btn-gold" onclick="salvarLead()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ MODAL PRODUTO CATÁLOGO ═══════ -->
 <div class="modal-overlay" id="modalProdCatalogo">
   <div class="modal" style="max-width:640px">
@@ -1974,11 +2147,18 @@ async function syncToCloud() {
 // Envio "best effort" ao sair/fechar a aba — usa sendBeacon, que o navegador
 // tenta entregar mesmo com a página sendo fechada (diferente de fetch normal).
 function flushPendingSyncOnExit() {
-  if (localStorage.getItem('vangardis_db_dirty') !== '1') return;
-  try {
-    const blob = new Blob([JSON.stringify({ action: 'save', data: DB })], { type: 'text/plain;charset=UTF-8' });
-    navigator.sendBeacon(GS_URL, blob);
-  } catch (e) {}
+  if (localStorage.getItem('vangardis_db_dirty') === '1') {
+    try {
+      const blob = new Blob([JSON.stringify({ action: 'save', data: DB })], { type: 'text/plain;charset=UTF-8' });
+      navigator.sendBeacon(GS_URL, blob);
+    } catch (e) {}
+  }
+  if (localStorage.getItem('vangardis_leads_dirty') === '1') {
+    try {
+      const blob = new Blob([JSON.stringify({ action: 'saveLeads', data: LEADS })], { type: 'text/plain;charset=UTF-8' });
+      navigator.sendBeacon(GS_URL, blob);
+    } catch (e) {}
+  }
 }
 window.addEventListener('pagehide', flushPendingSyncOnExit);
 document.addEventListener('visibilitychange', () => {
@@ -2058,6 +2238,7 @@ async function forceSyncFromCloud() {
 const TAB_TITLES = {
   overview:'Visão Geral', filamentos:'Filamentos', produtos:'Produtos Acabados',
   catalogo:'Catálogo de Produtos',
+  prospeccao:'Prospecção de Clientes',
   pedidos:'Pedidos', fila:'Fila de Produção', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
 };
 function goTab(id) {
@@ -6411,9 +6592,455 @@ function verProdutoCatalogo(id) {
   openModal('modalVerProduto');
 }
 
+// ════════════════════════════════════════════════════
+// PROSPECÇÃO — Leads
+// Os leads vivem em armazenamento PRÓPRIO (chave separada na planilha),
+// não dentro do DB principal. Motivo: o volume esperado (50-200/mês) faria
+// o banco inteiro ser reenviado a cada alteração de lead.
+// ════════════════════════════════════════════════════
+
+let LEADS = [];
+let leadsSyncTimer = null;
+
+const ESTAGIOS_LEAD = {
+  descoberto:  { label:'Descoberto',   cor:'#7D8794', ordem:1, desc:'achado, ainda não avaliado' },
+  qualificado: { label:'Qualificado',  cor:'#3D6E9C', ordem:2, desc:'perfil combina' },
+  contatado:   { label:'Contatado',    cor:'#C9940A', ordem:3, desc:'1ª mensagem enviada' },
+  conversa:    { label:'Em conversa',  cor:'#A8651A', ordem:4, desc:'respondeu' },
+  proposta:    { label:'Proposta',     cor:'#7A5B12', ordem:5, desc:'panfleto, preço ou amostra' },
+  cliente:     { label:'Virou cliente',cor:'#2E7D52', ordem:6, desc:'fechou o 1º pedido' },
+  perdido:     { label:'Perdido',      cor:'#A33B3B', ordem:7, desc:'com motivo, reciclável' },
+  bloqueado:   { label:'Não perturbar',cor:'#5C2020', ordem:8, desc:'pediu para não receber' }
+};
+
+const MOTIVOS_PERDIDO = {
+  sem_interesse:'Sem interesse', preco:'Achou caro', ja_tem_fornecedor:'Já tem fornecedor',
+  sem_resposta:'Não respondeu', fechou:'Loja fechou', fora_perfil:'Fora do perfil'
+};
+
+const ORIGENS_LEAD = {
+  manual:'Cadastro manual', busca:'Busca por região', indicacao:'Indicação',
+  feira:'Feira / evento', instagram:'Instagram'
+};
+
+// ── Armazenamento próprio dos leads ──
+function saveLeads() {
+  localStorage.setItem('vangardis_leads', JSON.stringify(LEADS));
+  localStorage.setItem('vangardis_leads_dirty', '1');
+  clearTimeout(leadsSyncTimer);
+  leadsSyncTimer = setTimeout(() => syncLeadsToCloud(), 2000);
+}
+
+async function syncLeadsToCloud() {
+  try {
+    const res = await fetch(GS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'saveLeads', data: LEADS })
+    });
+    const json = await res.json();
+    if (json.ok) {
+      localStorage.removeItem('vangardis_leads_dirty');
+    }
+  } catch (e) { /* fica salvo localmente; tenta de novo na próxima alteração */ }
+}
+
+async function loadLeads() {
+  const local = localStorage.getItem('vangardis_leads');
+  if (local) { try { LEADS = JSON.parse(local) || []; } catch(_) { LEADS = []; } }
+
+  // Se a sessão anterior fechou sem confirmar o envio, o local é mais recente
+  if (localStorage.getItem('vangardis_leads_dirty') === '1') {
+    await syncLeadsToCloud();
+    return;
+  }
+  try {
+    const res = await fetch(GS_URL + '?action=loadLeads');
+    const json = await res.json();
+    if (json && Array.isArray(json.leads)) {
+      LEADS = json.leads;
+      localStorage.setItem('vangardis_leads', JSON.stringify(LEADS));
+    }
+  } catch (e) { /* offline: segue com o que tem local */ }
+}
+
+// ── Formulário ──
+function popularSelectsLead() {
+  const sel = document.getElementById('leadEstagio');
+  if (sel && !sel.options.length) {
+    sel.innerHTML = Object.entries(ESTAGIOS_LEAD)
+      .filter(([k]) => k !== 'cliente') // "virou cliente" acontece pelo botão de conversão
+      .map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('');
+  }
+  const dl = document.getElementById('leadSegmentosList');
+  if (dl) {
+    const segs = [...new Set((DB.clientes||[]).map(c => c.segmento).filter(Boolean))].sort();
+    dl.innerHTML = segs.map(s => `<option value="${s}">`).join('');
+  }
+}
+
+function toggleMotivoPerdido() {
+  const est = document.getElementById('leadEstagio').value;
+  document.getElementById('leadMotivoWrap').style.display = (est === 'perdido') ? 'block' : 'none';
+}
+
+function abrirNovoLead() {
+  popularSelectsLead();
+  document.getElementById('leadId').value = '';
+  document.getElementById('leadTitulo').textContent = 'Novo Lead';
+  ['leadNome','leadSegmento','leadCidade','leadBairro','leadContato','leadEndereco',
+   'leadWhatsapp','leadEmail','leadSite','leadInstagram','leadProximoContato','leadFicha'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('leadEstagio').value = 'descoberto';
+  document.getElementById('leadOrigem').value = 'manual';
+  document.getElementById('leadMotivo').value = '';
+  document.getElementById('leadHistoricoWrap').style.display = 'none';
+  document.getElementById('leadConverterBtn').style.display = 'none';
+  toggleMotivoPerdido();
+  openModal('modalLead');
+}
+
+function editarLead(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  popularSelectsLead();
+  document.getElementById('leadId').value = id;
+  document.getElementById('leadTitulo').textContent = l.nome;
+  document.getElementById('leadNome').value       = l.nome || '';
+  document.getElementById('leadSegmento').value   = l.segmento || '';
+  document.getElementById('leadCidade').value     = l.cidade || '';
+  document.getElementById('leadBairro').value     = l.bairro || '';
+  document.getElementById('leadContato').value    = l.contato || '';
+  document.getElementById('leadEndereco').value   = l.endereco || '';
+  document.getElementById('leadWhatsapp').value   = l.whatsapp || '';
+  document.getElementById('leadEmail').value      = l.email || '';
+  document.getElementById('leadSite').value       = l.site || '';
+  document.getElementById('leadInstagram').value  = l.instagram || '';
+  document.getElementById('leadEstagio').value    = l.estagio || 'descoberto';
+  document.getElementById('leadOrigem').value     = l.origem || 'manual';
+  document.getElementById('leadProximoContato').value = l.proximoContato || '';
+  document.getElementById('leadMotivo').value     = l.motivo || '';
+  document.getElementById('leadFicha').value      = l.ficha || '';
+  toggleMotivoPerdido();
+  renderHistoricoLead(l);
+  document.getElementById('leadConverterBtn').style.display =
+    (l.estagio === 'cliente' || l.convertido) ? 'none' : 'inline-block';
+  openModal('modalLead');
+}
+
+function salvarLead() {
+  const nome = document.getElementById('leadNome').value.trim();
+  if (!nome) { showToast('⚠️ Informe o nome da loja.', 'warning'); return; }
+
+  const estagio = document.getElementById('leadEstagio').value;
+  const dados = {
+    nome,
+    segmento:  document.getElementById('leadSegmento').value.trim(),
+    cidade:    document.getElementById('leadCidade').value.trim(),
+    bairro:    document.getElementById('leadBairro').value.trim(),
+    contato:   document.getElementById('leadContato').value.trim(),
+    endereco:  document.getElementById('leadEndereco').value.trim(),
+    whatsapp:  document.getElementById('leadWhatsapp').value.trim(),
+    email:     document.getElementById('leadEmail').value.trim(),
+    site:      document.getElementById('leadSite').value.trim(),
+    instagram: document.getElementById('leadInstagram').value.trim(),
+    estagio,
+    origem:    document.getElementById('leadOrigem').value,
+    proximoContato: document.getElementById('leadProximoContato').value,
+    motivo:    estagio === 'perdido' ? document.getElementById('leadMotivo').value : '',
+    ficha:     document.getElementById('leadFicha').value.trim()
+  };
+
+  const editId = document.getElementById('leadId').value;
+  if (editId) {
+    const l = LEADS.find(x => x.id === parseInt(editId));
+    if (l) {
+      const estagioAnterior = l.estagio;
+      Object.assign(l, dados);
+      if (estagioAnterior !== estagio) registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[estagioAnterior]?.label||estagioAnterior} → ${ESTAGIOS_LEAD[estagio]?.label||estagio}`);
+    }
+    showToast('✅ Lead atualizado!');
+  } else {
+    // Aviso de duplicidade contra clientes já cadastrados e outros leads
+    const dup = encontrarDuplicadoLead(nome, dados.whatsapp);
+    if (dup && !confirm(`Atenção: "${dup}" já existe no sistema. Cadastrar mesmo assim?`)) return;
+    const novo = { id: Date.now(), ...dados, dataDescoberta: new Date().toISOString(), historico: [] };
+    registrarHistoricoLead(novo, 'Lead cadastrado');
+    LEADS.push(novo);
+    showToast('✅ Lead cadastrado!');
+  }
+  saveLeads();
+  closeModal('modalLead');
+  renderProspeccao();
+}
+
+function encontrarDuplicadoLead(nome, whatsapp) {
+  const n = nome.trim().toLowerCase();
+  const w = (whatsapp||'').replace(/\D/g,'');
+  const cli = (DB.clientes||[]).find(c =>
+    c.nome.trim().toLowerCase() === n || (w && (c.whatsapp||'').replace(/\D/g,'') === w));
+  if (cli) return cli.nome + ' (já é cliente)';
+  const ld = LEADS.find(l =>
+    l.nome.trim().toLowerCase() === n || (w && (l.whatsapp||'').replace(/\D/g,'') === w));
+  if (ld) return ld.nome + ' (já está nos leads)';
+  return null;
+}
+
+function registrarHistoricoLead(lead, texto) {
+  if (!lead.historico) lead.historico = [];
+  lead.historico.unshift({ data: new Date().toISOString(), texto });
+  lead.historico = lead.historico.slice(0, 30);
+}
+
+function renderHistoricoLead(l) {
+  const wrap = document.getElementById('leadHistoricoWrap');
+  const list = document.getElementById('leadHistoricoList');
+  if (!l.historico || !l.historico.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = l.historico.map(h => {
+    const d = new Date(h.data);
+    return `<div style="padding:5px 0;border-bottom:1px solid var(--gray-100)">
+      <span class="text-muted">${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
+      · ${h.texto}</div>`;
+  }).join('');
+}
+
+// ── Ações rápidas ──
+function avancarEstagioLead(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  const ordemAtual = ESTAGIOS_LEAD[l.estagio]?.ordem || 1;
+  const proximo = Object.entries(ESTAGIOS_LEAD)
+    .filter(([k,v]) => v.ordem > ordemAtual && v.ordem <= 5)
+    .sort((a,b) => a[1].ordem - b[1].ordem)[0];
+  if (!proximo) { showToast('Este lead já está no fim do funil — use "Virou cliente" na ficha.'); return; }
+  const anterior = l.estagio;
+  l.estagio = proximo[0];
+  registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[anterior]?.label} → ${proximo[1].label}`);
+  saveLeads();
+  renderProspeccao();
+  showToast(`→ ${proximo[1].label}`);
+}
+
+function whatsappLead(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  const num = (l.whatsapp||'').replace(/\D/g,'');
+  if (!num) { showToast('⚠️ Este lead não tem WhatsApp cadastrado.', 'warning'); return; }
+  const full = num.startsWith('55') ? num : '55' + num;
+  window.open(`https://wa.me/${full}`, '_blank');
+  if (l.estagio === 'descoberto' || l.estagio === 'qualificado') {
+    l.estagio = 'contatado';
+    registrarHistoricoLead(l, 'WhatsApp aberto — marcado como Contatado');
+    saveLeads();
+    renderProspeccao();
+  }
+}
+
+function excluirLead(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  if (!confirm(`Excluir o lead "${l.nome}"?`)) return;
+  LEADS = LEADS.filter(x => x.id !== id);
+  saveLeads();
+  renderProspeccao();
+  showToast('🗑️ Lead excluído.');
+}
+
+// ── Conversão em cliente ──
+function converterLeadEmCliente() {
+  const id = parseInt(document.getElementById('leadId').value);
+  const l = LEADS.find(x => x.id === id);
+  if (!l) { showToast('⚠️ Salve o lead antes de convertê-lo.', 'warning'); return; }
+
+  const jaCliente = (DB.clientes||[]).find(c => c.nome.trim().toLowerCase() === l.nome.trim().toLowerCase());
+  if (jaCliente) { showToast('⚠️ Já existe um cliente com esse nome.', 'warning'); return; }
+  if (!confirm(`Converter "${l.nome}" em cliente? Ele sai do funil e passa a aparecer no cadastro de clientes.`)) return;
+
+  // Histórico do lead vai junto, anexado à ficha do cliente
+  const histTexto = (l.historico||[]).map(h =>
+    `${new Date(h.data).toLocaleDateString('pt-BR')}: ${h.texto}`).reverse().join('\n');
+  const fichaFinal = [l.ficha, histTexto ? '— Histórico de prospecção —\n' + histTexto : '']
+    .filter(Boolean).join('\n\n');
+
+  if (!DB.clientes) DB.clientes = [];
+  DB.clientes.push({
+    id: Date.now(),
+    nome: l.nome, cidade: l.cidade || '', contato: l.contato || '',
+    segmento: l.segmento || '', tipoCliente: '',
+    whatsapp: l.whatsapp || '', email: l.email || '', site: l.site || '',
+    telefone: '', instagram: l.instagram || '', facebook: '', tiktok: '', outraRede: '',
+    ficha: fichaFinal
+  });
+  saveDB();
+
+  // O lead não é apagado — vira registro de conversão (mantém a métrica do funil honesta)
+  l.estagio = 'cliente';
+  l.convertido = true;
+  l.dataConversao = new Date().toISOString();
+  registrarHistoricoLead(l, 'Convertido em cliente');
+  saveLeads();
+
+  closeModal('modalLead');
+  renderAll();
+  showToast(`🤝 ${l.nome} agora é cliente!`);
+}
+
+// ── Render ──
+function limparFiltrosLead() {
+  document.getElementById('leadBusca').value = '';
+  document.getElementById('leadFiltroEstagio').value = '';
+  document.getElementById('leadFiltroCidade').value = '';
+  renderLeads();
+}
+
+function renderProspeccao() {
+  renderKpiLeads();
+  renderFunilTrilha();
+  renderLeadsAtencao();
+  popularFiltrosLead();
+  renderLeads();
+}
+
+function renderKpiLeads() {
+  const el = document.getElementById('kpiLeads');
+  if (!el) return;
+  const ativos = LEADS.filter(l => !['cliente','perdido','bloqueado'].includes(l.estagio));
+  const convertidos = LEADS.filter(l => l.estagio === 'cliente').length;
+  const contatados = LEADS.filter(l => ESTAGIOS_LEAD[l.estagio]?.ordem >= 3).length;
+  const taxa = contatados ? (convertidos / contatados * 100) : 0;
+  el.innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">Leads ativos</div><div class="kpi-value">${ativos.length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Contatados</div><div class="kpi-value">${contatados}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Viraram cliente</div><div class="kpi-value" style="color:#2E7D52">${convertidos}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Conversão</div><div class="kpi-value">${taxa.toFixed(0)}%</div></div>
+  `;
+}
+
+function renderFunilTrilha() {
+  const el = document.getElementById('funilTrilha');
+  if (!el) return;
+  el.innerHTML = Object.entries(ESTAGIOS_LEAD)
+    .sort((a,b) => a[1].ordem - b[1].ordem)
+    .map(([k,v]) => {
+      const n = LEADS.filter(l => l.estagio === k).length;
+      const ativo = document.getElementById('leadFiltroEstagio').value === k;
+      return `<div onclick="filtrarPorEstagio('${k}')" title="${v.desc}"
+        style="cursor:pointer;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:600;
+        background:${ativo ? v.cor : 'var(--gray-100)'};color:${ativo ? '#fff' : 'var(--navy)'};
+        border:1.5px solid ${v.cor}">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${v.cor};margin-right:5px"></span>
+        ${v.label} <strong>${n}</strong></div>`;
+    }).join('');
+}
+
+function filtrarPorEstagio(k) {
+  const sel = document.getElementById('leadFiltroEstagio');
+  sel.value = (sel.value === k) ? '' : k;
+  renderLeads();
+  renderFunilTrilha();
+}
+
+function popularFiltrosLead() {
+  const selE = document.getElementById('leadFiltroEstagio');
+  if (selE && selE.options.length <= 1) {
+    selE.innerHTML = '<option value="">Todos os estágios</option>' +
+      Object.entries(ESTAGIOS_LEAD).sort((a,b)=>a[1].ordem-b[1].ordem)
+        .map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('');
+  }
+  const selC = document.getElementById('leadFiltroCidade');
+  if (selC) {
+    const atual = selC.value;
+    const cidades = [...new Set(LEADS.map(l => l.cidade).filter(Boolean))].sort();
+    selC.innerHTML = '<option value="">Todas as cidades</option>' +
+      cidades.map(c => `<option value="${c}">${c}</option>`).join('');
+    selC.value = atual;
+  }
+}
+
+function renderLeadsAtencao() {
+  const card = document.getElementById('cardLeadsAtencao');
+  const el = document.getElementById('leadsAtencaoList');
+  if (!el) return;
+  const hoje = new Date(); hoje.setHours(23,59,59,999);
+  const vencidos = LEADS.filter(l =>
+    l.proximoContato && !['cliente','perdido','bloqueado'].includes(l.estagio) &&
+    parseLocalDate(l.proximoContato) <= hoje);
+
+  if (!vencidos.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  el.innerHTML = vencidos
+    .sort((a,b) => parseLocalDate(a.proximoContato) - parseLocalDate(b.proximoContato))
+    .map(l => {
+      const est = ESTAGIOS_LEAD[l.estagio] || {};
+      return `<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
+        <div>
+          <strong>${l.nome}</strong> <span class="badge" style="background:${est.cor};color:#fff;font-size:10px">${est.label}</span>
+          <div class="text-muted" style="font-size:12px">${l.cidade||'—'} · contato previsto para ${formatDate(l.proximoContato)}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})">📱</button>` : ''}
+          <button class="btn btn-sm btn-gold" onclick="editarLead(${l.id})">Abrir</button>
+        </div>
+      </div>`;
+    }).join('');
+}
+
+function renderLeads() {
+  const tbody = document.getElementById('tabelaLeads');
+  if (!tbody) return;
+  const termo = (document.getElementById('leadBusca').value || '').toLowerCase();
+  const fEst = document.getElementById('leadFiltroEstagio').value;
+  const fCid = document.getElementById('leadFiltroCidade').value;
+
+  let data = LEADS.filter(l => {
+    if (fEst && l.estagio !== fEst) return false;
+    if (fCid && l.cidade !== fCid) return false;
+    if (termo) {
+      const campos = [l.nome,l.cidade,l.bairro,l.contato,l.segmento,l.whatsapp,l.email,l.ficha]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (!campos.includes(termo)) return false;
+    }
+    return true;
+  }).sort((a,b) => (ESTAGIOS_LEAD[a.estagio]?.ordem||9) - (ESTAGIOS_LEAD[b.estagio]?.ordem||9)
+                   || a.nome.localeCompare(b.nome,'pt-BR'));
+
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:40px">
+      ${LEADS.length ? 'Nenhum lead encontrado com esses filtros.' : 'Nenhum lead ainda. Clique em "+ Novo Lead" para começar.'}
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.map(l => {
+    const est = ESTAGIOS_LEAD[l.estagio] || {};
+    const podeAvancar = (est.ordem || 9) < 5;
+    return `<tr>
+      <td>
+        <strong style="color:var(--navy)">${l.nome}</strong>
+        ${l.contato ? `<div class="text-muted" style="font-size:11px">👤 ${l.contato}</div>` : ''}
+      </td>
+      <td class="text-muted">${l.cidade||'—'}${l.bairro ? '<div style="font-size:11px">'+l.bairro+'</div>' : ''}</td>
+      <td class="text-muted" style="font-size:12px">${l.segmento||'—'}</td>
+      <td>
+        <span class="badge" style="background:${est.cor};color:#fff">${est.label||l.estagio}</span>
+        ${l.motivo ? `<div class="text-muted" style="font-size:10px;margin-top:2px">${MOTIVOS_PERDIDO[l.motivo]||l.motivo}</div>` : ''}
+      </td>
+      <td class="text-muted" style="font-size:12px">${l.proximoContato ? formatDate(l.proximoContato) : '—'}</td>
+      <td style="white-space:nowrap">
+        ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})" title="Abrir WhatsApp">📱</button>` : ''}
+        ${podeAvancar ? `<button class="btn btn-sm btn-ghost" onclick="avancarEstagioLead(${l.id})" title="Avançar no funil">⏩</button>` : ''}
+        <button class="btn btn-sm btn-ghost" onclick="editarLead(${l.id})" title="Abrir ficha">✏️</button>
+        <button class="btn btn-sm btn-ghost" style="color:var(--warning)" onclick="excluirLead(${l.id})" title="Excluir">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
 function renderAll(){
   renderOverview();renderFilamentos();renderProdutos();renderCatalogo();
   renderPedidos();renderFilaProducao();renderClientes();renderFinanceiro();renderABC();
+  renderProspeccao();
 }
 
 // ════════════════════════════════════════════════════
@@ -6424,7 +7051,11 @@ document.getElementById('pedData').value  = new Date().toISOString().slice(0,10)
 document.getElementById('despData').value = new Date().toISOString().slice(0,10);
 
 // loadDB é async — carrega local imediatamente, depois sincroniza nuvem
-loadDB();
+// Os leads têm armazenamento próprio e carregam em paralelo
+(async () => {
+  await Promise.all([loadDB(), loadLeads()]);
+  renderAll();
+})();
 </script>
 </body>
 </html>
