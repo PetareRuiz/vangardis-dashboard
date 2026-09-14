@@ -1941,6 +1941,67 @@ th.sortable:hover { background: var(--navy-mid); }
   </div>
 </div>
 
+<!-- ═══════ MODAL ABORDAGEM DE LEAD (IA) ═══════ -->
+<div class="modal-overlay" id="modalAbordagem">
+  <div class="modal" style="max-width:660px">
+    <div class="modal-title">🎯 Abordagem de Prospecção</div>
+
+    <div id="abordLeadInfo" style="background:var(--gray-100);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px"></div>
+
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">🔍 Dados usados pela IA</div>
+    <div id="abordDadosAnalisados" style="background:#F8F6F1;border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.7;margin-bottom:14px"></div>
+
+    <div class="form-row" style="align-items:flex-end">
+      <div class="form-group">
+        <label>Canal</label>
+        <select id="abordCanal" onchange="atualizarBotaoEnvioLead()">
+          <option value="whatsapp">📱 WhatsApp</option>
+          <option value="email">✉️ E-mail</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:2">
+        <label>Tipo de abordagem</label>
+        <select id="abordTom">
+          <option value="apresentacao">Apresentação da empresa</option>
+          <option value="consultivo">Consultiva — foco no ramo da loja</option>
+          <option value="direto">Direta e curta</option>
+          <option value="novidade">Novidade / lançamento</option>
+        </select>
+      </div>
+      <div class="form-group" style="max-width:130px">
+        <button class="btn btn-gold" style="width:100%" onclick="gerarMensagemAbordagem()">✨ Gerar</button>
+      </div>
+    </div>
+
+    <div id="abordLoading" style="display:none;text-align:center;padding:20px;color:var(--gray-600);font-size:13px">
+      ⏳ Escrevendo a abordagem…
+    </div>
+    <div id="abordErro" class="alert alert-warning" style="display:none"></div>
+
+    <div id="abordResultado" style="display:none">
+      <label style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Mensagem gerada (edite se quiser)</label>
+      <textarea id="abordMensagem" rows="9"
+        style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;line-height:1.5;margin-top:6px"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="copiarMensagemAbordagem()">📋 Copiar</button>
+      </div>
+
+      <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--gray-300)">
+        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📄 Panfleto para enviar junto</div>
+        <div style="font-size:11px;color:var(--gray-600);margin-bottom:8px">Produtos citados na mensagem já vêm marcados. Ajuste se quiser.</div>
+        <div id="abordPanfletoProdutos" style="max-height:150px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
+        <button class="btn btn-gold btn-sm" style="margin-top:10px" id="abordPanfletoBtn" onclick="gerarPanfletoLead()">📄 Gerar Panfleto PDF</button>
+        <div id="abordPanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAbordagem')">Fechar</button>
+      <button class="btn btn-gold" id="abordEnvioBtn" style="display:none" onclick="enviarAbordagem()">📱 Abrir no WhatsApp</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ MODAL PRODUTO CATÁLOGO ═══════ -->
 <div class="modal-overlay" id="modalProdCatalogo">
   <div class="modal" style="max-width:640px">
@@ -4608,23 +4669,20 @@ function carregarImagemInfo(url) {
   });
 }
 
-async function gerarPanfletoReativacao() {
-  const c = reativClienteAtual ? reativClienteAtual.cliente : null;
-  if (!c) return;
+// Gera o panfleto PDF. Serve tanto para reativação de cliente quanto para
+// abordagem de lead — por isso recebe o destinatário e os produtos por parâmetro.
+async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
+  if (!nomeDestinatario) return;
   if (!window.jspdf) { showToast('⚠️ Biblioteca PDF não carregada. Recarregue a página.', 'warning'); return; }
-
-  const idsSelecionados = Array.from(document.querySelectorAll('#reativPanfletoProdutos input[type=checkbox]:checked'))
-    .map(el => parseInt(el.value));
-  if (!idsSelecionados.length) {
+  if (!produtos || !produtos.length) {
     showToast('⚠️ Selecione ao menos um produto para o panfleto.', 'warning');
     return;
   }
-  const produtos = (DB.catalogo || []).filter(p => idsSelecionados.includes(p.id));
 
-  const statusEl = document.getElementById('reativPanfletoStatus');
-  const btn = document.getElementById('reativPanfletoBtn');
-  btn.disabled = true;
-  statusEl.textContent = '⏳ Buscando fotos e montando o panfleto...';
+  const statusEl = document.getElementById(statusElId);
+  const btn = document.getElementById(btnId);
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.textContent = '⏳ Buscando fotos e montando o panfleto...';
 
   // Carrega a logo (do bucket) e a primeira imagem de cada produto (com fallback silencioso)
   const [logoInfo, ...imagensInfo] = await Promise.all([
@@ -4674,7 +4732,7 @@ async function gerarPanfletoReativacao() {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(90, 90, 90);
-    doc.text(c.nome, W - margin, continuacao ? 19 : 26, { align: 'right' });
+    doc.text(nomeDestinatario, W - margin, continuacao ? 19 : 26, { align: 'right' });
     if (!continuacao) {
       doc.setFontSize(8.5);
       doc.setTextColor(150, 150, 150);
@@ -4783,15 +4841,35 @@ async function gerarPanfletoReativacao() {
 
   desenharRodape();
 
-  const nomeArq = 'Panfleto_' + c.nome.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
+  const nomeArq = 'Panfleto_' + nomeDestinatario.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
   doc.save(nomeArq);
 
-  btn.disabled = false;
+  if (btn) btn.disabled = false;
   const semFoto = imagensInfo.filter(x => !x).length;
-  statusEl.innerHTML = semFoto
+  if (statusEl) statusEl.innerHTML = semFoto
     ? `✅ Panfleto gerado! ${semFoto} de ${produtos.length} produto(s) ficaram sem foto (imagem indisponível ou bloqueada por CORS) — vale conferir manualmente.`
     : '✅ Panfleto gerado com sucesso!';
   showToast('📄 Panfleto gerado! Verifique seus downloads.');
+}
+
+// Wrapper: panfleto a partir da tela de Reativação de Cliente
+function gerarPanfletoReativacao() {
+  const c = reativClienteAtual ? reativClienteAtual.cliente : null;
+  if (!c) return;
+  const ids = Array.from(document.querySelectorAll('#reativPanfletoProdutos input[type=checkbox]:checked'))
+    .map(el => parseInt(el.value));
+  const produtos = (DB.catalogo || []).filter(p => ids.includes(p.id));
+  return gerarPanfletoPDF(c.nome, produtos, 'reativPanfletoStatus', 'reativPanfletoBtn');
+}
+
+// Wrapper: panfleto a partir da tela de Abordagem de Lead
+function gerarPanfletoLead() {
+  const l = abordagemLeadAtual;
+  if (!l) return;
+  const ids = Array.from(document.querySelectorAll('#abordPanfletoProdutos input[type=checkbox]:checked'))
+    .map(el => parseInt(el.value));
+  const produtos = (DB.catalogo || []).filter(p => ids.includes(p.id));
+  return gerarPanfletoPDF(l.nome, produtos, 'abordPanfletoStatus', 'abordPanfletoBtn');
 }
 
 function desenharPlaceholderFoto(doc, x, y, size, grayLight) {
@@ -7028,6 +7106,7 @@ function renderLeadsAtencao() {
         </div>
         <div style="display:flex;gap:6px">
           ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})">📱</button>` : ''}
+          <button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirAbordagem(${l.id})" title="Gerar abordagem com IA">✨</button>
           <button class="btn btn-sm btn-gold" onclick="editarLead(${l.id})">Abrir</button>
         </div>
       </div>`;
@@ -7076,6 +7155,7 @@ function renderLeads() {
       </td>
       <td class="text-muted" style="font-size:12px">${l.proximoContato ? formatDate(l.proximoContato) : '—'}</td>
       <td style="white-space:nowrap">
+        ${l.estagio !== 'bloqueado' ? `<button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark);margin-right:2px" onclick="abrirAbordagem(${l.id})" title="Gerar abordagem com IA">✨</button>` : ''}
         ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})" title="Abrir WhatsApp">📱</button>` : ''}
         ${podeAvancar ? `<button class="btn btn-sm btn-ghost" onclick="avancarEstagioLead(${l.id})" title="Avançar no funil">⏩</button>` : ''}
         <button class="btn btn-sm btn-ghost" onclick="editarLead(${l.id})" title="Abrir ficha">✏️</button>
@@ -7251,6 +7331,232 @@ function extrairCidadeDoEndereco(end) {
   const m2 = end.match(/-\s*([^,-]+?)\s*-\s*[A-Z]{2}/);
   if (m2) return m2[1].trim();
   return '';
+}
+
+// ════════════════════════════════════════════════════
+// ABORDAGEM DE LEAD (IA) — primeiro contato
+// Diferente da reativação: não existe histórico de compras, então o
+// argumento vem do RAMO da loja e do encaixe com o catálogo.
+// ════════════════════════════════════════════════════
+
+let abordagemLeadAtual = null;
+
+const TONS_ABORDAGEM = {
+  apresentacao: 'APRESENTAÇÃO DA EMPRESA — apresente a Vangardis de forma breve e confiável, mostrando o que ela fabrica e por que isso interessa a uma loja como a dele. Cordial e profissional.',
+  consultivo:   'CONSULTIVA — demonstre que você entende o ramo específico do cliente e conecte os produtos ao público que ele atende. Agregue valor antes de vender.',
+  direto:       'DIRETA E CURTA — vá ao ponto em poucas linhas: quem é você, o que oferece e qual o próximo passo. Sem rodeios.',
+  novidade:     'NOVIDADE — apresente os produtos como algo novo e diferenciado que a loja ainda não tem, despertando curiosidade, sem exagero ou promessa falsa.'
+};
+
+function abrirAbordagem(leadId) {
+  const l = LEADS.find(x => x.id === leadId);
+  if (!l) return;
+  if (l.estagio === 'bloqueado') {
+    showToast('🚫 Este lead pediu para não ser contatado.', 'warning');
+    return;
+  }
+  abordagemLeadAtual = l;
+
+  document.getElementById('abordLeadInfo').innerHTML = `
+    <strong style="color:var(--navy)">${l.nome}</strong>${l.contato ? ' · 👤 '+l.contato : ''} · ${l.cidade||'Sem cidade'}${l.bairro ? ' / '+l.bairro : ''}<br>
+    <span class="text-muted">${l.segmento ? '🏷️ '+l.segmento : '⚠️ Sem segmento'} · ${l.whatsapp ? '📱 '+l.whatsapp : '⚠️ Sem WhatsApp'} · ${l.email ? '✉️ '+l.email : 'sem e-mail'}</span>
+  `;
+
+  renderDadosAbordagem(l);
+
+  document.getElementById('abordResultado').style.display = 'none';
+  document.getElementById('abordErro').style.display = 'none';
+  document.getElementById('abordLoading').style.display = 'none';
+  document.getElementById('abordEnvioBtn').style.display = 'none';
+  document.getElementById('abordPanfletoProdutos').innerHTML = '';
+  document.getElementById('abordPanfletoStatus').textContent = '';
+  document.getElementById('abordCanal').value = l.whatsapp ? 'whatsapp' : (l.email ? 'email' : 'whatsapp');
+
+  openModal('modalAbordagem');
+}
+
+// Catálogo disponível para um LEAD: produtos exclusivos de clientes ficam de fora,
+// porque pertencem a outro cliente e não podem ser oferecidos.
+function catalogoParaLead() {
+  return (DB.catalogo || []).filter(p => p.nome && !p.exclusivo);
+}
+
+function renderDadosAbordagem(l) {
+  const cat = catalogoParaLead();
+  const exclusivos = (DB.catalogo || []).filter(p => p.exclusivo).length;
+  const check = v => v ? '✅' : '<span style="color:var(--gray-400)">— não cadastrado</span>';
+  document.getElementById('abordDadosAnalisados').innerHTML = `
+    <div>• Segmento/ramo: ${l.segmento ? '✅ '+l.segmento : '<span style="color:var(--warning)">⚠️ não cadastrado — a IA vai escrever de forma genérica</span>'}</div>
+    <div>• Cidade: ${l.cidade ? '✅ '+l.cidade : check(false)}</div>
+    <div>• Como chegou até ele: ${ORIGENS_LEAD[l.origem] || 'não informado'}</div>
+    <div>• Anotações da ficha: ${check(l.ficha)}</div>
+    <div>• Produtos que a IA pode oferecer: ${cat.length}${exclusivos ? ` <span class="text-muted">(${exclusivos} exclusivo(s) de clientes ficaram de fora)</span>` : ''}</div>
+    ${!l.segmento ? '<div style="margin-top:6px;color:var(--warning)">💡 Preencher o segmento é o que mais melhora a abordagem. <a href="#" onclick="closeModal(\'modalAbordagem\');editarLead('+l.id+');return false;" style="color:var(--gold);font-weight:600">Editar ficha</a></div>' : ''}
+  `;
+}
+
+function montarPromptAbordagem(l, tom) {
+  const canal = document.getElementById('abordCanal').value;
+  const ehEmail = canal === 'email';
+  const tomDesc = TONS_ABORDAGEM[tom] || TONS_ABORDAGEM.apresentacao;
+  const cat = catalogoParaLead();
+
+  let ctx = `Você é o assistente comercial da Vangardis Expertise, empresa de Curitiba que fabrica produtos personalizados por impressão 3D, corte a laser e itens com NFC, e vende no ATACADO para lojistas de todo o Brasil.
+
+Escreva ${ehEmail ? 'um E-MAIL' : 'uma mensagem de WhatsApp'} de PRIMEIRO CONTATO com uma loja que ainda não é cliente. É prospecção: não existe relacionamento anterior nem histórico de compras.
+
+TIPO DE ABORDAGEM: ${tomDesc}
+
+A mensagem deve:
+1. Cumprimentar ${l.contato ? 'a pessoa de contato pelo nome' : 'a loja pelo nome'} de forma cordial
+2. Se apresentar rapidamente: quem é a Vangardis e o que ela fabrica
+3. Dizer de forma natural e transparente como você chegou até a loja (você encontrou a loja pesquisando estabelecimentos do ramo dela na região). Isso é exigência de transparência da LGPD — não omita, mas também não faça disso o assunto principal
+4. Conectar o que a Vangardis faz ao RAMO e ao público específico dessa loja
+5. Sugerir 1 ou 2 produtos ESTRITAMENTE da lista "PRODUTOS DISPONÍVEIS" abaixo, escolhendo os que fazem sentido para o ramo dela. Nunca invente produtos nem cite itens fora dessa lista. Se nada da lista combinar com o ramo, não cite produto nenhum e fale apenas da capacidade de produzir sob medida
+6. Terminar com um chamado para ação leve e de baixo compromisso (ex: enviar o catálogo, conversar sobre uma amostra) — primeiro contato não fecha venda
+7. NÃO usar emojis em nenhuma parte da mensagem, nem no assunto, nem como marcador. Apenas texto puro
+8. Não prometer preço, prazo ou condição que não foi informada aqui
+${ehEmail
+  ? '9. Como é e-mail, comece com uma linha "Assunto: ..." e depois pule uma linha antes do corpo. No máximo 3 parágrafos curtos.'
+  : '9. Ser curta — no máximo 6 a 8 linhas, adequada para WhatsApp de primeiro contato, que precisa ser fácil de ler e responder.'}
+
+DADOS DA LOJA:
+- Nome: ${l.nome}
+${l.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + l.contato : '- Pessoa de contato: não se sabe, dirija-se à loja'}
+- Cidade: ${l.cidade || 'não informada'}${l.bairro ? ' / ' + l.bairro : ''}
+- Ramo de atividade: ${l.segmento || 'NÃO INFORMADO — escreva de forma mais geral e não presuma o que a loja vende'}`;
+
+  ctx += cat.length
+    ? `\n\nPRODUTOS DISPONÍVEIS (única fonte permitida para o item 5):\n- ${cat.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`
+    : `\n\nNão há produtos cadastrados no catálogo — não cite nenhum produto específico.`;
+
+  if (l.ficha) ctx += `\n\nANOTAÇÕES SOBRE A LOJA:\n${l.ficha}`;
+
+  ctx += `\n\nEscreva APENAS o texto ${ehEmail ? 'do e-mail (com a linha de Assunto)' : 'da mensagem'}, pronto para copiar e enviar, sem explicações antes ou depois e sem aspas ao redor. Nenhum emoji em nenhuma hipótese.`;
+  return ctx;
+}
+
+async function gerarMensagemAbordagem() {
+  const l = abordagemLeadAtual;
+  if (!l) return;
+  const tom = document.getElementById('abordTom').value;
+
+  document.getElementById('abordLoading').style.display = 'block';
+  document.getElementById('abordErro').style.display = 'none';
+  document.getElementById('abordResultado').style.display = 'none';
+
+  try {
+    const res = await fetch(GS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'gerarMensagem', prompt: montarPromptAbordagem(l, tom) })
+    });
+    const json = await res.json();
+    document.getElementById('abordLoading').style.display = 'none';
+
+    if (json.ok && json.mensagem) {
+      const msg = removerEmojis(json.mensagem.trim());
+      document.getElementById('abordMensagem').value = msg;
+      document.getElementById('abordResultado').style.display = 'block';
+      renderSelecaoPanfletoLead(msg);
+      atualizarBotaoEnvioLead();
+    } else {
+      mostrarErroAbordagem(json.error || 'Não consegui gerar a mensagem.');
+    }
+  } catch (e) {
+    document.getElementById('abordLoading').style.display = 'none';
+    mostrarErroAbordagem('Erro de conexão com o servidor de IA. Verifique se a chave da API está configurada no Apps Script.');
+  }
+}
+
+function mostrarErroAbordagem(msg) {
+  const el = document.getElementById('abordErro');
+  el.style.display = 'block';
+  el.innerHTML = '⚠️ ' + msg;
+}
+
+function renderSelecaoPanfletoLead(msg) {
+  const wrap = document.getElementById('abordPanfletoProdutos');
+  const cat = catalogoParaLead();
+  if (!cat.length) {
+    wrap.innerHTML = '<span style="color:var(--gray-400)">Nenhum produto disponível no catálogo.</span>';
+    return;
+  }
+  const texto = (msg || '').toLowerCase();
+  const citados = new Set(cat.filter(p => texto.includes(p.nome.toLowerCase())).map(p => p.id));
+
+  wrap.innerHTML = cat
+    .sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
+    .map(p => `
+      <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+        <input type="checkbox" value="${p.id}" ${citados.has(p.id) ? 'checked' : ''} style="cursor:pointer">
+        <span>${p.nome}${p.valor ? ' — R$ ' + Number(p.valor).toFixed(2) : ''}</span>
+      </label>`).join('');
+}
+
+function atualizarBotaoEnvioLead() {
+  const l = abordagemLeadAtual;
+  const canal = document.getElementById('abordCanal').value;
+  const btn = document.getElementById('abordEnvioBtn');
+  if (!l) return;
+  if (canal === 'whatsapp') {
+    btn.textContent = '📱 Abrir no WhatsApp';
+    btn.style.display = l.whatsapp ? 'inline-block' : 'none';
+  } else {
+    btn.textContent = '✉️ Copiar e abrir e-mail';
+    btn.style.display = l.email ? 'inline-block' : 'none';
+  }
+}
+
+function copiarMensagemAbordagem() {
+  const txt = document.getElementById('abordMensagem').value;
+  navigator.clipboard.writeText(txt)
+    .then(() => { registrarAbordagemEnviada(); showToast('📋 Mensagem copiada!'); })
+    .catch(() => {
+      const ta = document.getElementById('abordMensagem');
+      ta.select(); document.execCommand('copy');
+      registrarAbordagemEnviada();
+      showToast('📋 Mensagem copiada!');
+    });
+}
+
+function enviarAbordagem() {
+  const l = abordagemLeadAtual;
+  if (!l) return;
+  const canal = document.getElementById('abordCanal').value;
+  const txt = document.getElementById('abordMensagem').value;
+
+  if (canal === 'whatsapp') {
+    const num = (l.whatsapp||'').replace(/\D/g,'');
+    const full = num.startsWith('55') ? num : '55' + num;
+    window.open(`https://wa.me/${full}?text=${encodeURIComponent(txt)}`, '_blank');
+  } else {
+    // No e-mail a 1ª linha costuma ser "Assunto: ..."
+    const linhas = txt.split('\n');
+    let assunto = 'Vangardis Expertise', corpo = txt;
+    if (/^assunto:/i.test(linhas[0])) {
+      assunto = linhas[0].replace(/^assunto:\s*/i,'').trim();
+      corpo = linhas.slice(1).join('\n').trim();
+    }
+    navigator.clipboard.writeText(corpo).catch(()=>{});
+    window.open(`mailto:${l.email}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`, '_blank');
+  }
+  registrarAbordagemEnviada();
+}
+
+// Ao usar a mensagem, o lead avança para "Contatado" e o histórico registra
+function registrarAbordagemEnviada() {
+  const l = abordagemLeadAtual;
+  if (!l) return;
+  const canal = document.getElementById('abordCanal').value === 'email' ? 'e-mail' : 'WhatsApp';
+  const tom = document.getElementById('abordTom').value;
+  if (['descoberto','qualificado'].includes(l.estagio)) {
+    l.estagio = 'contatado';
+    registrarHistoricoLead(l, `Abordagem por ${canal} (${tom}) — marcado como Contatado`);
+  } else {
+    registrarHistoricoLead(l, `Nova abordagem por ${canal} (${tom})`);
+  }
+  saveLeads();
+  renderProspeccao();
 }
 
 function renderAll(){
