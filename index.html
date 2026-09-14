@@ -704,6 +704,53 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="tab" id="tab-prospeccao">
       <div id="kpiLeads" class="kpi-grid" style="margin-bottom:20px"></div>
 
+      <!-- Busca de novos leads por região -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <div class="card-title">🔍 Buscar lojas por região</div>
+        </div>
+        <div class="card-body">
+          <div class="form-row" style="align-items:flex-end">
+            <div class="form-group" style="flex:2">
+              <label>O que buscar</label>
+              <input type="text" id="buscaTermo" placeholder="Ex: tabacaria, adega, empório"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();buscarLugares();}">
+            </div>
+            <div class="form-group" style="flex:2">
+              <label>Onde</label>
+              <input type="text" id="buscaLocal" list="cidadesPR" placeholder="Ex: Batel, Curitiba ou Londrina"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();buscarLugares();}">
+              <datalist id="cidadesPR"></datalist>
+            </div>
+            <div class="form-group" style="max-width:130px">
+              <button class="btn btn-gold" style="width:100%" id="buscaBtn" onclick="buscarLugares()">Buscar</button>
+            </div>
+          </div>
+
+          <div style="font-size:11px;color:var(--gray-600);margin-bottom:6px">Termos baseados nos seus clientes atuais:</div>
+          <div id="buscaSugestoes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+
+          <div id="buscaStatus" style="font-size:12px;color:var(--gray-600);min-height:18px"></div>
+
+          <div id="buscaResultados" style="display:none;margin-top:12px">
+            <div class="flex-between" style="margin-bottom:8px">
+              <div style="font-size:12px;color:var(--navy);font-weight:700">
+                <label style="cursor:pointer"><input type="checkbox" id="buscaSelectAll" onchange="toggleTodosResultados(this)"> Selecionar todos</label>
+              </div>
+              <button class="btn btn-gold btn-sm" onclick="importarResultados()">⬇ Importar selecionados</button>
+            </div>
+            <div class="table-wrap" style="max-height:340px;overflow-y:auto">
+              <table>
+                <thead>
+                  <tr><th style="width:34px"></th><th>Loja</th><th>Endereço</th><th>Contato</th></tr>
+                </thead>
+                <tbody id="tabelaResultados"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Próximos contatos / leads parados -->
       <div class="card" id="cardLeadsAtencao" style="margin-bottom:20px;display:none">
         <div class="card-header">
@@ -6899,6 +6946,7 @@ function renderProspeccao() {
   renderFunilTrilha();
   renderLeadsAtencao();
   popularFiltrosLead();
+  popularBuscaAuxiliares();
   renderLeads();
 }
 
@@ -7035,6 +7083,174 @@ function renderLeads() {
       </td>
     </tr>`;
   }).join('');
+}
+
+// ════════════════════════════════════════════════════
+// BUSCA DE LUGARES (Google Places, via Apps Script)
+// A chave fica no servidor — o dashboard só pede o resultado.
+// ════════════════════════════════════════════════════
+
+let resultadosBusca = [];
+
+// Principais cidades do Paraná, para agilizar o preenchimento.
+// Como cada busca traz no máximo 20 lugares, trabalhar cidade a
+// cidade (e bairro a bairro em Curitiba) é o caminho produtivo.
+const CIDADES_PR = ['Curitiba','Londrina','Maringá','Ponta Grossa','Cascavel','São José dos Pinhais',
+  'Foz do Iguaçu','Colombo','Guarapuava','Paranaguá','Araucária','Toledo','Apucarana','Pinhais',
+  'Campo Largo','Arapongas','Almirante Tamandaré','Umuarama','Piraquara','Cambé','Fazenda Rio Grande',
+  'Sarandi','Francisco Beltrão','Pato Branco','Cianorte','Telêmaco Borba','Castro','Rolândia','Irati'];
+
+function popularBuscaAuxiliares() {
+  const dl = document.getElementById('cidadesPR');
+  if (dl && !dl.children.length) {
+    dl.innerHTML = CIDADES_PR.map(c => `<option value="${c}, PR">`).join('');
+  }
+  // Sugestões de termo derivadas dos segmentos dos clientes atuais
+  const el = document.getElementById('buscaSugestoes');
+  if (!el) return;
+  const segs = [...new Set((DB.clientes||[]).map(c => c.segmento).filter(Boolean))].sort();
+  el.innerHTML = segs.length
+    ? segs.map(s => `<span onclick="usarTermoBusca('${s.replace(/'/g,"\\'")}')"
+        style="cursor:pointer;background:var(--gray-100);border:1px solid var(--gray-200);
+        border-radius:12px;padding:3px 10px;font-size:11.5px;color:var(--navy)">${s}</span>`).join('')
+    : '<span class="text-muted" style="font-size:11.5px">Preencha o campo "Segmento" nas fichas dos seus clientes para ver sugestões aqui.</span>';
+}
+
+function usarTermoBusca(t) {
+  document.getElementById('buscaTermo').value = t;
+  document.getElementById('buscaTermo').focus();
+}
+
+async function buscarLugares() {
+  const termo = document.getElementById('buscaTermo').value.trim();
+  const local = document.getElementById('buscaLocal').value.trim();
+  const status = document.getElementById('buscaStatus');
+  const btn = document.getElementById('buscaBtn');
+
+  if (!termo) { showToast('⚠️ Informe o que buscar.', 'warning'); return; }
+
+  btn.disabled = true;
+  status.innerHTML = '⏳ Buscando…';
+  document.getElementById('buscaResultados').style.display = 'none';
+
+  try {
+    const res = await fetch(GS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'buscarLugares', termo, local, maxResultados: 20 })
+    });
+    const json = await res.json();
+
+    if (!json.ok) {
+      status.innerHTML = `<span style="color:var(--warning)">⚠️ ${json.error || 'Erro na busca.'}</span>`;
+      btn.disabled = false;
+      return;
+    }
+
+    resultadosBusca = json.lugares || [];
+    if (!resultadosBusca.length) {
+      status.innerHTML = 'Nenhum resultado. Tente outro termo ou outra cidade.';
+      btn.disabled = false;
+      return;
+    }
+
+    const novos = resultadosBusca.filter(l => !encontrarDuplicadoLead(l.nome, l.telefone) && l.ativo !== false).length;
+    status.innerHTML = `${resultadosBusca.length} resultado(s) para "<strong>${json.consulta}</strong>" · ${novos} disponível(is) para importar.`;
+    renderResultadosBusca();
+    document.getElementById('buscaResultados').style.display = 'block';
+
+  } catch (e) {
+    status.innerHTML = '<span style="color:var(--warning)">⚠️ Não consegui falar com o servidor. Verifique a conexão.</span>';
+  }
+  btn.disabled = false;
+}
+
+function renderResultadosBusca() {
+  const tbody = document.getElementById('tabelaResultados');
+  document.getElementById('buscaSelectAll').checked = false;
+  tbody.innerHTML = resultadosBusca.map((l, i) => {
+    const dup = encontrarDuplicadoLead(l.nome, l.telefone);
+    const fechado = l.ativo === false;
+    const bloqueado = dup || fechado;
+    return `<tr style="${bloqueado ? 'opacity:.5' : ''}">
+      <td><input type="checkbox" class="res-check" value="${i}" ${bloqueado ? 'disabled' : ''} style="cursor:pointer"></td>
+      <td>
+        <strong style="color:var(--navy)">${l.nome}</strong>
+        ${l.categoria ? `<div class="text-muted" style="font-size:11px">${l.categoria}</div>` : ''}
+        ${dup ? `<div style="font-size:10px;color:var(--warning)">já cadastrado: ${dup}</div>` : ''}
+        ${fechado ? '<div style="font-size:10px;color:var(--warning)">marcado como fechado no Google</div>' : ''}
+      </td>
+      <td class="text-muted" style="font-size:12px">${l.endereco || '—'}</td>
+      <td style="font-size:12px">
+        ${l.telefone ? '📱 ' + l.telefone : '<span class="text-muted">sem telefone</span>'}
+        ${l.site ? `<div><a href="${l.site}" target="_blank" style="font-size:11px">site</a></div>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleTodosResultados(el) {
+  document.querySelectorAll('.res-check:not(:disabled)').forEach(c => c.checked = el.checked);
+}
+
+function importarResultados() {
+  const marcados = Array.from(document.querySelectorAll('.res-check:checked')).map(c => parseInt(c.value));
+  if (!marcados.length) { showToast('⚠️ Selecione ao menos uma loja.', 'warning'); return; }
+
+  const termo = document.getElementById('buscaTermo').value.trim();
+  let importados = 0;
+
+  marcados.forEach(i => {
+    const l = resultadosBusca[i];
+    if (!l || l.ativo === false || encontrarDuplicadoLead(l.nome, l.telefone)) return;
+
+    // A cidade vem no fim do endereço formatado do Google
+    const partes = (l.endereco || '').split(' - ');
+    const cidade = extrairCidadeDoEndereco(l.endereco);
+
+    const novo = {
+      id: Date.now() + i,
+      nome: l.nome,
+      segmento: termo || l.categoria || '',
+      cidade,
+      bairro: '',
+      contato: '',
+      endereco: l.endereco || '',
+      whatsapp: (l.telefone || '').replace(/\D/g,''),
+      email: '',
+      site: l.site || '',
+      instagram: '',
+      estagio: 'descoberto',
+      origem: 'busca',
+      proximoContato: '',
+      motivo: '',
+      ficha: '',
+      placeId: l.placeId || '',
+      dataDescoberta: new Date().toISOString(),
+      historico: []
+    };
+    registrarHistoricoLead(novo, `Importado da busca "${termo}"`);
+    LEADS.push(novo);
+    importados++;
+  });
+
+  if (!importados) { showToast('Nada novo para importar.', 'warning'); return; }
+  saveLeads();
+  renderProspeccao();
+  document.getElementById('buscaStatus').innerHTML =
+    `✅ ${importados} lead(s) importado(s). Eles entraram como <strong>Descoberto</strong> — o próximo passo é qualificar.`;
+  renderResultadosBusca(); // atualiza marcação de duplicados
+  showToast(`✅ ${importados} lead(s) importado(s)!`);
+}
+
+// Extrai a cidade do endereço formatado do Google.
+// Formato típico: "Rua X, 123 - Bairro, Cidade - PR, 80000-000"
+function extrairCidadeDoEndereco(end) {
+  if (!end) return '';
+  const m = end.match(/,\s*([^,]+?)\s*-\s*[A-Z]{2}\s*,/);
+  if (m) return m[1].trim();
+  const m2 = end.match(/-\s*([^,-]+?)\s*-\s*[A-Z]{2}/);
+  if (m2) return m2[1].trim();
+  return '';
 }
 
 function renderAll(){
