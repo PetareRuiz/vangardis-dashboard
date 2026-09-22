@@ -2052,7 +2052,17 @@ th.sortable:hover { background: var(--navy-mid); }
         </div>
       </div>
 
-      <div style="background:#FFFDF7;border-left:3px solid var(--gold);padding:10px 14px;font-size:11.5px;color:var(--gray-600);margin-bottom:6px">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:6px 0 6px">📄 Panfleto do lote (opcional)</div>
+      <div style="font-size:11.5px;color:var(--gray-600);margin-bottom:8px">
+        Escolha os produtos e gere <strong>um único panfleto</strong> para anexar em todas as conversas.
+        Se você selecionar produtos aqui, as mensagens vão falar exatamente sobre eles — texto e anexo combinando.
+      </div>
+      <div id="lotePanfletoFiltro"></div>
+      <div id="lotePanfletoProdutos" style="max-height:180px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" id="lotePanfletoBtn" onclick="gerarPanfletoDoLote()">📄 Gerar panfleto do lote</button>
+      <div id="lotePanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
+
+      <div style="background:#FFFDF7;border-left:3px solid var(--gold);padding:10px 14px;font-size:11.5px;color:var(--gray-600);margin:12px 0 6px">
         Cada loja recebe uma mensagem escrita sob medida para o ramo dela — não é o mesmo texto repetido.
         O envio continua sendo <strong>um clique seu por loja</strong>: o dashboard abre o WhatsApp com o texto pronto e você aperta enviar.
         É isso que mantém seu número fora do padrão de disparo em massa, que leva a bloqueio.
@@ -2085,7 +2095,12 @@ th.sortable:hover { background: var(--navy-mid); }
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-gold" onclick="enviarItemFila()">📱 Abrir WhatsApp e marcar contatado</button>
         <button class="btn btn-ghost" onclick="pularItemFila()">⏭️ Pular esta loja</button>
+        <button class="btn btn-ghost" id="loteFilaPanfletoBtn" style="display:none" onclick="gerarPanfletoDaLojaDaFila()" title="Gera um panfleto endereçado só para esta loja">📄 Panfleto desta loja</button>
         <button class="btn btn-ghost btn-sm" style="margin-left:auto;color:var(--warning)" onclick="encerrarLote()">Encerrar fila</button>
+      </div>
+      <div id="loteFilaPanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
+      <div id="loteLembretePanfleto" style="display:none;font-size:11.5px;color:#2B5F87;background:#E8F1F8;border-radius:6px;padding:8px 10px;margin-top:8px">
+        📎 Lembre de anexar o panfleto na conversa — o link do WhatsApp leva só o texto.
       </div>
     </div>
 
@@ -4872,7 +4887,7 @@ function carregarImagemInfo(url) {
 // Gera o panfleto PDF. Serve tanto para reativação de cliente quanto para
 // abordagem de lead — por isso recebe o destinatário e os produtos por parâmetro.
 async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
-  if (!nomeDestinatario) return;
+  // nomeDestinatario vazio = panfleto genérico do lote, sem loja no cabeçalho
   if (!window.jspdf) { showToast('⚠️ Biblioteca PDF não carregada. Recarregue a página.', 'warning'); return; }
   if (!produtos || !produtos.length) {
     showToast('⚠️ Selecione ao menos um produto para o panfleto.', 'warning');
@@ -4932,7 +4947,7 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(90, 90, 90);
-    doc.text(nomeDestinatario, W - margin, continuacao ? 19 : 26, { align: 'right' });
+    if (nomeDestinatario) doc.text(nomeDestinatario, W - margin, continuacao ? 19 : 26, { align: 'right' });
     if (!continuacao) {
       doc.setFontSize(8.5);
       doc.setTextColor(150, 150, 150);
@@ -5041,7 +5056,9 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
 
   desenharRodape();
 
-  const nomeArq = 'Panfleto_' + nomeDestinatario.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
+  const nomeArq = nomeDestinatario
+    ? 'Panfleto_' + nomeDestinatario.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf'
+    : 'Panfleto_Vangardis.pdf';
   doc.save(nomeArq);
 
   if (btn) btn.disabled = false;
@@ -7749,13 +7766,15 @@ function renderDadosAbordagem(l) {
   `;
 }
 
-function montarPromptAbordagem(l, tom, canalParam) {
+function montarPromptAbordagem(l, tom, canalParam, produtosEscolhidos) {
   // canalParam permite reaproveitar este prompt no envio em lote,
   // que não tem o seletor de canal do modal individual na tela
   const canal = canalParam || (document.getElementById('abordCanal') || {}).value || 'whatsapp';
   const ehEmail = canal === 'email';
   const tomDesc = TONS_ABORDAGEM[tom] || TONS_ABORDAGEM.apresentacao;
-  const cat = catalogoParaLead();
+  // Se o envio em lote definiu os produtos do panfleto, a mensagem fala
+  // exatamente sobre eles — assim texto e anexo combinam
+  const cat = (produtosEscolhidos && produtosEscolhidos.length) ? produtosEscolhidos : catalogoParaLead();
 
   let ctx = `Você é o assistente comercial da Vangardis Expertise, empresa de Curitiba que fabrica produtos personalizados por impressão 3D, corte a laser e itens com NFC, e vende no ATACADO para lojistas de todo o Brasil.
 
@@ -7782,8 +7801,11 @@ ${l.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + l.contato : 
 - Cidade: ${l.cidade || 'não informada'}${l.bairro ? ' / ' + l.bairro : ''}
 - Ramo de atividade: ${l.segmento || 'NÃO INFORMADO — escreva de forma mais geral e não presuma o que a loja vende'}`;
 
+  const rotuloLista = (produtosEscolhidos && produtosEscolhidos.length)
+    ? 'PRODUTOS DESTE ENVIO (são os que vão no panfleto anexado — cite apenas estes)'
+    : 'PRODUTOS DISPONÍVEIS (única fonte permitida para o item 5)';
   ctx += cat.length
-    ? `\n\nPRODUTOS DISPONÍVEIS (única fonte permitida para o item 5):\n- ${cat.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`
+    ? `\n\n${rotuloLista}:\n- ${cat.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`
     : `\n\nNão há produtos cadastrados no catálogo — não cite nenhum produto específico.`;
 
   if (l.ficha) ctx += `\n\nANOTAÇÕES SOBRE A LOJA:\n${l.ficha}`;
@@ -7957,6 +7979,11 @@ function abrirLoteAbordagem() {
   loteFila = aptos.map(l => ({ lead: l, mensagem: '', erro: null }));
   loteIndice = 0; loteEnviados = 0; lotePulados = 0;
 
+  // Lista de produtos para o panfleto do lote (só não-exclusivos, como na abordagem individual)
+  renderSelecaoPanfletoLote();
+  document.getElementById('lotePanfletoStatus').textContent = '';
+  document.getElementById('loteFilaPanfletoStatus').textContent = '';
+
   document.getElementById('loteSetup').style.display = aptos.length ? 'block' : 'block';
   document.getElementById('loteProgresso').style.display = 'none';
   document.getElementById('loteFila').style.display = 'none';
@@ -7984,7 +8011,7 @@ async function gerarMensagensLote() {
     try {
       const res = await fetch(GS_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'gerarMensagem', prompt: montarPromptAbordagem(item.lead, tom, 'whatsapp') })
+        body: JSON.stringify({ action: 'gerarMensagem', prompt: montarPromptAbordagem(item.lead, tom, 'whatsapp', produtosDoLote()) })
       });
       const json = await res.json();
       if (json.ok && json.mensagem) item.mensagem = removerEmojis(json.mensagem.trim());
@@ -8030,6 +8057,51 @@ function renderItemFila() {
     <span class="text-muted">${l.cidade || 'Sem cidade'}${l.bairro ? ' / ' + l.bairro : ''} · ${l.segmento || 'sem segmento'} · 📱 ${l.whatsapp}</span>
   `;
   document.getElementById('loteMensagem').value = item.mensagem;
+  const temProdutos = produtosDoLote().length > 0;
+  document.getElementById('loteFilaPanfletoBtn').style.display = temProdutos ? 'inline-block' : 'none';
+  document.getElementById('loteLembretePanfleto').style.display = temProdutos ? 'block' : 'none';
+  document.getElementById('loteFilaPanfletoStatus').textContent = '';
+}
+
+// ── Panfleto no envio em lote ──
+function renderSelecaoPanfletoLote() {
+  const wrap = document.getElementById('lotePanfletoProdutos');
+  if (!wrap) return;
+  const cat = catalogoParaLead();
+  if (!cat.length) {
+    wrap.innerHTML = '<span style="color:var(--gray-400)">Nenhum produto disponível no catálogo.</span>';
+    renderFiltroPanfleto('lote', []);
+    return;
+  }
+  wrap.innerHTML = cat
+    .sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
+    .map(p => `
+      <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+        <input type="checkbox" value="${p.id}" style="cursor:pointer" onchange="atualizarContadorPanfleto('lote')">
+        <span>${p.nome}${p.valor ? ' — R$ ' + Number(p.valor).toFixed(2) : ''}</span>
+      </label>`).join('');
+  renderFiltroPanfleto('lote', cat);
+}
+
+function produtosDoLote() {
+  const ids = Array.from(document.querySelectorAll('#lotePanfletoProdutos input[type=checkbox]:checked'))
+    .map(el => parseInt(el.value));
+  return (DB.catalogo || []).filter(p => ids.includes(p.id));
+}
+
+// Um panfleto só, sem nome de loja, para anexar em todas as conversas
+function gerarPanfletoDoLote() {
+  const produtos = produtosDoLote();
+  if (!produtos.length) { showToast('⚠️ Selecione ao menos um produto.', 'warning'); return; }
+  return gerarPanfletoPDF('', produtos, 'lotePanfletoStatus', 'lotePanfletoBtn');
+}
+
+// Panfleto endereçado a uma loja específica, direto da fila
+function gerarPanfletoDaLojaDaFila() {
+  const item = loteFila[loteIndice];
+  const produtos = produtosDoLote();
+  if (!item || !produtos.length) return;
+  return gerarPanfletoPDF(item.lead.nome, produtos, 'loteFilaPanfletoStatus', 'loteFilaPanfletoBtn');
 }
 
 function enviarItemFila() {
