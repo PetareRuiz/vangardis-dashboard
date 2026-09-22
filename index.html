@@ -798,6 +798,7 @@ th.sortable:hover { background: var(--navy-mid); }
             <strong id="leadLoteCount"></strong>
             <button class="btn btn-sm" id="leadLoteCongelar" style="background:#E8F1F8;color:#2B5F87" onclick="congelarSelecionados(true)">❄️ Congelar</button>
             <button class="btn btn-sm" id="leadLoteDescongelar" style="background:var(--gold);color:var(--navy-dark);display:none" onclick="congelarSelecionados(false)">☀️ Descongelar</button>
+            <button class="btn btn-sm" id="leadLoteAbordar" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirLoteAbordagem()">✨ Abordar em lote</button>
             <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparSelecaoLeads()">Limpar seleção</button>
           </div>
 
@@ -2017,6 +2018,83 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalAbordagem')">Fechar</button>
       <button class="btn btn-gold" id="abordEnvioBtn" style="display:none" onclick="enviarAbordagem()">📱 Abrir no WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL ABORDAGEM EM LOTE (fila de WhatsApp) ═══════ -->
+<div class="modal-overlay" id="modalLote">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-title">📱 Abordagem em lote</div>
+
+    <!-- Etapa 1: configuração -->
+    <div id="loteSetup">
+      <div id="loteResumoSelecao" style="background:var(--gray-100);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px"></div>
+
+      <div class="form-row" style="align-items:flex-end">
+        <div class="form-group" style="flex:2">
+          <label>Tipo de abordagem</label>
+          <select id="loteTom">
+            <option value="apresentacao">Apresentação da empresa</option>
+            <option value="consultivo">Consultiva — foco no ramo da loja</option>
+            <option value="direto">Direta e curta</option>
+            <option value="novidade">Novidade / lançamento</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Agendar retorno</label>
+          <select id="loteRetorno">
+            <option value="5">Em 5 dias</option>
+            <option value="7">Em 7 dias</option>
+            <option value="10">Em 10 dias</option>
+            <option value="0">Não agendar</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="background:#FFFDF7;border-left:3px solid var(--gold);padding:10px 14px;font-size:11.5px;color:var(--gray-600);margin-bottom:6px">
+        Cada loja recebe uma mensagem escrita sob medida para o ramo dela — não é o mesmo texto repetido.
+        O envio continua sendo <strong>um clique seu por loja</strong>: o dashboard abre o WhatsApp com o texto pronto e você aperta enviar.
+        É isso que mantém seu número fora do padrão de disparo em massa, que leva a bloqueio.
+        <div id="loteCusto" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <!-- Etapa 2: progresso da geração -->
+    <div id="loteProgresso" style="display:none;padding:10px 0">
+      <div style="font-size:13px;color:var(--navy);margin-bottom:8px" id="loteProgressoTexto"></div>
+      <div style="background:var(--gray-200);height:8px;border-radius:4px;overflow:hidden">
+        <div id="loteProgressoBarra" style="height:100%;background:var(--gold);width:0%;transition:width .3s"></div>
+      </div>
+    </div>
+
+    <!-- Etapa 3: fila -->
+    <div id="loteFila" style="display:none">
+      <div class="flex-between" style="margin-bottom:8px">
+        <strong id="loteContador" style="font-size:13px;color:var(--navy)"></strong>
+        <span id="loteEnviados" class="text-muted" style="font-size:12px"></span>
+      </div>
+      <div style="background:var(--gray-200);height:6px;border-radius:3px;overflow:hidden;margin-bottom:12px">
+        <div id="loteFilaBarra" style="height:100%;background:var(--gold);width:0%;transition:width .3s"></div>
+      </div>
+
+      <div id="loteLeadInfo" style="background:var(--gray-100);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px"></div>
+      <textarea id="loteMensagem" rows="8"
+        style="width:100%;padding:12px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;line-height:1.5"></textarea>
+
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-gold" onclick="enviarItemFila()">📱 Abrir WhatsApp e marcar contatado</button>
+        <button class="btn btn-ghost" onclick="pularItemFila()">⏭️ Pular esta loja</button>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto;color:var(--warning)" onclick="encerrarLote()">Encerrar fila</button>
+      </div>
+    </div>
+
+    <!-- Etapa 4: resumo -->
+    <div id="loteResumoFinal" style="display:none"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharLote()">Fechar</button>
+      <button class="btn btn-gold" id="loteGerarBtn" onclick="gerarMensagensLote()">✨ Gerar mensagens</button>
     </div>
   </div>
 </div>
@@ -7220,6 +7298,8 @@ function atualizarBarraLote() {
   bar.style.display = n ? 'flex' : 'none';
   document.getElementById('leadLoteCount').textContent = `${n} lead(s) selecionado(s)`;
   document.getElementById('leadLoteCongelar').style.display   = verCongelados ? 'none' : 'inline-block';
+  const btnAb = document.getElementById('leadLoteAbordar');
+  if (btnAb) btnAb.style.display = verCongelados ? 'none' : 'inline-block';
   document.getElementById('leadLoteDescongelar').style.display = verCongelados ? 'inline-block' : 'none';
 }
 
@@ -7669,8 +7749,10 @@ function renderDadosAbordagem(l) {
   `;
 }
 
-function montarPromptAbordagem(l, tom) {
-  const canal = document.getElementById('abordCanal').value;
+function montarPromptAbordagem(l, tom, canalParam) {
+  // canalParam permite reaproveitar este prompt no envio em lote,
+  // que não tem o seletor de canal do modal individual na tela
+  const canal = canalParam || (document.getElementById('abordCanal') || {}).value || 'whatsapp';
   const ehEmail = canal === 'email';
   const tomDesc = TONS_ABORDAGEM[tom] || TONS_ABORDAGEM.apresentacao;
   const cat = catalogoParaLead();
@@ -7833,6 +7915,184 @@ function registrarAbordagemEnviada() {
   }
   saveLeads();
   renderProspeccao();
+}
+
+// ════════════════════════════════════════════════════
+// ABORDAGEM EM LOTE — fila de WhatsApp
+// A IA escreve uma mensagem por loja de uma vez só; o envio continua
+// sendo um clique manual por loja. Disparo automático no WhatsApp não é
+// feito de propósito: é o que leva número a ser banido.
+// ════════════════════════════════════════════════════
+
+let loteFila = [];       // [{lead, mensagem, erro}]
+let loteIndice = 0;
+let loteEnviados = 0;
+let lotePulados = 0;
+
+function abrirLoteAbordagem() {
+  const ids = [...leadsSelecionados];
+  if (!ids.length) { showToast('⚠️ Selecione os leads primeiro.', 'warning'); return; }
+
+  const sel = ids.map(id => LEADS.find(l => l.id === id)).filter(Boolean);
+  const aptos     = sel.filter(l => l.whatsapp && l.estagio !== 'bloqueado' && !l.congelado);
+  const semZap    = sel.filter(l => !l.whatsapp && l.estagio !== 'bloqueado' && !l.congelado);
+  const bloqueados= sel.filter(l => l.estagio === 'bloqueado');
+  const congelados= sel.filter(l => l.congelado);
+
+  const semSegmento = aptos.filter(l => !l.segmento).length;
+
+  document.getElementById('loteResumoSelecao').innerHTML = `
+    <strong style="color:var(--navy)">${aptos.length} loja(s) na fila</strong>
+    ${semZap.length ? `<div style="color:var(--warning);font-size:12px;margin-top:4px">⚠️ ${semZap.length} sem WhatsApp cadastrado — ficaram de fora</div>` : ''}
+    ${bloqueados.length ? `<div style="color:#A33B3B;font-size:12px;margin-top:4px">🚫 ${bloqueados.length} marcada(s) como "não perturbar" — ficaram de fora</div>` : ''}
+    ${congelados.length ? `<div class="text-muted" style="font-size:12px;margin-top:4px">❄️ ${congelados.length} congelada(s) — ficaram de fora</div>` : ''}
+    ${semSegmento ? `<div class="text-muted" style="font-size:12px;margin-top:4px">💡 ${semSegmento} sem segmento preenchido — a mensagem sai mais genérica para essas</div>` : ''}
+  `;
+
+  const custo = (aptos.length * 0.015).toFixed(2);
+  document.getElementById('loteCusto').innerHTML = aptos.length
+    ? `Custo estimado da geração: cerca de <strong>US$ ${custo}</strong> (${aptos.length} mensagens).`
+    : '';
+
+  loteFila = aptos.map(l => ({ lead: l, mensagem: '', erro: null }));
+  loteIndice = 0; loteEnviados = 0; lotePulados = 0;
+
+  document.getElementById('loteSetup').style.display = aptos.length ? 'block' : 'block';
+  document.getElementById('loteProgresso').style.display = 'none';
+  document.getElementById('loteFila').style.display = 'none';
+  document.getElementById('loteResumoFinal').style.display = 'none';
+  document.getElementById('loteGerarBtn').style.display = aptos.length ? 'inline-block' : 'none';
+  document.getElementById('loteGerarBtn').disabled = false;
+
+  openModal('modalLote');
+}
+
+async function gerarMensagensLote() {
+  if (!loteFila.length) return;
+  const tom = document.getElementById('loteTom').value;
+
+  document.getElementById('loteSetup').style.display = 'none';
+  document.getElementById('loteGerarBtn').style.display = 'none';
+  document.getElementById('loteProgresso').style.display = 'block';
+
+  for (let i = 0; i < loteFila.length; i++) {
+    const item = loteFila[i];
+    document.getElementById('loteProgressoTexto').textContent =
+      `Escrevendo ${i + 1} de ${loteFila.length} — ${item.lead.nome}`;
+    document.getElementById('loteProgressoBarra').style.width = ((i) / loteFila.length * 100) + '%';
+
+    try {
+      const res = await fetch(GS_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'gerarMensagem', prompt: montarPromptAbordagem(item.lead, tom, 'whatsapp') })
+      });
+      const json = await res.json();
+      if (json.ok && json.mensagem) item.mensagem = removerEmojis(json.mensagem.trim());
+      else item.erro = json.error || 'não consegui gerar';
+    } catch (e) {
+      item.erro = 'falha de conexão';
+    }
+    // Pequena pausa entre chamadas, para não saturar o Apps Script
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  document.getElementById('loteProgressoBarra').style.width = '100%';
+
+  // Tira da fila o que falhou
+  const falhas = loteFila.filter(x => x.erro).length;
+  loteFila = loteFila.filter(x => x.mensagem);
+
+  document.getElementById('loteProgresso').style.display = 'none';
+
+  if (!loteFila.length) {
+    document.getElementById('loteResumoFinal').style.display = 'block';
+    document.getElementById('loteResumoFinal').innerHTML =
+      '<div class="alert alert-warning">⚠️ Não consegui gerar nenhuma mensagem. Verifique a conexão e a chave da API no Apps Script.</div>';
+    return;
+  }
+
+  loteIndice = 0;
+  document.getElementById('loteFila').style.display = 'block';
+  if (falhas) showToast(`⚠️ ${falhas} mensagem(ns) falharam e ficaram de fora da fila.`, 'warning');
+  renderItemFila();
+}
+
+function renderItemFila() {
+  if (loteIndice >= loteFila.length) { finalizarLote(); return; }
+  const item = loteFila[loteIndice];
+  const l = item.lead;
+
+  document.getElementById('loteContador').textContent = `Loja ${loteIndice + 1} de ${loteFila.length}`;
+  document.getElementById('loteEnviados').textContent = `${loteEnviados} enviada(s) · ${lotePulados} pulada(s)`;
+  document.getElementById('loteFilaBarra').style.width = (loteIndice / loteFila.length * 100) + '%';
+  document.getElementById('loteLeadInfo').innerHTML = `
+    <strong style="color:var(--navy)">${l.nome}</strong>${l.contato ? ' · 👤 ' + l.contato : ''}<br>
+    <span class="text-muted">${l.cidade || 'Sem cidade'}${l.bairro ? ' / ' + l.bairro : ''} · ${l.segmento || 'sem segmento'} · 📱 ${l.whatsapp}</span>
+  `;
+  document.getElementById('loteMensagem').value = item.mensagem;
+}
+
+function enviarItemFila() {
+  const item = loteFila[loteIndice];
+  if (!item) return;
+  const l = item.lead;
+  const txt = document.getElementById('loteMensagem').value;
+
+  const num = (l.whatsapp || '').replace(/\D/g, '');
+  const full = num.startsWith('55') ? num : '55' + num;
+  window.open(`https://wa.me/${full}?text=${encodeURIComponent(txt)}`, '_blank');
+
+  // Registra no lead
+  if (['descoberto','qualificado'].includes(l.estagio)) l.estagio = 'contatado';
+  registrarHistoricoLead(l, 'Abordagem por WhatsApp (envio em lote)');
+
+  const dias = parseInt(document.getElementById('loteRetorno').value) || 0;
+  if (dias && !l.proximoContato) {
+    const d = new Date(); d.setDate(d.getDate() + dias);
+    l.proximoContato = d.toISOString().slice(0, 10);
+  }
+
+  loteEnviados++;
+  saveLeads();
+  loteIndice++;
+  renderItemFila();
+}
+
+function pularItemFila() {
+  lotePulados++;
+  loteIndice++;
+  renderItemFila();
+}
+
+function encerrarLote() {
+  if (loteIndice < loteFila.length &&
+      !confirm(`Ainda faltam ${loteFila.length - loteIndice} loja(s) na fila. As mensagens não enviadas serão descartadas. Encerrar?`)) return;
+  finalizarLote();
+}
+
+function finalizarLote() {
+  document.getElementById('loteFila').style.display = 'none';
+  const restantes = Math.max(0, loteFila.length - loteIndice);
+  document.getElementById('loteResumoFinal').style.display = 'block';
+  document.getElementById('loteResumoFinal').innerHTML = `
+    <div style="text-align:center;padding:20px 0">
+      <div style="font-size:34px">✅</div>
+      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-top:6px">Fila concluída</div>
+      <div class="text-muted" style="font-size:13px;margin-top:6px">
+        ${loteEnviados} loja(s) contatada(s)${lotePulados ? ` · ${lotePulados} pulada(s)` : ''}${restantes ? ` · ${restantes} não enviada(s)` : ''}
+      </div>
+      ${loteEnviados ? '<div class="text-muted" style="font-size:12px;margin-top:8px">Os leads contatados já estão com o retorno agendado e aparecem em "Precisam de atenção" na data.</div>' : ''}
+    </div>`;
+  limparSelecaoLeads();
+  renderProspeccao();
+}
+
+function fecharLote() {
+  if (document.getElementById('loteFila').style.display === 'block' &&
+      loteIndice < loteFila.length &&
+      !confirm('Você ainda tem lojas na fila. Fechar e descartar as mensagens não enviadas?')) return;
+  closeModal('modalLote');
+  loteFila = []; loteIndice = 0;
 }
 
 function renderAll(){
