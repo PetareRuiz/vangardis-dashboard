@@ -799,6 +799,7 @@ th.sortable:hover { background: var(--navy-mid); }
             <button class="btn btn-sm" id="leadLoteCongelar" style="background:#E8F1F8;color:#2B5F87" onclick="congelarSelecionados(true)">❄️ Congelar</button>
             <button class="btn btn-sm" id="leadLoteDescongelar" style="background:var(--gold);color:var(--navy-dark);display:none" onclick="congelarSelecionados(false)">☀️ Descongelar</button>
             <button class="btn btn-sm" id="leadLoteAbordar" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirLoteAbordagem()">✨ Abordar em lote</button>
+            <button class="btn btn-sm btn-ghost" id="leadLoteHistorico" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparHistoricoSelecionados()">🗑️ Limpar histórico</button>
             <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparSelecaoLeads()">Limpar seleção</button>
           </div>
 
@@ -1946,7 +1947,10 @@ th.sortable:hover { background: var(--navy-mid); }
 
     <!-- Histórico de contatos -->
     <div id="leadHistoricoWrap" style="display:none">
-      <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px">Histórico de contatos</div>
+      <div class="flex-between" style="margin:16px 0 8px">
+        <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Histórico de contatos</div>
+        <button class="btn btn-ghost btn-sm" style="color:var(--warning)" onclick="limparHistoricoLead()">🗑️ Limpar histórico</button>
+      </div>
       <div id="leadHistoricoList" style="max-height:150px;overflow-y:auto;font-size:12px"></div>
     </div>
 
@@ -2049,6 +2053,14 @@ th.sortable:hover { background: var(--navy-mid); }
             <option value="10">Em 10 dias</option>
             <option value="0">Não agendar</option>
           </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>✍️ Incluir em todas as mensagens <span class="text-muted" style="font-weight:400;font-size:11px">(opcional)</span></label>
+        <textarea id="loteInstrucao" rows="2" placeholder="Ex: informe que temos condição especial de primeira compra com frete grátis acima de R$ 300"></textarea>
+        <div class="text-muted" style="font-size:11px;margin-top:4px">
+          A IA é obrigada a incluir isso em todas as mensagens, adaptando as palavras ao tom escolhido, e proibida de escrever qualquer coisa que contradiga. Fica salvo para o próximo lote.
         </div>
       </div>
 
@@ -7766,7 +7778,7 @@ function renderDadosAbordagem(l) {
   `;
 }
 
-function montarPromptAbordagem(l, tom, canalParam, produtosEscolhidos) {
+function montarPromptAbordagem(l, tom, canalParam, produtosEscolhidos, instrucaoExtra) {
   // canalParam permite reaproveitar este prompt no envio em lote,
   // que não tem o seletor de canal do modal individual na tela
   const canal = canalParam || (document.getElementById('abordCanal') || {}).value || 'whatsapp';
@@ -7809,6 +7821,12 @@ ${l.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + l.contato : 
     : `\n\nNão há produtos cadastrados no catálogo — não cite nenhum produto específico.`;
 
   if (l.ficha) ctx += `\n\nANOTAÇÕES SOBRE A LOJA:\n${l.ficha}`;
+
+  // Instrução do remetente: obrigatória e com prioridade sobre o resto,
+  // para a mensagem não acabar contradizendo o que ele quer comunicar
+  if (instrucaoExtra && instrucaoExtra.trim()) {
+    ctx += `\n\nINSTRUÇÃO OBRIGATÓRIA DO REMETENTE — o conteúdo abaixo PRECISA constar na mensagem. Adapte as palavras ao tom escolhido, mas sem alterar o sentido nem omitir nada:\n"${instrucaoExtra.trim()}"\n\nNenhuma outra parte da mensagem pode contradizer, enfraquecer ou desmentir essa instrução. Se ela conflitar com qualquer orientação anterior deste pedido, a instrução do remetente prevalece. Não a apresente como um aviso separado: integre naturalmente ao texto.`;
+  }
 
   ctx += `\n\nEscreva APENAS o texto ${ehEmail ? 'do e-mail (com a linha de Assunto)' : 'da mensagem'}, pronto para copiar e enviar, sem explicações antes ou depois e sem aspas ao redor. Nenhum emoji em nenhuma hipótese.`;
   return ctx;
@@ -7947,6 +7965,7 @@ function registrarAbordagemEnviada() {
 // ════════════════════════════════════════════════════
 
 let loteFila = [];       // [{lead, mensagem, erro}]
+let loteFalhas = [];     // nomes das lojas cuja mensagem não pôde ser gerada
 let loteIndice = 0;
 let loteEnviados = 0;
 let lotePulados = 0;
@@ -7981,6 +8000,7 @@ function abrirLoteAbordagem() {
 
   // Lista de produtos para o panfleto do lote (só não-exclusivos, como na abordagem individual)
   renderSelecaoPanfletoLote();
+  document.getElementById('loteInstrucao').value = localStorage.getItem('vangardis_lote_instrucao') || '';
   document.getElementById('lotePanfletoStatus').textContent = '';
   document.getElementById('loteFilaPanfletoStatus').textContent = '';
 
@@ -7997,6 +8017,8 @@ function abrirLoteAbordagem() {
 async function gerarMensagensLote() {
   if (!loteFila.length) return;
   const tom = document.getElementById('loteTom').value;
+  const instrucaoLote = document.getElementById('loteInstrucao').value;
+  localStorage.setItem('vangardis_lote_instrucao', instrucaoLote); // reaproveita no próximo lote
 
   document.getElementById('loteSetup').style.display = 'none';
   document.getElementById('loteGerarBtn').style.display = 'none';
@@ -8011,7 +8033,7 @@ async function gerarMensagensLote() {
     try {
       const res = await fetch(GS_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'gerarMensagem', prompt: montarPromptAbordagem(item.lead, tom, 'whatsapp', produtosDoLote()) })
+        body: JSON.stringify({ action: 'gerarMensagem', prompt: montarPromptAbordagem(item.lead, tom, 'whatsapp', produtosDoLote(), instrucaoLote) })
       });
       const json = await res.json();
       if (json.ok && json.mensagem) item.mensagem = removerEmojis(json.mensagem.trim());
@@ -8025,8 +8047,10 @@ async function gerarMensagensLote() {
 
   document.getElementById('loteProgressoBarra').style.width = '100%';
 
-  // Tira da fila o que falhou
-  const falhas = loteFila.filter(x => x.erro).length;
+  // Tira da fila o que falhou, guardando os nomes para avisar
+  const nomesFalha = loteFila.filter(x => x.erro).map(x => x.lead.nome);
+  const falhas = nomesFalha.length;
+  loteFalhas = nomesFalha;
   loteFila = loteFila.filter(x => x.mensagem);
 
   document.getElementById('loteProgresso').style.display = 'none';
@@ -8040,7 +8064,7 @@ async function gerarMensagensLote() {
 
   loteIndice = 0;
   document.getElementById('loteFila').style.display = 'block';
-  if (falhas) showToast(`⚠️ ${falhas} mensagem(ns) falharam e ficaram de fora da fila.`, 'warning');
+  if (falhas) showToast(`⚠️ ${falhas} mensagem(ns) falharam — veja a lista no resumo ao fim da fila.`, 'warning');
   renderItemFila();
 }
 
@@ -8154,6 +8178,7 @@ function finalizarLote() {
         ${loteEnviados} loja(s) contatada(s)${lotePulados ? ` · ${lotePulados} pulada(s)` : ''}${restantes ? ` · ${restantes} não enviada(s)` : ''}
       </div>
       ${loteEnviados ? '<div class="text-muted" style="font-size:12px;margin-top:8px">Os leads contatados já estão com o retorno agendado e aparecem em "Precisam de atenção" na data.</div>' : ''}
+      ${loteFalhas.length ? `<div style="text-align:left;background:#FDF5F4;border-left:3px solid #A33B3B;padding:10px 12px;margin-top:12px;font-size:12px;color:#8a2020"><strong>Não consegui gerar a mensagem para:</strong> ${loteFalhas.join(', ')}.<br>Tente de novo para essas lojas — costuma ser instabilidade momentânea na geração.</div>` : ''}
     </div>`;
   limparSelecaoLeads();
   renderProspeccao();
@@ -8165,6 +8190,38 @@ function fecharLote() {
       !confirm('Você ainda tem lojas na fila. Fechar e descartar as mensagens não enviadas?')) return;
   closeModal('modalLote');
   loteFila = []; loteIndice = 0;
+}
+
+// Limpa o histórico do lead aberto na ficha. Pede confirmação nominal,
+// porque o histórico é o registro de tudo que já foi conversado.
+function limparHistoricoLead() {
+  const id = parseInt(document.getElementById('leadId').value);
+  const l = LEADS.find(x => x.id === id);
+  if (!l || !l.historico || !l.historico.length) return;
+  if (!confirm(`Apagar as ${l.historico.length} anotações do histórico de "${l.nome}"?\n\nO estágio, a ficha e os dados de contato NÃO são alterados — só o registro de contatos. Isso não pode ser desfeito.`)) return;
+  l.historico = [];
+  registrarHistoricoLead(l, 'Histórico anterior apagado');
+  saveLeads();
+  renderHistoricoLead(l);
+  showToast('🗑️ Histórico limpo.');
+}
+
+// Limpa o histórico de vários leads de uma vez, a partir da seleção da lista
+function limparHistoricoSelecionados() {
+  const ids = [...leadsSelecionados];
+  if (!ids.length) return;
+  const alvos = ids.map(id => LEADS.find(l => l.id === id)).filter(l => l && l.historico && l.historico.length);
+  if (!alvos.length) { showToast('Nenhum dos leads selecionados tem histórico.', 'warning'); return; }
+
+  const lista = alvos.slice(0, 8).map(l => '• ' + l.nome).join('\n');
+  const resto = alvos.length > 8 ? `\n… e mais ${alvos.length - 8}` : '';
+  if (!confirm(`Apagar o histórico de ${alvos.length} lead(s)?\n\n${lista}${resto}\n\nO estágio e os dados de contato NÃO são alterados. Isso não pode ser desfeito.`)) return;
+
+  alvos.forEach(l => { l.historico = []; registrarHistoricoLead(l, 'Histórico anterior apagado'); });
+  saveLeads();
+  limparSelecaoLeads();
+  renderProspeccao();
+  showToast(`🗑️ Histórico limpo em ${alvos.length} lead(s).`);
 }
 
 function renderAll(){
