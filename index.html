@@ -612,6 +612,7 @@ th.sortable:hover { background: var(--navy-mid); }
         <div class="card-header">
           <div class="card-title">📖 Catálogo de Produtos</div>
           <div class="flex" style="gap:8px">
+            <button class="btn btn-ghost" id="btnTirarDestaques" style="display:none" onclick="tirarTodosDestaques()" title="Remove o destaque de todos os produtos de uma vez"></button>
             <button class="btn btn-ghost" onclick="exportarProdutosPublicados()" title="Gerar JSON apenas dos produtos com Publicar = Sim">📤 Exportar Publicados (JSON)</button>
             <button class="btn btn-gold" onclick="abrirNovoProdutoCatalogo()">+ Novo Produto</button>
           </div>
@@ -771,24 +772,40 @@ th.sortable:hover { background: var(--navy-mid); }
         <div class="card-body">
           <!-- Filtros -->
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
-            <input type="text" id="leadBusca" placeholder="🔎 Buscar por nome, cidade, contato…" oninput="renderLeads()"
+            <input type="text" id="leadBusca" placeholder="🔎 Buscar por nome, cidade, segmento…" oninput="limparSelecaoLeads();renderLeads()"
               style="flex:1;min-width:200px;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
-            <select id="leadFiltroEstagio" onchange="renderLeads()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+            <select id="leadFiltroEstagio" onchange="limparSelecaoLeads();renderLeads();renderFunilTrilha()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
               <option value="">Todos os estágios</option>
             </select>
-            <select id="leadFiltroCidade" onchange="renderLeads()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+            <select id="leadFiltroCidade" onchange="limparSelecaoLeads();renderLeads()" style="padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
               <option value="">Todas as cidades</option>
             </select>
             <button class="btn btn-ghost btn-sm" onclick="limparFiltrosLead()">Limpar</button>
+            <button class="btn btn-sm" id="btnVerCongelados" onclick="toggleVerCongelados()"
+              style="display:none;background:#E8F1F8;color:#2B5F87;border:1.5px solid #9CC3E0"></button>
+          </div>
+
+          <!-- Aviso de modo "congelados" -->
+          <div id="avisoCongelados" style="display:none;background:#E8F1F8;border:1px solid #9CC3E0;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;color:#2B5F87">
+            ❄️ Você está vendo os leads <strong>congelados</strong>. Eles ficam fora da lista principal, dos indicadores e dos lembretes — mas continuam contando como já cadastrados nas buscas, para não serem importados de novo.
           </div>
 
           <!-- Trilha do funil (clicável) -->
           <div id="funilTrilha" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px"></div>
 
+          <!-- Barra de ações em lote (aparece ao selecionar) -->
+          <div id="leadLoteBar" style="display:none;background:var(--navy);color:#fff;border-radius:8px;padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px">
+            <strong id="leadLoteCount"></strong>
+            <button class="btn btn-sm" id="leadLoteCongelar" style="background:#E8F1F8;color:#2B5F87" onclick="congelarSelecionados(true)">❄️ Congelar</button>
+            <button class="btn btn-sm" id="leadLoteDescongelar" style="background:var(--gold);color:var(--navy-dark);display:none" onclick="congelarSelecionados(false)">☀️ Descongelar</button>
+            <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparSelecaoLeads()">Limpar seleção</button>
+          </div>
+
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
+                  <th style="width:34px"><input type="checkbox" id="leadSelectAll" onchange="toggleSelecionarTodosLeads(this)" style="cursor:pointer" title="Selecionar todos os leads visíveis"></th>
                   <th>Loja</th>
                   <th>Cidade</th>
                   <th>Segmento</th>
@@ -6268,6 +6285,16 @@ function popularClientesDatalistExclusivo() {
   if (dl) dl.innerHTML = (DB.clientes || []).map(c => `<option value="${c.nome}">`).join('');
 }
 
+function tirarTodosDestaques() {
+  const emDestaque = (DB.catalogo || []).filter(p => p.destaque);
+  if (!emDestaque.length) return;
+  if (!confirm(`Tirar o destaque de ${emDestaque.length} produto(s)? Eles continuam no catálogo e publicados — só deixam de aparecer como destaque.`)) return;
+  emDestaque.forEach(p => { p.destaque = false; });
+  saveDB();
+  renderCatalogo();
+  showToast(`☆ Destaque removido de ${emDestaque.length} produto(s).`);
+}
+
 function abrirNovoProdutoCatalogo() {
   document.getElementById('prodCatId').value = '';
   document.getElementById('prodCatTitulo').textContent = 'Novo Produto';
@@ -6420,6 +6447,14 @@ function exportarProdutosPublicados() {
 
 function renderCatalogo() {
   const catalogo = DB.catalogo || [];
+
+  // Botão "tirar todos os destaques" — só aparece quando há algum destaque
+  const btnDest = document.getElementById('btnTirarDestaques');
+  if (btnDest) {
+    const nDest = catalogo.filter(p => p.destaque).length;
+    btnDest.style.display = nDest ? 'inline-block' : 'none';
+    btnDest.textContent = `☆ Tirar destaque de todos (${nDest})`;
+  }
 
   // KPIs
   const kpiEl = document.getElementById('kpiCatalogo');
@@ -6967,6 +7002,7 @@ function excluirLead(id) {
   if (!l) return;
   if (!confirm(`Excluir o lead "${l.nome}"?`)) return;
   LEADS = LEADS.filter(x => x.id !== id);
+  leadsSelecionados.delete(id);
   saveLeads();
   renderProspeccao();
   showToast('🗑️ Lead excluído.');
@@ -7016,7 +7052,97 @@ function limparFiltrosLead() {
   document.getElementById('leadBusca').value = '';
   document.getElementById('leadFiltroEstagio').value = '';
   document.getElementById('leadFiltroCidade').value = '';
+  limparSelecaoLeads();
   renderLeads();
+  renderFunilTrilha();
+}
+
+// ── Congelamento ──
+// Um lead congelado sai da lista principal, dos indicadores e dos lembretes,
+// mas continua guardado (e continua contando como duplicado nas buscas).
+// O estágio em que estava é preservado — ao descongelar, volta para onde estava.
+let verCongelados = false;
+let leadsSelecionados = new Set();
+
+function leadsDaVisao() {
+  return LEADS.filter(l => verCongelados ? !!l.congelado : !l.congelado);
+}
+function leadsAtivosNaoCongelados() {
+  return LEADS.filter(l => !l.congelado);
+}
+
+function toggleVerCongelados() {
+  verCongelados = !verCongelados;
+  document.getElementById('leadFiltroEstagio').value = '';
+  document.getElementById('leadFiltroCidade').value = '';
+  limparSelecaoLeads();
+  renderProspeccao();
+}
+
+function toggleSelecionarTodosLeads(el) {
+  document.querySelectorAll('.lead-check').forEach(c => {
+    c.checked = el.checked;
+    const id = parseInt(c.value);
+    if (el.checked) leadsSelecionados.add(id); else leadsSelecionados.delete(id);
+  });
+  atualizarBarraLote();
+}
+
+function toggleSelecaoLead(id, el) {
+  if (el.checked) leadsSelecionados.add(id); else leadsSelecionados.delete(id);
+  atualizarBarraLote();
+}
+
+function limparSelecaoLeads() {
+  leadsSelecionados.clear();
+  const all = document.getElementById('leadSelectAll');
+  if (all) all.checked = false;
+  document.querySelectorAll('.lead-check').forEach(c => c.checked = false);
+  atualizarBarraLote();
+}
+
+function atualizarBarraLote() {
+  const bar = document.getElementById('leadLoteBar');
+  if (!bar) return;
+  const n = leadsSelecionados.size;
+  bar.style.display = n ? 'flex' : 'none';
+  document.getElementById('leadLoteCount').textContent = `${n} lead(s) selecionado(s)`;
+  document.getElementById('leadLoteCongelar').style.display   = verCongelados ? 'none' : 'inline-block';
+  document.getElementById('leadLoteDescongelar').style.display = verCongelados ? 'inline-block' : 'none';
+}
+
+function congelarSelecionados(congelar) {
+  const ids = [...leadsSelecionados];
+  if (!ids.length) return;
+  const msg = congelar
+    ? `Congelar ${ids.length} lead(s)? Eles saem da lista e dos indicadores, mas ficam guardados para você retomar depois.`
+    : `Descongelar ${ids.length} lead(s)? Eles voltam para a lista principal no mesmo estágio em que estavam.`;
+  if (!confirm(msg)) return;
+  ids.forEach(id => { congelarLead(id, congelar, true); });
+  saveLeads();
+  limparSelecaoLeads();
+  renderProspeccao();
+  showToast(congelar ? `❄️ ${ids.length} lead(s) congelado(s).` : `☀️ ${ids.length} lead(s) descongelado(s).`);
+}
+
+function congelarLead(id, congelar, emLote) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  if (congelar) {
+    l.congelado = true;
+    l.dataCongelamento = new Date().toISOString();
+    registrarHistoricoLead(l, 'Congelado (stand by)');
+  } else {
+    delete l.congelado;
+    delete l.dataCongelamento;
+    registrarHistoricoLead(l, 'Descongelado — voltou para a lista');
+  }
+  if (!emLote) {
+    saveLeads();
+    leadsSelecionados.delete(id);
+    renderProspeccao();
+    showToast(congelar ? '❄️ Lead congelado.' : '☀️ Lead descongelado.');
+  }
 }
 
 function renderProspeccao() {
@@ -7028,12 +7154,14 @@ function renderProspeccao() {
   renderLeads();
 }
 
+// Indicadores sempre ignoram os congelados
 function renderKpiLeads() {
   const el = document.getElementById('kpiLeads');
   if (!el) return;
-  const ativos = LEADS.filter(l => !['cliente','perdido','bloqueado'].includes(l.estagio));
-  const convertidos = LEADS.filter(l => l.estagio === 'cliente').length;
-  const contatados = LEADS.filter(l => ESTAGIOS_LEAD[l.estagio]?.ordem >= 3).length;
+  const base = leadsAtivosNaoCongelados();
+  const ativos = base.filter(l => !['cliente','perdido','bloqueado'].includes(l.estagio));
+  const convertidos = base.filter(l => l.estagio === 'cliente').length;
+  const contatados = base.filter(l => ESTAGIOS_LEAD[l.estagio]?.ordem >= 3).length;
   const taxa = contatados ? (convertidos / contatados * 100) : 0;
   el.innerHTML = `
     <div class="kpi-card"><div class="kpi-label">Leads ativos</div><div class="kpi-value">${ativos.length}</div></div>
@@ -7043,13 +7171,15 @@ function renderKpiLeads() {
   `;
 }
 
+// A trilha reflete a visão atual (ativos ou congelados)
 function renderFunilTrilha() {
   const el = document.getElementById('funilTrilha');
   if (!el) return;
+  const base = leadsDaVisao();
   el.innerHTML = Object.entries(ESTAGIOS_LEAD)
     .sort((a,b) => a[1].ordem - b[1].ordem)
     .map(([k,v]) => {
-      const n = LEADS.filter(l => l.estagio === k).length;
+      const n = base.filter(l => l.estagio === k).length;
       const ativo = document.getElementById('leadFiltroEstagio').value === k;
       return `<div onclick="filtrarPorEstagio('${k}')" title="${v.desc}"
         style="cursor:pointer;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:600;
@@ -7063,6 +7193,7 @@ function renderFunilTrilha() {
 function filtrarPorEstagio(k) {
   const sel = document.getElementById('leadFiltroEstagio');
   sel.value = (sel.value === k) ? '' : k;
+  limparSelecaoLeads();
   renderLeads();
   renderFunilTrilha();
 }
@@ -7077,19 +7208,37 @@ function popularFiltrosLead() {
   const selC = document.getElementById('leadFiltroCidade');
   if (selC) {
     const atual = selC.value;
-    const cidades = [...new Set(LEADS.map(l => l.cidade).filter(Boolean))].sort();
+    const cidades = [...new Set(leadsDaVisao().map(l => l.cidade).filter(Boolean))].sort();
     selC.innerHTML = '<option value="">Todas as cidades</option>' +
       cidades.map(c => `<option value="${c}">${c}</option>`).join('');
-    selC.value = atual;
+    selC.value = cidades.includes(atual) ? atual : '';
   }
+
+  // Botão de alternar visão + aviso
+  const nCong = LEADS.filter(l => l.congelado).length;
+  const btn = document.getElementById('btnVerCongelados');
+  if (btn) {
+    if (verCongelados) {
+      btn.style.display = 'inline-block';
+      btn.textContent = '← Voltar aos leads ativos';
+    } else {
+      btn.style.display = nCong ? 'inline-block' : 'none';
+      btn.textContent = `❄️ Congelados (${nCong})`;
+    }
+  }
+  const aviso = document.getElementById('avisoCongelados');
+  if (aviso) aviso.style.display = verCongelados ? 'block' : 'none';
+  // Se não sobrou nenhum congelado, volta sozinho para a visão normal
+  if (verCongelados && !nCong) { verCongelados = false; if (aviso) aviso.style.display = 'none'; if (btn) btn.style.display = 'none'; }
 }
 
+// Lembretes de contato ignoram os congelados
 function renderLeadsAtencao() {
   const card = document.getElementById('cardLeadsAtencao');
   const el = document.getElementById('leadsAtencaoList');
   if (!el) return;
   const hoje = new Date(); hoje.setHours(23,59,59,999);
-  const vencidos = LEADS.filter(l =>
+  const vencidos = leadsAtivosNaoCongelados().filter(l =>
     l.proximoContato && !['cliente','perdido','bloqueado'].includes(l.estagio) &&
     parseLocalDate(l.proximoContato) <= hoje);
 
@@ -7120,7 +7269,7 @@ function renderLeads() {
   const fEst = document.getElementById('leadFiltroEstagio').value;
   const fCid = document.getElementById('leadFiltroCidade').value;
 
-  let data = LEADS.filter(l => {
+  let data = leadsDaVisao().filter(l => {
     if (fEst && l.estagio !== fEst) return false;
     if (fCid && l.cidade !== fCid) return false;
     if (termo) {
@@ -7132,20 +7281,37 @@ function renderLeads() {
   }).sort((a,b) => (ESTAGIOS_LEAD[a.estagio]?.ordem||9) - (ESTAGIOS_LEAD[b.estagio]?.ordem||9)
                    || a.nome.localeCompare(b.nome,'pt-BR'));
 
+  const all = document.getElementById('leadSelectAll');
+  if (all) all.checked = data.length > 0 && data.every(l => leadsSelecionados.has(l.id));
+
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:40px">
-      ${LEADS.length ? 'Nenhum lead encontrado com esses filtros.' : 'Nenhum lead ainda. Clique em "+ Novo Lead" para começar.'}
-    </td></tr>`;
+    const vazio = verCongelados
+      ? 'Nenhum lead congelado com esses filtros.'
+      : (leadsAtivosNaoCongelados().length ? 'Nenhum lead encontrado com esses filtros.' : 'Nenhum lead ainda. Clique em "+ Novo Lead" para começar.');
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--gray-400);padding:40px">${vazio}</td></tr>`;
+    atualizarBarraLote();
     return;
   }
 
   tbody.innerHTML = data.map(l => {
     const est = ESTAGIOS_LEAD[l.estagio] || {};
     const podeAvancar = (est.ordem || 9) < 5;
-    return `<tr>
+    const sel = leadsSelecionados.has(l.id) ? 'checked' : '';
+    const acoes = verCongelados
+      ? `<button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark);margin-right:2px" onclick="congelarLead(${l.id}, false)" title="Descongelar">☀️</button>
+         <button class="btn btn-sm btn-ghost" onclick="editarLead(${l.id})" title="Abrir ficha">✏️</button>
+         <button class="btn btn-sm btn-ghost" style="color:var(--warning)" onclick="excluirLead(${l.id})" title="Excluir">🗑️</button>`
+      : `${l.estagio !== 'bloqueado' ? `<button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark);margin-right:2px" onclick="abrirAbordagem(${l.id})" title="Gerar abordagem com IA">✨</button>` : ''}
+         ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})" title="Abrir WhatsApp">📱</button>` : ''}
+         ${podeAvancar ? `<button class="btn btn-sm btn-ghost" onclick="avancarEstagioLead(${l.id})" title="Avançar no funil">⏩</button>` : ''}
+         <button class="btn btn-sm btn-ghost" onclick="editarLead(${l.id})" title="Abrir ficha">✏️</button>
+         <button class="btn btn-sm btn-ghost" style="color:var(--warning)" onclick="excluirLead(${l.id})" title="Excluir">🗑️</button>`;
+    return `<tr${verCongelados ? ' style="background:#F4F8FB"' : ''}>
+      <td><input type="checkbox" class="lead-check" value="${l.id}" ${sel} onchange="toggleSelecaoLead(${l.id}, this)" style="cursor:pointer"></td>
       <td>
-        <strong style="color:var(--navy)">${l.nome}</strong>
+        <strong style="color:var(--navy)">${verCongelados ? '❄️ ' : ''}${l.nome}</strong>
         ${l.contato ? `<div class="text-muted" style="font-size:11px">👤 ${l.contato}</div>` : ''}
+        ${verCongelados && l.dataCongelamento ? `<div class="text-muted" style="font-size:10px">congelado em ${new Date(l.dataCongelamento).toLocaleDateString('pt-BR')}</div>` : ''}
       </td>
       <td class="text-muted">${l.cidade||'—'}${l.bairro ? '<div style="font-size:11px">'+l.bairro+'</div>' : ''}</td>
       <td class="text-muted" style="font-size:12px">${l.segmento||'—'}</td>
@@ -7154,15 +7320,10 @@ function renderLeads() {
         ${l.motivo ? `<div class="text-muted" style="font-size:10px;margin-top:2px">${MOTIVOS_PERDIDO[l.motivo]||l.motivo}</div>` : ''}
       </td>
       <td class="text-muted" style="font-size:12px">${l.proximoContato ? formatDate(l.proximoContato) : '—'}</td>
-      <td style="white-space:nowrap">
-        ${l.estagio !== 'bloqueado' ? `<button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark);margin-right:2px" onclick="abrirAbordagem(${l.id})" title="Gerar abordagem com IA">✨</button>` : ''}
-        ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})" title="Abrir WhatsApp">📱</button>` : ''}
-        ${podeAvancar ? `<button class="btn btn-sm btn-ghost" onclick="avancarEstagioLead(${l.id})" title="Avançar no funil">⏩</button>` : ''}
-        <button class="btn btn-sm btn-ghost" onclick="editarLead(${l.id})" title="Abrir ficha">✏️</button>
-        <button class="btn btn-sm btn-ghost" style="color:var(--warning)" onclick="excluirLead(${l.id})" title="Excluir">🗑️</button>
-      </td>
+      <td style="white-space:nowrap">${acoes}</td>
     </tr>`;
   }).join('');
+  atualizarBarraLote();
 }
 
 // ════════════════════════════════════════════════════
