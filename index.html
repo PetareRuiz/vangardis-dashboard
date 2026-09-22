@@ -1824,7 +1824,8 @@ th.sortable:hover { background: var(--navy-mid); }
       <div id="reativPanfletoSection" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--gray-300)">
         <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📄 Panfleto de produtos para o cliente</div>
         <div style="font-size:11px;color:var(--gray-600);margin-bottom:8px">Produtos do catálogo identificados na mensagem já vêm marcados. Ajuste a seleção se quiser.</div>
-        <div id="reativPanfletoProdutos" style="max-height:150px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
+        <div id="reativPanfletoFiltro"></div>
+        <div id="reativPanfletoProdutos" style="max-height:220px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
         <button class="btn btn-gold btn-sm" style="margin-top:10px" id="reativPanfletoBtn" onclick="gerarPanfletoReativacao()">📄 Gerar Panfleto PDF</button>
         <div id="reativPanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
       </div>
@@ -2006,7 +2007,8 @@ th.sortable:hover { background: var(--navy-mid); }
       <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--gray-300)">
         <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📄 Panfleto para enviar junto</div>
         <div style="font-size:11px;color:var(--gray-600);margin-bottom:8px">Produtos citados na mensagem já vêm marcados. Ajuste se quiser.</div>
-        <div id="abordPanfletoProdutos" style="max-height:150px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
+        <div id="abordPanfletoFiltro"></div>
+        <div id="abordPanfletoProdutos" style="max-height:220px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
         <button class="btn btn-gold btn-sm" style="margin-top:10px" id="abordPanfletoBtn" onclick="gerarPanfletoLead()">📄 Gerar Panfleto PDF</button>
         <div id="abordPanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
       </div>
@@ -4376,6 +4378,7 @@ function abrirReativacao(clienteId) {
   document.getElementById('reativEnvioBtn').style.display = 'none';
   document.getElementById('reativLoading').style.display = 'none';
   document.getElementById('reativPanfletoProdutos').innerHTML = '';
+  document.getElementById('reativPanfletoFiltro').innerHTML = '';
   document.getElementById('reativPanfletoStatus').textContent = '';
 
   atualizarBotaoEnvio();
@@ -4581,6 +4584,78 @@ function extrairProdutosSugeridosDaMensagem(msg) {
 
 // Monta a lista de checkboxes de produtos do catálogo para o panfleto,
 // pré-marcando os que foram identificados no texto da mensagem
+// ════════════════════════════════════════════════════
+// FILTRO POR CATEGORIA NA SELEÇÃO DO PANFLETO
+// Compartilhado entre Reativação ('reativ') e Abordagem de lead ('abord').
+// O filtro só ESCONDE itens — não apaga a seleção. Dá para marcar produtos
+// numa categoria, trocar para outra e continuar marcando.
+// ════════════════════════════════════════════════════
+
+const SEM_CATEGORIA = '__sem__';
+
+function renderFiltroPanfleto(prefixo, produtos) {
+  const el = document.getElementById(prefixo + 'PanfletoFiltro');
+  if (!el) return;
+  if (!produtos || !produtos.length) { el.innerHTML = ''; return; }
+
+  const contagem = {};
+  let semCat = 0;
+  produtos.forEach(p => {
+    const cats = getCategoriasProduto(p);
+    if (!cats.length) semCat++;
+    cats.forEach(c => { contagem[c] = (contagem[c] || 0) + 1; });
+  });
+  const cats = Object.keys(contagem).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const esc = t => String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+
+  el.innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <select id="${prefixo}PanfletoCat" onchange="filtrarPanfletoPorCategoria('${prefixo}')"
+        style="padding:5px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px;max-width:230px">
+        <option value="">Todas as categorias (${produtos.length})</option>
+        ${cats.map(c => `<option value="${esc(c)}">${esc(c)} (${contagem[c]})</option>`).join('')}
+        ${semCat ? `<option value="${SEM_CATEGORIA}">Sem categoria (${semCat})</option>` : ''}
+      </select>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="marcarVisiveisPanfleto('${prefixo}', true)">Marcar visíveis</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="marcarVisiveisPanfleto('${prefixo}', false)">Desmarcar visíveis</button>
+      <span id="${prefixo}PanfletoContador" style="font-size:11px;color:var(--navy);font-weight:600;margin-left:auto"></span>
+    </div>`;
+  atualizarContadorPanfleto(prefixo);
+}
+
+function filtrarPanfletoPorCategoria(prefixo) {
+  const sel = document.getElementById(prefixo + 'PanfletoCat');
+  const cat = sel ? sel.value : '';
+  document.querySelectorAll(`#${prefixo}PanfletoProdutos input[type=checkbox]`).forEach(inp => {
+    const p = (DB.catalogo || []).find(x => x.id === parseInt(inp.value));
+    const cats = p ? getCategoriasProduto(p) : [];
+    const mostra = !cat
+      || (cat === SEM_CATEGORIA ? !cats.length : cats.includes(cat));
+    const label = inp.closest('label');
+    if (label) label.style.display = mostra ? 'flex' : 'none';
+  });
+  atualizarContadorPanfleto(prefixo);
+}
+
+function marcarVisiveisPanfleto(prefixo, marcar) {
+  document.querySelectorAll(`#${prefixo}PanfletoProdutos input[type=checkbox]`).forEach(inp => {
+    const label = inp.closest('label');
+    if (label && label.style.display !== 'none') inp.checked = marcar;
+  });
+  // Na Reativação, a seleção também reflete no texto da mensagem
+  if (prefixo === 'reativ' && typeof sincronizarProdutosNaMensagem === 'function') sincronizarProdutosNaMensagem();
+  atualizarContadorPanfleto(prefixo);
+}
+
+function atualizarContadorPanfleto(prefixo) {
+  const el = document.getElementById(prefixo + 'PanfletoContador');
+  if (!el) return;
+  const todos = document.querySelectorAll(`#${prefixo}PanfletoProdutos input[type=checkbox]`);
+  const marcados = Array.from(todos).filter(i => i.checked);
+  const ocultosMarcados = marcados.filter(i => { const l = i.closest('label'); return l && l.style.display === 'none'; }).length;
+  el.textContent = `${marcados.length} selecionado(s)` + (ocultosMarcados ? ` · ${ocultosMarcados} fora do filtro` : '');
+}
+
 function renderSelecaoPanfleto(msg) {
   const wrap = document.getElementById('reativPanfletoProdutos');
   const statusEl = document.getElementById('reativPanfletoStatus');
@@ -4594,6 +4669,7 @@ function renderSelecaoPanfleto(msg) {
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   if (!catalogo.length) {
     wrap.innerHTML = '<span style="color:var(--gray-400)">Nenhum produto do catálogo disponível para sugerir a este cliente.</span>';
+    renderFiltroPanfleto('reativ', []);
     return;
   }
 
@@ -4617,7 +4693,7 @@ function renderSelecaoPanfleto(msg) {
 
   wrap.innerHTML = catalogo.map(p => `
     <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
-      <input type="checkbox" value="${p.id}" ${sugeridos.has(p.id) ? 'checked' : ''} style="cursor:pointer" onchange="sincronizarProdutosNaMensagem()">
+      <input type="checkbox" value="${p.id}" ${sugeridos.has(p.id) ? 'checked' : ''} style="cursor:pointer" onchange="sincronizarProdutosNaMensagem();atualizarContadorPanfleto('reativ')">
       <span>${p.nome}${p.valor ? ' — R$ ' + Number(p.valor).toFixed(2) : ''}</span>
       ${p.exclusivo ? '<span style="font-size:10px;color:#B23B3B;font-weight:700">🔒 exclusivo</span>' : ''}
     </label>
@@ -4626,6 +4702,7 @@ function renderSelecaoPanfleto(msg) {
   if (!sugeridos.size) {
     statusEl.innerHTML = '<span style="color:var(--warning)">⚠️ Não identifiquei automaticamente produtos do catálogo no texto da mensagem — selecione manualmente os que quiser incluir.</span>';
   }
+  renderFiltroPanfleto('reativ', catalogo);
 }
 
 // Mantém o texto da mensagem em sincronia com os produtos marcados para o panfleto.
@@ -7565,6 +7642,7 @@ function abrirAbordagem(leadId) {
   document.getElementById('abordLoading').style.display = 'none';
   document.getElementById('abordEnvioBtn').style.display = 'none';
   document.getElementById('abordPanfletoProdutos').innerHTML = '';
+  document.getElementById('abordPanfletoFiltro').innerHTML = '';
   document.getElementById('abordPanfletoStatus').textContent = '';
   document.getElementById('abordCanal').value = l.whatsapp ? 'whatsapp' : (l.email ? 'email' : 'whatsapp');
 
@@ -7675,6 +7753,7 @@ function renderSelecaoPanfletoLead(msg) {
   const cat = catalogoParaLead();
   if (!cat.length) {
     wrap.innerHTML = '<span style="color:var(--gray-400)">Nenhum produto disponível no catálogo.</span>';
+    renderFiltroPanfleto('abord', []);
     return;
   }
   const texto = (msg || '').toLowerCase();
@@ -7684,9 +7763,10 @@ function renderSelecaoPanfletoLead(msg) {
     .sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
     .map(p => `
       <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
-        <input type="checkbox" value="${p.id}" ${citados.has(p.id) ? 'checked' : ''} style="cursor:pointer">
+        <input type="checkbox" value="${p.id}" ${citados.has(p.id) ? 'checked' : ''} style="cursor:pointer" onchange="atualizarContadorPanfleto('abord')">
         <span>${p.nome}${p.valor ? ' — R$ ' + Number(p.valor).toFixed(2) : ''}</span>
       </label>`).join('');
+  renderFiltroPanfleto('abord', cat);
 }
 
 function atualizarBotaoEnvioLead() {
