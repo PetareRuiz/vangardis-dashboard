@@ -4665,10 +4665,19 @@ function sincronizarProdutosNaMensagem() {
 // Carrega uma imagem de URL externa e converte para base64, junto com suas
 // dimensões reais (para manter a proporção no PDF). Retorna null se falhar
 // (ex: CORS bloqueado, imagem fora do ar) — nesse caso o panfleto segue sem foto.
+// Parâmetro exclusivo para as buscas do PDF. Quando uma foto é exibida como
+// imagem comum (no site, ou como miniatura no Catálogo), o navegador e a
+// Cloudflare guardam uma cópia SEM a permissão de CORS. Se o panfleto pedir a
+// mesma URL, recebe essa cópia e é bloqueado. Com o "?pdf=1" a URL fica
+// diferente, e a cópia usada aqui é sempre uma que já veio com a permissão.
+function urlParaPDF(url) {
+  return url + (url.includes('?') ? '&' : '?') + 'pdf=1';
+}
+
 function carregarImagemInfo(url) {
   return new Promise((resolve) => {
     if (!url) { resolve(null); return; }
-    fetch(url, { mode: 'cors' })
+    fetch(urlParaPDF(url), { mode: 'cors' })
       .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
       .then(blob => new Promise((res, rej) => {
         const reader = new FileReader();
@@ -4678,11 +4687,30 @@ function carregarImagemInfo(url) {
       }))
       .then(dataUrl => {
         const img = new Image();
-        img.onload = () => resolve({ dataUrl, w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
-        img.onerror = () => resolve(null);
+        img.onload = () => {
+          // Converte tudo para JPEG: o gerador de PDF não lê WebP/GIF com
+          // segurança. Aproveita para reduzir fotos muito grandes, o que deixa
+          // o PDF leve o bastante para mandar por WhatsApp.
+          try {
+            const MAX = 1200;
+            const w0 = img.naturalWidth || 1, h0 = img.naturalHeight || 1;
+            const esc = Math.min(1, MAX / Math.max(w0, h0));
+            const w = Math.max(1, Math.round(w0 * esc)), h = Math.max(1, Math.round(h0 * esc));
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            const ctx = cv.getContext('2d');
+            ctx.fillStyle = '#FFFFFF';           // fundo branco para PNG transparente
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve({ dataUrl: cv.toDataURL('image/jpeg', 0.9), w, h });
+          } catch (e) {
+            resolve({ dataUrl, w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+          }
+        };
+        img.onerror = () => { console.warn('[panfleto] arquivo de imagem ilegível:', url); resolve(null); };
         img.src = dataUrl;
       })
-      .catch(() => resolve(null));
+      .catch(err => { console.warn('[panfleto] não consegui baixar a imagem:', url, err && err.message); resolve(null); });
   });
 }
 
@@ -4862,10 +4890,17 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
   doc.save(nomeArq);
 
   if (btn) btn.disabled = false;
-  const semFoto = imagensInfo.filter(x => !x).length;
-  if (statusEl) statusEl.innerHTML = semFoto
-    ? `✅ Panfleto gerado! ${semFoto} de ${produtos.length} produto(s) ficaram sem foto (imagem indisponível ou bloqueada por CORS) — vale conferir manualmente.`
-    : '✅ Panfleto gerado com sucesso!';
+  // Separa os dois motivos de "sem foto": não ter imagem cadastrada é
+  // diferente de ter imagem cadastrada que não pôde ser baixada.
+  const semCadastro = produtos.filter(p => !(p.imagens && p.imagens.length)).map(p => p.nome);
+  const falhaDownload = produtos.filter((p, i) => (p.imagens && p.imagens.length) && !imagensInfo[i]).map(p => p.nome);
+  let aviso = '✅ Panfleto gerado com sucesso!';
+  if (semCadastro.length || falhaDownload.length) {
+    aviso = '✅ Panfleto gerado, mas alguns produtos saíram sem foto:';
+    if (semCadastro.length) aviso += `<br>• <strong>Sem imagem cadastrada no Catálogo:</strong> ${semCadastro.join(', ')}`;
+    if (falhaDownload.length) aviso += `<br>• <strong>Imagem cadastrada, mas não baixou:</strong> ${falhaDownload.join(', ')} — confira se o nome do arquivo no Catálogo bate exatamente com o do bucket (maiúsculas, acentos e extensão contam).`;
+  }
+  if (statusEl) statusEl.innerHTML = aviso;
   showToast('📄 Panfleto gerado! Verifique seus downloads.');
 }
 
