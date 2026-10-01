@@ -784,6 +784,7 @@ th.sortable:hover { background: var(--navy-mid); }
         <div class="card-header">
           <div class="card-title">Leads</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost" onclick="abrirImportarConversas()" title="Importar conversas exportadas do WhatsApp">📥 Importar conversas</button>
             <button class="btn btn-gold" onclick="abrirNovoLead()">+ Novo Lead</button>
           </div>
         </div>
@@ -1966,7 +1967,7 @@ th.sortable:hover { background: var(--navy-mid); }
     <!-- Histórico de contatos -->
     <div id="leadHistoricoWrap" style="display:none">
       <div class="flex-between" style="margin:16px 0 8px">
-        <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Histórico de contatos</div>
+        <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Registro de alterações <a href="#" onclick="const id=parseInt(document.getElementById('leadId').value);closeModal('modalLead');abrirConversa(id);return false;" style="text-transform:none;letter-spacing:0;font-weight:600;margin-left:8px;color:#2B5F87">💬 abrir a conversa</a></div>
         <button class="btn btn-ghost btn-sm" style="color:var(--warning)" onclick="limparHistoricoLead()">🗑️ Limpar histórico</button>
       </div>
       <div id="leadHistoricoList" style="max-height:150px;overflow-y:auto;font-size:12px"></div>
@@ -1991,6 +1992,7 @@ th.sortable:hover { background: var(--navy-mid); }
 
     <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">🔍 Dados usados pela IA</div>
     <div id="abordDadosAnalisados" style="background:#F8F6F1;border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.7;margin-bottom:14px"></div>
+    <div id="abordRetomada" style="display:none;background:#E8F1F8;border-left:3px solid #2B5F87;border-radius:6px;padding:9px 12px;font-size:12px;line-height:1.5;margin:-6px 0 14px"></div>
 
     <div class="form-row" style="align-items:flex-end">
       <div class="form-group">
@@ -2012,6 +2014,10 @@ th.sortable:hover { background: var(--navy-mid); }
       <div class="form-group" style="max-width:130px">
         <button class="btn btn-gold" style="width:100%" onclick="gerarMensagemAbordagem()">✨ Gerar</button>
       </div>
+    </div>
+    <div class="form-group" id="abordObjetivoWrap" style="display:none;margin-top:-4px">
+      <label>Objetivo desta mensagem</label>
+      <select id="abordObjetivo"><option value="auto">A IA decide pelo histórico</option><option value="retomar">Retomar a conversa</option><option value="responder">Responder ao que o lead disse</option><option value="amostra">Oferecer uma amostra</option><option value="comprador">Chegar a quem decide a compra</option><option value="agendar">Marcar uma data de volta</option><option value="primeiro">Primeiro contato (ignorar histórico)</option></select>
     </div>
 
     <div id="abordLoading" style="display:none;text-align:center;padding:20px;color:var(--gray-600);font-size:13px">
@@ -2062,6 +2068,10 @@ th.sortable:hover { background: var(--navy-mid); }
             <option value="direto">Direta e curta</option>
             <option value="novidade">Novidade / lançamento</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label>Leads com conversa</label>
+          <select id="loteObjetivo"><option value="auto">A IA decide pelo histórico</option><option value="retomar">Retomar a conversa</option><option value="responder">Responder ao que o lead disse</option><option value="amostra">Oferecer uma amostra</option><option value="comprador">Chegar a quem decide a compra</option><option value="agendar">Marcar uma data de volta</option><option value="primeiro">Primeiro contato (ignorar histórico)</option></select>
         </div>
         <div class="form-group">
           <label>Agendar retorno</label>
@@ -2140,6 +2150,66 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fecharLote()">Fechar</button>
       <button class="btn btn-gold" id="loteGerarBtn" onclick="gerarMensagensLote()">✨ Gerar mensagens</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL CONVERSA DO LEAD (linha do tempo) ═══════ -->
+<div class="modal-overlay" id="modalConversa">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-title" id="convTitulo">Conversa</div>
+    <div class="text-muted" id="convSub" style="font-size:12px;margin:-6px 0 12px"></div>
+
+    <div id="convResumo" style="background:#FBF1D6;border-left:3px solid var(--gold);border-radius:6px;padding:10px 12px;font-size:12.5px;line-height:1.5;margin-bottom:12px"></div>
+
+    <div id="convTimeline" style="max-height:300px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:8px;padding:8px;background:#fff;margin-bottom:12px"></div>
+
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Registrar o que aconteceu</div>
+    <div class="form-row" style="align-items:flex-start">
+      <div class="form-group" style="max-width:200px">
+        <select id="convTipo">
+          <option value="retorno">💬 Retorno do lead (texto)</option>
+          <option value="audio">🎙️ Áudio do lead (seu resumo)</option>
+          <option value="ligacao">📞 Ligação</option>
+          <option value="visita">🤝 Visita</option>
+          <option value="amostra">📦 Amostra entregue</option>
+          <option value="nota">📝 Anotação</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1">
+        <textarea id="convTexto" rows="3" placeholder="Cole aqui a resposta do lead, copiada do WhatsApp — ou descreva o que aconteceu"></textarea>
+      </div>
+    </div>
+    <div class="flex-between" style="margin-top:-4px">
+      <label style="font-size:12px;color:var(--gray-600);cursor:pointer"><input type="checkbox" id="convLerIA" checked> Pedir a leitura da IA (resumo, interesse e sugestão de estágio)</label>
+      <button class="btn btn-gold btn-sm" id="convRegistrarBtn" onclick="registrarNaConversa()">Registrar</button>
+    </div>
+
+    <div id="convLeitura" style="display:none;background:#E8F1F8;border-left:3px solid #2B5F87;border-radius:6px;padding:10px 12px;font-size:12.5px;line-height:1.5;margin-top:12px"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalConversa')">Fechar</button>
+      <button class="btn btn-gold" onclick="gerarMensagemDaConversa()">✨ Escrever a próxima mensagem</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL IMPORTAR CONVERSAS DO WHATSAPP ═══════ -->
+<div class="modal-overlay" id="modalImportarConversas">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-title">📥 Importar conversas do WhatsApp</div>
+    <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:12px">
+      No celular: abra a conversa → <b>Mais</b> → <b>Exportar conversa</b> → <b>Sem mídia</b>. Pode selecionar vários arquivos de uma vez — <b>.zip</b> ou <b>.txt</b>.
+      O dashboard tenta descobrir de qual lead é cada conversa pelo telefone ou pelo nome. Confira antes de importar.
+    </div>
+    <input type="file" id="impArquivos" multiple accept=".zip,.txt" onchange="lerArquivosImportacao(event)" style="margin-bottom:12px">
+    <div id="impPreview" style="max-height:320px;overflow-y:auto"></div>
+    <label style="display:block;font-size:12px;color:var(--gray-600);margin-top:10px;cursor:pointer"><input type="checkbox" id="impResumir" checked> Pedir à IA um resumo e uma sugestão de próximo passo para cada lead (cerca de US$ 0,02 por conversa)</label>
+    <div id="impStatus" style="font-size:12px;color:var(--gray-600);margin-top:8px;min-height:16px"></div>
+    <div class="text-muted" style="font-size:11px;margin-top:6px">O texto que vai junto do PDF não sai na exportação do iPhone — essa mensagem aparece só como "documento omitido".</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalImportarConversas')">Fechar</button>
+      <button class="btn btn-gold" id="impBtn" style="display:none" onclick="importarConversas()">📥 Importar</button>
     </div>
   </div>
 </div>
@@ -2455,10 +2525,12 @@ async function entrarNoDashboard() {
     _dashboardIniciado = true;
     await Promise.all([loadDB(), loadLeads()]);
     renderAll();
+    iniciarFase1();
   } else {
     // Voltou depois de a sessão expirar: envia o que ficou pendente nesse meio-tempo
     if (localStorage.getItem('vangardis_db_dirty') === '1') syncToCloud();
     if (localStorage.getItem('vangardis_leads_dirty') === '1') syncLeadsToCloud();
+    enviarPendentesInter();
   }
 }
 
@@ -4696,6 +4768,7 @@ function renderDadosAnalisados(c, peds) {
 }
 
 async function gerarMensagemReativacao() {
+  if (!iaPermitida(1)) return;
   const c = reativClienteAtual.cliente;
   const peds = reativClienteAtual.pedidos;
   const tom = document.getElementById('reativTom').value;
@@ -4709,6 +4782,7 @@ async function gerarMensagemReativacao() {
   try {
     const res = await apiFetch({ action: 'gerarMensagem', prompt });
     const json = await res.json();
+    if (typeof json.custoMes === 'number') atualizarCustoIA(json.custoMes);
     document.getElementById('reativLoading').style.display = 'none';
 
     if (json.ok && json.mensagem) {
@@ -7311,8 +7385,11 @@ function salvarLead() {
     const l = LEADS.find(x => x.id === parseInt(editId));
     if (l) {
       const estagioAnterior = l.estagio;
+      if (estagio === 'bloqueado' && estagioAnterior !== 'bloqueado' &&
+          !confirm('Marcar como "Não perturbar"? A conversa registrada com este lead será apagada e ele não poderá mais ser abordado.')) return;
       Object.assign(l, dados);
       if (estagioAnterior !== estagio) registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[estagioAnterior]?.label||estagioAnterior} → ${ESTAGIOS_LEAD[estagio]?.label||estagio}`);
+      if (estagio === 'bloqueado' && estagioAnterior !== 'bloqueado') bloquearLead(l);
     }
     showToast('✅ Lead atualizado!');
   } else {
@@ -7395,7 +7472,8 @@ function whatsappLead(id) {
 function excluirLead(id) {
   const l = LEADS.find(x => x.id === id);
   if (!l) return;
-  if (!confirm(`Excluir o lead "${l.nome}"?`)) return;
+  if (!confirm(`Excluir o lead "${l.nome}"? A conversa registrada com ele também será apagada.`)) return;
+  apagarConversaDoLead(id);
   LEADS = LEADS.filter(x => x.id !== id);
   leadsSelecionados.delete(id);
   saveLeads();
@@ -7565,7 +7643,20 @@ function renderKpiLeads() {
     <div class="kpi-card"><div class="kpi-label">Contatados</div><div class="kpi-value">${contatados}</div></div>
     <div class="kpi-card"><div class="kpi-label">Viraram cliente</div><div class="kpi-value" style="color:#2E7D52">${convertidos}</div></div>
     <div class="kpi-card"><div class="kpi-label">Conversão</div><div class="kpi-value">${taxa.toFixed(0)}%</div></div>
+    ${kpiCardIA()}
   `;
+}
+
+// Medidor do gasto com IA no mês, contra o teto definido
+function kpiCardIA() {
+  const pct = Math.min(100, custoIAMes / TETO_IA_MENSAL * 100);
+  const cor = pct >= 100 ? '#A33B3B' : pct >= 80 ? '#C9940A' : '#2E7D52';
+  return `<div class="kpi-card" id="kpiIA" title="Soma de todas as chamadas à IA neste mês: mensagens, reativação, leituras e resumos">
+    <div class="kpi-label">IA neste mês</div>
+    <div class="kpi-value" style="color:${cor}">US$ ${custoIAMes.toFixed(2)}</div>
+    <div style="height:5px;background:#EEE;border-radius:3px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${cor}"></div></div>
+    <div class="text-muted" style="font-size:10.5px;margin-top:3px">teto de US$ ${TETO_IA_MENSAL}</div>
+  </div>`;
 }
 
 // A trilha reflete a visão atual (ativos ou congelados)
@@ -7652,6 +7743,7 @@ function renderLeadsAtencao() {
         </div>
         <div style="display:flex;gap:6px">
           ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})">📱</button>` : ''}
+          <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})" title="Conversa e registro de retorno">💬</button>
           <button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirAbordagem(${l.id})" title="Gerar abordagem com IA">✨</button>
           <button class="btn btn-sm btn-gold" onclick="editarLead(${l.id})">Abrir</button>
         </div>
@@ -7698,7 +7790,7 @@ function renderLeads() {
       ? `<button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark);margin-right:2px" onclick="congelarLead(${l.id}, false)" title="Descongelar">☀️</button>
          <button class="btn btn-sm btn-ghost" onclick="editarLead(${l.id})" title="Abrir ficha">✏️</button>
          <button class="btn btn-sm btn-ghost" style="color:var(--warning)" onclick="excluirLead(${l.id})" title="Excluir">🗑️</button>`
-      : `${l.estagio !== 'bloqueado' ? `<button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark);margin-right:2px" onclick="abrirAbordagem(${l.id})" title="Gerar abordagem com IA">✨</button>` : ''}
+      : `${l.estagio !== 'bloqueado' ? `<button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})" title="Conversa e registro de retorno">💬</button><button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark);margin-right:2px" onclick="abrirAbordagem(${l.id})" title="Gerar abordagem com IA">✨</button>` : ''}
          ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})" title="Abrir WhatsApp">📱</button>` : ''}
          ${podeAvancar ? `<button class="btn btn-sm btn-ghost" onclick="avancarEstagioLead(${l.id})" title="Avançar no funil">⏩</button>` : ''}
          <button class="btn btn-sm btn-ghost" onclick="editarLead(${l.id})" title="Abrir ficha">✏️</button>
@@ -7716,7 +7808,7 @@ function renderLeads() {
         <span class="badge" style="background:${est.cor};color:#fff">${est.label||l.estagio}</span>
         ${l.motivo ? `<div class="text-muted" style="font-size:10px;margin-top:2px">${MOTIVOS_PERDIDO[l.motivo]||l.motivo}</div>` : ''}
       </td>
-      <td class="text-muted" style="font-size:12px">${l.proximoContato ? formatDate(l.proximoContato) : '—'}</td>
+      <td class="text-muted" style="font-size:12px">${l.proximoContato ? formatDate(l.proximoContato) : '—'}${l.proximoPasso ? `<div style="font-size:10.5px;color:#2E7D52;margin-top:2px;max-width:200px;line-height:1.3" title="${escaparHtml(l.proximoPasso)}">→ ${escaparHtml(l.proximoPasso.length > 70 ? l.proximoPasso.slice(0, 70) + '…' : l.proximoPasso)}</div>` : ''}</td>
       <td style="white-space:nowrap">${acoes}</td>
     </tr>`;
   }).join('');
@@ -7895,6 +7987,8 @@ function extrairCidadeDoEndereco(end) {
 // ════════════════════════════════════════════════════
 
 let abordagemLeadAtual = null;
+let abordagemInteracoes = [];   // conversa do lead aberto (fase 1)
+let abordagemRegistrado = '';   // evita gravar duas vezes o mesmo texto (copiar + enviar)
 
 const TONS_ABORDAGEM = {
   apresentacao: 'APRESENTAÇÃO DA EMPRESA — apresente a Vangardis de forma breve e confiável, mostrando o que ela fabrica e por que isso interessa a uma loja como a dele. Cordial e profissional.',
@@ -7928,7 +8022,25 @@ function abrirAbordagem(leadId) {
   document.getElementById('abordPanfletoStatus').textContent = '';
   document.getElementById('abordCanal').value = l.whatsapp ? 'whatsapp' : (l.email ? 'email' : 'whatsapp');
 
+  abordagemInteracoes = [];
+  abordagemRegistrado = '';
+  document.getElementById('abordRetomada').style.display = 'none';
+  document.getElementById('abordObjetivoWrap').style.display = 'none';
+  document.getElementById('abordObjetivo').value = 'auto';
   openModal('modalAbordagem');
+
+  // Se o lead já tem conversa, a IA escreve a continuação em vez de um primeiro contato
+  carregarInteracoes([l.id]).then(mapa => {
+    if (abordagemLeadAtual !== l) return;
+    abordagemInteracoes = mapa[String(l.id)] || [];
+    if (!abordagemInteracoes.length) return;
+    const resps = abordagemInteracoes.filter(x => x.direcao === 'entrada' && x.tipo !== 'robo').length;
+    const el = document.getElementById('abordRetomada');
+    el.innerHTML = `💬 <b>Conversa em andamento</b> — ${abordagemInteracoes.length} registro(s)${resps ? `, ${resps} resposta(s) do lead` : ', sem resposta de pessoa ainda'}. A IA vai escrever a <b>continuação</b>, sem se reapresentar.`
+      + (l.resumoIA ? `<div style="margin-top:4px;color:#3A5A75">${escaparHtml(l.resumoIA)}</div>` : '');
+    el.style.display = 'block';
+    document.getElementById('abordObjetivoWrap').style.display = 'block';
+  });
 }
 
 // Catálogo disponível para um LEAD: produtos exclusivos de clientes ficam de fora,
@@ -8009,14 +8121,23 @@ async function gerarMensagemAbordagem() {
   const l = abordagemLeadAtual;
   if (!l) return;
   const tom = document.getElementById('abordTom').value;
+  const objetivo = document.getElementById('abordObjetivo').value;
+  const canal = document.getElementById('abordCanal').value;
+  if (!iaPermitida(1)) return;
+  const retomada = abordagemInteracoes.length > 0 && objetivo !== 'primeiro';
 
   document.getElementById('abordLoading').style.display = 'block';
   document.getElementById('abordErro').style.display = 'none';
   document.getElementById('abordResultado').style.display = 'none';
+  abordagemRegistrado = '';
 
   try {
-    const res = await apiFetch({ action: 'gerarMensagem', prompt: montarPromptAbordagem(l, tom) });
-    const json = await res.json();
+    const prompt = retomada
+      ? montarPromptRetomada(l, abordagemInteracoes, objetivo, canal, catalogoParaLead(), '')
+      : montarPromptAbordagem(l, tom);
+    let json;
+    try { json = { ok: true, mensagem: await chamarIA(prompt) }; }
+    catch (e) { json = { ok: false, error: e.message }; }
     document.getElementById('abordLoading').style.display = 'none';
 
     if (json.ok && json.mensagem) {
@@ -8115,6 +8236,11 @@ function enviarAbordagem() {
 function registrarAbordagemEnviada() {
   const l = abordagemLeadAtual;
   if (!l) return;
+  // Copiar e depois enviar o mesmo texto conta como um envio só
+  const texto = (document.getElementById('abordMensagem').value || '').trim();
+  if (!texto || texto === abordagemRegistrado) return;
+  abordagemRegistrado = texto;
+  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: document.getElementById('abordCanal').value, texto, origem: 'dashboard' }]);
   const canal = document.getElementById('abordCanal').value === 'email' ? 'e-mail' : 'WhatsApp';
   const tom = document.getElementById('abordTom').value;
   if (['descoberto','qualificado'].includes(l.estagio)) {
@@ -8188,11 +8314,18 @@ async function gerarMensagensLote() {
   if (!loteFila.length) return;
   const tom = document.getElementById('loteTom').value;
   const instrucaoLote = document.getElementById('loteInstrucao').value;
+  const objetivoLote = document.getElementById('loteObjetivo').value;
   localStorage.setItem('vangardis_lote_instrucao', instrucaoLote); // reaproveita no próximo lote
+  if (!iaPermitida(loteFila.length)) return;
 
   document.getElementById('loteSetup').style.display = 'none';
   document.getElementById('loteGerarBtn').style.display = 'none';
   document.getElementById('loteProgresso').style.display = 'block';
+  document.getElementById('loteProgressoTexto').textContent = 'Carregando as conversas…';
+
+  // Quem já tem conversa recebe uma continuação, não um primeiro contato
+  const conversas = await carregarInteracoes(loteFila.map(x => x.lead.id));
+  const produtosLote = produtosDoLote();
 
   for (let i = 0; i < loteFila.length; i++) {
     const item = loteFila[i];
@@ -8201,12 +8334,14 @@ async function gerarMensagensLote() {
     document.getElementById('loteProgressoBarra').style.width = ((i) / loteFila.length * 100) + '%';
 
     try {
-      const res = await apiFetch({ action: 'gerarMensagem', prompt: montarPromptAbordagem(item.lead, tom, 'whatsapp', produtosDoLote(), instrucaoLote) });
-      const json = await res.json();
-      if (json.ok && json.mensagem) item.mensagem = removerEmojis(json.mensagem.trim());
-      else item.erro = json.error || 'não consegui gerar';
+      const inters = conversas[String(item.lead.id)] || [];
+      item.retomada = inters.length > 0 && objetivoLote !== 'primeiro';
+      const prompt = item.retomada
+        ? montarPromptRetomada(item.lead, inters, objetivoLote, 'whatsapp', produtosLote.length ? produtosLote : catalogoParaLead(), instrucaoLote)
+        : montarPromptAbordagem(item.lead, tom, 'whatsapp', produtosLote, instrucaoLote);
+      item.mensagem = removerEmojis((await chamarIA(prompt)).trim());
     } catch (e) {
-      item.erro = 'falha de conexão';
+      item.erro = e.message || 'falha de conexão';
     }
     // Pequena pausa entre chamadas, para não saturar o Apps Script
     await new Promise(r => setTimeout(r, 250));
@@ -8244,7 +8379,8 @@ function renderItemFila() {
   document.getElementById('loteEnviados').textContent = `${loteEnviados} enviada(s) · ${lotePulados} pulada(s)`;
   document.getElementById('loteFilaBarra').style.width = (loteIndice / loteFila.length * 100) + '%';
   document.getElementById('loteLeadInfo').innerHTML = `
-    <strong style="color:var(--navy)">${l.nome}</strong>${l.contato ? ' · 👤 ' + l.contato : ''}<br>
+    <strong style="color:var(--navy)">${l.nome}</strong>${l.contato ? ' · 👤 ' + l.contato : ''}
+    ${item.retomada ? '<span class="badge" style="background:#E8F1F8;color:#2B5F87;font-size:10px;margin-left:4px">💬 continuação da conversa</span>' : ''}<br>
     <span class="text-muted">${l.cidade || 'Sem cidade'}${l.bairro ? ' / ' + l.bairro : ''} · ${l.segmento || 'sem segmento'} · 📱 ${l.whatsapp}</span>
   `;
   document.getElementById('loteMensagem').value = item.mensagem;
@@ -8305,9 +8441,10 @@ function enviarItemFila() {
   const full = num.startsWith('55') ? num : '55' + num;
   window.open(`https://wa.me/${full}?text=${encodeURIComponent(txt)}`, '_blank');
 
-  // Registra no lead
+  // Registra no lead e na linha do tempo da conversa
   if (['descoberto','qualificado'].includes(l.estagio)) l.estagio = 'contatado';
-  registrarHistoricoLead(l, 'Abordagem por WhatsApp (envio em lote)');
+  registrarHistoricoLead(l, item.retomada ? 'Retomada por WhatsApp (envio em lote)' : 'Abordagem por WhatsApp (envio em lote)');
+  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt.trim(), origem: 'lote' }]);
 
   const dias = parseInt(document.getElementById('loteRetorno').value) || 0;
   if (dias && !l.proximoContato) {
@@ -8389,6 +8526,625 @@ function limparHistoricoSelecionados() {
   limparSelecaoLeads();
   renderProspeccao();
   showToast(`🗑️ Histórico limpo em ${alvos.length} lead(s).`);
+}
+
+// ════════════════════════════════════════════════════
+// FASE 1 — LINHA DO TEMPO DE CADA LEAD
+// As conversas moram na aba 'vangardis_interacoes' da planilha, uma linha
+// por mensagem, e só são carregadas quando você abre o lead. As mensagens
+// enviadas pelo dashboard são gravadas sozinhas; o retorno do lead você cola.
+// ════════════════════════════════════════════════════
+
+const TETO_IA_MENSAL = 20;          // US$ — decisão de outubro/2026
+const INTER_PEND_KEY = 'vangardis_inter_pendentes';
+let interCache = {};                // leadId -> [interações]
+let conversaLeadAtual = null;
+let custoIAMes = parseFloat(localStorage.getItem('vangardis_ia_custo') || '0') || 0;
+
+const TIPOS_INTERACAO = {
+  mensagem: { label: 'Mensagem enviada',   icone: '📤', direcao: 'saida' },
+  retorno:  { label: 'Retorno do lead',    icone: '💬', direcao: 'entrada' },
+  audio:    { label: 'Áudio do lead (resumo seu)', icone: '🎙️', direcao: 'entrada' },
+  robo:     { label: 'Resposta automática', icone: '🤖', direcao: 'entrada' },
+  ligacao:  { label: 'Ligação',            icone: '📞', direcao: 'nota' },
+  visita:   { label: 'Visita',             icone: '🤝', direcao: 'nota' },
+  amostra:  { label: 'Amostra entregue',   icone: '📦', direcao: 'nota' },
+  nota:     { label: 'Anotação',           icone: '📝', direcao: 'nota' }
+};
+
+const OBJETIVOS_MSG = {
+  auto:      'A IA decide pelo histórico',
+  retomar:   'Retomar a conversa',
+  responder: 'Responder ao que o lead disse',
+  amostra:   'Oferecer uma amostra',
+  comprador: 'Chegar a quem decide a compra',
+  agendar:   'Marcar uma data de volta',
+  primeiro:  'Primeiro contato (ignorar histórico)'
+};
+
+// ── Pendências locais: nada se perde se a internet cair ──
+function lerPendentesInter() {
+  try { return JSON.parse(localStorage.getItem(INTER_PEND_KEY) || '[]'); } catch (e) { return []; }
+}
+function salvarPendentesInter(l) { localStorage.setItem(INTER_PEND_KEY, JSON.stringify(l)); }
+
+async function enviarPendentesInter() {
+  const pend = lerPendentesInter();
+  if (!pend.length) return true;
+  try {
+    const r = await apiFetch({ action: 'addInteracoes', itens: pend });
+    const j = await r.json();
+    if (j.ok) {
+      // Só tira da fila o que foi enviado (pode ter entrado algo novo nesse meio-tempo)
+      const enviados = new Set(pend.map(p => p.id));
+      salvarPendentesInter(lerPendentesInter().filter(p => !enviados.has(p.id)));
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function registrarInteracoes(itens) {
+  const agora = new Date().toISOString();
+  const prontos = itens.map((it, i) => ({
+    id: 'i' + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 6),
+    data: it.data || agora,
+    canal: '', origem: 'dashboard',
+    ...it,
+    leadId: String(it.leadId),
+    direcao: it.direcao || (TIPOS_INTERACAO[it.tipo] || {}).direcao || 'nota'
+  }));
+  prontos.forEach(p => { if (interCache[p.leadId]) interCache[p.leadId].push(p); });
+  salvarPendentesInter(lerPendentesInter().concat(prontos));
+  await enviarPendentesInter();
+  return prontos;
+}
+
+async function carregarInteracoes(leadIds, forcar) {
+  const ids = leadIds.map(String);
+  const faltam = ids.filter(id => forcar || !interCache[id]);
+  if (faltam.length) {
+    try {
+      const r = await apiFetch({ action: 'getInteracoes', leadIds: faltam });
+      const j = await r.json();
+      if (j.ok) faltam.forEach(id => { interCache[id] = (j.porLead && j.porLead[id]) || []; });
+    } catch (e) { /* sem conexão: usa o que tiver */ }
+  }
+  // Junta o que ainda está na fila local, sem duplicar
+  const pend = lerPendentesInter();
+  const out = {};
+  ids.forEach(id => {
+    const base = (interCache[id] || []).slice();
+    pend.filter(p => p.leadId === id && !base.some(b => b.id === p.id)).forEach(p => base.push(p));
+    out[id] = base.sort((a, b) => a.data < b.data ? -1 : 1);
+  });
+  return out;
+}
+
+async function apagarConversaDoLead(leadId) {
+  delete interCache[String(leadId)];
+  salvarPendentesInter(lerPendentesInter().filter(p => p.leadId !== String(leadId)));
+  try { await apiFetch({ action: 'apagarInteracoesLead', leadId: String(leadId) }); } catch (e) {}
+}
+
+// ── Medidor de gasto com IA ──
+function atualizarCustoIA(valor) {
+  if (typeof valor !== 'number' || isNaN(valor)) return;
+  custoIAMes = valor;
+  localStorage.setItem('vangardis_ia_custo', String(valor));
+  const el = document.getElementById('kpiIA');
+  if (el) renderKpiLeads();
+}
+
+// Pede confirmação quando o gasto do mês passa do teto. Retorna true se pode seguir.
+function iaPermitida(qtdChamadas) {
+  const estimado = custoIAMes + (qtdChamadas || 1) * 0.03;
+  if (custoIAMes >= TETO_IA_MENSAL) {
+    return confirm(`O gasto com IA neste mês já chegou a US$ ${custoIAMes.toFixed(2)}, acima do teto de US$ ${TETO_IA_MENSAL}.\n\nContinuar mesmo assim?`);
+  }
+  if (estimado >= TETO_IA_MENSAL) {
+    return confirm(`Esta ação pode levar o gasto com IA do mês (hoje US$ ${custoIAMes.toFixed(2)}) para perto ou acima do teto de US$ ${TETO_IA_MENSAL}.\n\nContinuar?`);
+  }
+  if (custoIAMes >= TETO_IA_MENSAL * 0.8) {
+    showToast(`⚠️ IA no mês: US$ ${custoIAMes.toFixed(2)} de US$ ${TETO_IA_MENSAL}`, 'warning');
+  }
+  return true;
+}
+
+async function chamarIA(prompt, maxTokens) {
+  const r = await apiFetch({ action: 'gerarMensagem', prompt, maxTokens: maxTokens || 1024 });
+  const j = await r.json();
+  if (typeof j.custoMes === 'number') atualizarCustoIA(j.custoMes);
+  if (!j.ok || !j.mensagem) throw new Error(j.error || 'Não consegui gerar a resposta da IA.');
+  return j.mensagem;
+}
+
+async function iniciarFase1() {
+  enviarPendentesInter();
+  try {
+    const r = await apiFetch({ action: 'usoIA' });
+    const j = await r.json();
+    if (j.ok) atualizarCustoIA(j.custoMes);
+  } catch (e) {}
+  // Retenção: uma vez por dia, apaga conversas que passaram do prazo
+  const hoje = new Date().toISOString().slice(0, 10);
+  if (localStorage.getItem('vangardis_retencao_dia') !== hoje) {
+    localStorage.setItem('vangardis_retencao_dia', hoje);
+    apiFetch({ action: 'aplicarRetencao' }).catch(() => {});
+  }
+}
+
+// ── Texto da conversa para a IA (curto, para não encarecer) ──
+function conversaParaPrompt(inters, max) {
+  const ult = inters.slice(-(max || 8));
+  return ult.map(it => {
+    const quem = it.direcao === 'saida' ? 'VOCÊ (Petare)'
+      : it.tipo === 'robo' ? 'ROBÔ (resposta automática do lead)'
+      : it.direcao === 'entrada' ? 'LEAD'
+      : 'NOTA SUA';
+    const tipo = TIPOS_INTERACAO[it.tipo] ? ` — ${TIPOS_INTERACAO[it.tipo].label}` : '';
+    const d = new Date(it.data);
+    const quando = isNaN(d) ? '' : d.toLocaleDateString('pt-BR');
+    let txt = String(it.texto || '').replace(/\s+\n/g, '\n').trim();
+    if (txt.length > 600) txt = txt.slice(0, 600) + '…';
+    return `[${quando}] ${quem}${tipo}:\n${txt}`;
+  }).join('\n\n');
+}
+
+// ════════ Modal da conversa ════════
+async function abrirConversa(leadId) {
+  const l = LEADS.find(x => x.id === leadId);
+  if (!l) return;
+  conversaLeadAtual = l;
+  const est = ESTAGIOS_LEAD[l.estagio] || {};
+  document.getElementById('convTitulo').innerHTML =
+    `${l.nome} <span class="badge" style="background:${est.cor};color:#fff;font-size:11px;vertical-align:middle">${est.label || l.estagio}</span>`;
+  document.getElementById('convSub').textContent =
+    [l.segmento, l.cidade, l.contato ? 'contato: ' + l.contato : ''].filter(Boolean).join(' · ');
+  document.getElementById('convTexto').value = '';
+  document.getElementById('convTipo').value = 'retorno';
+  document.getElementById('convLeitura').style.display = 'none';
+  renderResumoConversa(l);
+  document.getElementById('convTimeline').innerHTML = '<div class="text-muted" style="padding:14px;text-align:center">Carregando a conversa…</div>';
+  openModal('modalConversa');
+  const mapa = await carregarInteracoes([l.id]);
+  renderTimelineConversa(mapa[String(l.id)] || []);
+  if (l.ultimaLeitura) renderLeituraIA(l, l.ultimaLeitura);
+}
+
+function renderResumoConversa(l) {
+  const el = document.getElementById('convResumo');
+  if (!l.resumoIA && !l.proximoPasso) {
+    el.innerHTML = '<span class="text-muted">Ainda sem resumo. Ele aparece quando você registrar o primeiro retorno do lead.</span>';
+    return;
+  }
+  el.innerHTML = `
+    ${l.resumoIA ? `<div><b style="font-size:10.5px;color:#8A6508;text-transform:uppercase;letter-spacing:.4px">Resumo da IA</b><div style="margin-top:2px">${escaparHtml(l.resumoIA)}</div></div>` : ''}
+    ${l.proximoPasso ? `<div style="margin-top:6px"><b style="font-size:10.5px;color:#2E7D52;text-transform:uppercase;letter-spacing:.4px">Próximo passo sugerido</b><div style="margin-top:2px">${escaparHtml(l.proximoPasso)}</div></div>` : ''}
+    ${l.resumoEm ? `<div class="text-muted" style="font-size:10.5px;margin-top:4px">atualizado em ${new Date(l.resumoEm).toLocaleDateString('pt-BR')}</div>` : ''}`;
+}
+
+function escaparHtml(t) {
+  return String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderTimelineConversa(inters) {
+  const el = document.getElementById('convTimeline');
+  if (!inters.length) {
+    el.innerHTML = '<div class="text-muted" style="padding:14px;text-align:center;font-size:12.5px">Nenhuma mensagem registrada ainda. As que você enviar pelo dashboard aparecem aqui sozinhas; o retorno do lead você cola abaixo.</div>';
+    return;
+  }
+  el.innerHTML = inters.map(it => {
+    const t = TIPOS_INTERACAO[it.tipo] || TIPOS_INTERACAO.nota;
+    const d = new Date(it.data);
+    const quando = isNaN(d) ? '' : `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const cor = it.tipo === 'robo' ? '#F4F4F4' : it.direcao === 'saida' ? '#F0EEEA' : it.direcao === 'entrada' ? '#E5F2EA' : '#FBF4E1';
+    const corTxt = it.tipo === 'robo' ? '#999' : '#1F2430';
+    const origem = it.origem === 'lote' ? ' · envio em lote' : it.origem === 'importado' ? ' · importada' : '';
+    return `<div style="background:${cor};color:${corTxt};border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12.5px;line-height:1.45">
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:700;opacity:.8;margin-bottom:2px">
+        <span>${t.icone} ${t.label}${origem}</span>
+        <span style="white-space:nowrap">${quando} <a href="#" onclick="apagarInteracaoUI('${it.id}');return false;" title="Apagar este registro" style="color:#A33B3B;text-decoration:none;margin-left:6px">✕</a></span>
+      </div>
+      <div style="white-space:pre-wrap">${escaparHtml(it.texto)}</div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function apagarInteracaoUI(id) {
+  const l = conversaLeadAtual;
+  if (!l || !confirm('Apagar este registro da conversa? Isso não pode ser desfeito.')) return;
+  const lid = String(l.id);
+  if (interCache[lid]) interCache[lid] = interCache[lid].filter(x => x.id !== id);
+  salvarPendentesInter(lerPendentesInter().filter(p => p.id !== id));
+  renderTimelineConversa((await carregarInteracoes([l.id]))[lid]);
+  try { await apiFetch({ action: 'apagarInteracao', id }); } catch (e) {}
+}
+
+// ── Registrar algo na conversa ──
+async function registrarNaConversa() {
+  const l = conversaLeadAtual;
+  if (!l) return;
+  const tipo = document.getElementById('convTipo').value;
+  const texto = document.getElementById('convTexto').value.trim();
+  if (!texto) { showToast('⚠️ Cole ou escreva o que aconteceu.', 'warning'); return; }
+
+  const btn = document.getElementById('convRegistrarBtn');
+  btn.disabled = true;
+  const pedeLeitura = (tipo === 'retorno' || tipo === 'audio') && document.getElementById('convLerIA').checked;
+  let leitura = null;
+
+  if (pedeLeitura && iaPermitida(1)) {
+    btn.textContent = '⏳ A IA está lendo…';
+    try {
+      const mapa = await carregarInteracoes([l.id]);
+      leitura = await lerRetornoComIA(l, mapa[String(l.id)] || [], texto, tipo);
+    } catch (e) {
+      showToast('⚠️ Não consegui a leitura da IA — o registro foi salvo mesmo assim.', 'warning');
+    }
+  }
+
+  const tipoFinal = leitura && leitura.e_robo ? 'robo' : tipo;
+  await registrarInteracoes([{ leadId: l.id, tipo: tipoFinal, texto, origem: 'manual' }]);
+
+  if (leitura) aplicarLeituraNoLead(l, leitura);
+  if (tipoFinal !== 'robo' && (tipo === 'retorno' || tipo === 'audio') && l.estagio === 'contatado' && !(leitura && leitura.estagio_sugerido)) {
+    // sem leitura da IA: resposta de pessoa leva para "Em conversa"
+    l.estagio = 'conversa';
+    registrarHistoricoLead(l, 'Respondeu — marcado como Em conversa');
+  }
+  saveLeads();
+
+  document.getElementById('convTexto').value = '';
+  btn.disabled = false;
+  btn.textContent = 'Registrar';
+  const mapa = await carregarInteracoes([l.id]);
+  renderTimelineConversa(mapa[String(l.id)] || []);
+  renderResumoConversa(l);
+  if (leitura) renderLeituraIA(l, leitura);
+  renderProspeccao();
+  showToast(tipoFinal === 'robo' ? '🤖 Era uma resposta automática — registrada sem mudar o estágio.' : '✅ Registrado na conversa.');
+}
+
+function montarPromptLeitura(l, inters, novoTexto, tipo) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const estagios = Object.entries(ESTAGIOS_LEAD).filter(([k]) => k !== 'cliente')
+    .map(([k, v]) => `${k} (${v.label})`).join(', ');
+  return `Você analisa conversas comerciais de prospecção da Vangardis Expertise, fabricante de Curitiba de produtos personalizados em impressão 3D, corte a laser e NFC, que vende no atacado e para empresas.
+
+Hoje é ${hoje}. Leia a conversa com a loja abaixo e a NOVA mensagem recebida, e responda SOMENTE com um objeto JSON válido, sem texto antes ou depois e sem cercas de código.
+
+LOJA: ${l.nome}${l.segmento ? ' — ramo: ' + l.segmento : ''}${l.cidade ? ' — ' + l.cidade : ''}
+ESTÁGIO ATUAL NO FUNIL: ${l.estagio}
+${l.resumoIA ? 'RESUMO ANTERIOR: ' + l.resumoIA : ''}
+
+CONVERSA ATÉ AQUI:
+${inters.length ? conversaParaPrompt(inters, 10) : '(nenhuma mensagem registrada antes)'}
+
+NOVA MENSAGEM ${tipo === 'audio' ? '(resumo, escrito pelo Petare, de um áudio do lead)' : 'DO LEAD'}:
+${novoTexto}
+
+Responda com este JSON:
+{
+  "e_robo": true se a NOVA mensagem for resposta automática de atendimento (boas-vindas, "como podemos ajudar", fora do horário, pedido de nome por robô), senão false,
+  "resumo": "3 a 4 linhas sobre a relação até agora: o que a loja é, o que disse, o que interessou, objeções",
+  "interesse": "alto" | "medio" | "baixo" | "nenhum",
+  "objecao": "a objeção levantada, em poucas palavras, ou string vazia",
+  "estagio_sugerido": um destes valores: ${estagios} — NÃO retroceda o estágio sem motivo; use "bloqueado" SOMENTE se a pessoa pediu para não ser mais contatada,
+  "motivo_perdido": se o estágio sugerido for "perdido", um destes: sem_interesse, preco, ja_tem_fornecedor, sem_resposta, fechou, fora_perfil — senão string vazia,
+  "proximo_passo": "uma frase com a próxima ação concreta para o Petare",
+  "data_volta": "AAAA-MM-DD com a data sugerida para o próximo contato, considerando o que o lead disse (ex.: 'no ano que vem', 'semana que vem'), ou string vazia"
+}`;
+}
+
+function extrairJSON(txt) {
+  const limpo = String(txt).replace(/```json|```/g, '').trim();
+  const ini = limpo.indexOf('{'), fim = limpo.lastIndexOf('}');
+  if (ini < 0 || fim < ini) throw new Error('A IA não devolveu JSON.');
+  return JSON.parse(limpo.slice(ini, fim + 1));
+}
+
+async function lerRetornoComIA(l, inters, novoTexto, tipo) {
+  const resp = await chamarIA(montarPromptLeitura(l, inters, novoTexto, tipo), 700);
+  const j = extrairJSON(resp);
+  if (j.estagio_sugerido && !ESTAGIOS_LEAD[j.estagio_sugerido]) j.estagio_sugerido = '';
+  if (j.data_volta && !/^\d{4}-\d{2}-\d{2}$/.test(j.data_volta)) j.data_volta = '';
+  return j;
+}
+
+// O resumo e o próximo passo entram na ficha sozinhos; estágio e data de
+// volta ficam como sugestão para você aplicar com um toque.
+function aplicarLeituraNoLead(l, j) {
+  if (j.resumo) { l.resumoIA = j.resumo; l.resumoEm = new Date().toISOString(); }
+  if (j.proximo_passo) l.proximoPasso = j.proximo_passo;
+  if (j.interesse) l.interesse = j.interesse;
+  l.ultimaLeitura = {
+    e_robo: !!j.e_robo, estagio_sugerido: j.estagio_sugerido || '', motivo_perdido: j.motivo_perdido || '',
+    data_volta: j.data_volta || '', objecao: j.objecao || '', interesse: j.interesse || '',
+    em: new Date().toISOString()
+  };
+}
+
+function renderLeituraIA(l, j) {
+  const el = document.getElementById('convLeitura');
+  const est = ESTAGIOS_LEAD[j.estagio_sugerido];
+  const mudaEstagio = est && j.estagio_sugerido !== l.estagio;
+  const mudaData = j.data_volta && j.data_volta !== l.proximoContato;
+  const nivel = { alto: '🟢 alto', medio: '🟡 médio', baixo: '🟠 baixo', nenhum: '⚪ nenhum' }[j.interesse] || '';
+  if (!mudaEstagio && !mudaData && !j.e_robo && !j.objecao && !nivel) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="font-size:10.5px;font-weight:700;color:#2B5F87;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Leitura da IA</div>
+    ${j.e_robo ? '<div style="margin-bottom:4px">🤖 A mensagem era uma <b>resposta automática</b> — o estágio não muda por causa dela.</div>' : ''}
+    ${nivel ? `<div style="margin-bottom:4px">Interesse: <b>${nivel}</b>${j.objecao ? ` · Objeção: <b>${escaparHtml(j.objecao)}</b>` : ''}</div>` : ''}
+    ${mudaEstagio ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
+        <span>Mudar estágio para <span class="badge" style="background:${est.cor};color:#fff">${est.label}</span>${j.motivo_perdido ? ` (${MOTIVOS_PERDIDO[j.motivo_perdido] || j.motivo_perdido})` : ''}</span>
+        <button class="btn btn-sm btn-gold" onclick="aplicarSugestaoEstagio()">Aplicar</button></div>` : ''}
+    ${mudaData ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
+        <span>Agendar próximo contato para <b>${formatDate(j.data_volta)}</b></span>
+        <button class="btn btn-sm btn-gold" onclick="aplicarSugestaoData()">Aplicar</button></div>` : ''}`;
+}
+
+async function aplicarSugestaoEstagio() {
+  const l = conversaLeadAtual;
+  const j = l && l.ultimaLeitura;
+  if (!j || !ESTAGIOS_LEAD[j.estagio_sugerido]) return;
+  if (j.estagio_sugerido === 'bloqueado' &&
+      !confirm('Marcar como "Não perturbar"? A conversa com este lead será apagada e ele não poderá mais ser abordado.')) return;
+  const anterior = l.estagio;
+  l.estagio = j.estagio_sugerido;
+  l.motivo = j.estagio_sugerido === 'perdido' ? (j.motivo_perdido || l.motivo || '') : '';
+  registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[anterior]?.label} → ${ESTAGIOS_LEAD[l.estagio].label} (sugestão da IA)`);
+  if (l.estagio === 'bloqueado') await bloquearLead(l);
+  j.estagio_sugerido = '';
+  saveLeads();
+  renderProspeccao();
+  if (l.estagio === 'bloqueado') { closeModal('modalConversa'); showToast('🚫 Marcado como não perturbar.'); return; }
+  abrirConversa(l.id);
+}
+
+function aplicarSugestaoData() {
+  const l = conversaLeadAtual;
+  const j = l && l.ultimaLeitura;
+  if (!j || !j.data_volta) return;
+  l.proximoContato = j.data_volta;
+  registrarHistoricoLead(l, `Próximo contato agendado para ${formatDate(j.data_volta)} (sugestão da IA)`);
+  j.data_volta = '';
+  saveLeads();
+  renderProspeccao();
+  renderLeituraIA(l, j);
+  showToast('📅 Próximo contato agendado.');
+}
+
+// "Não perturbar": apaga a conversa e o resumo, fica só o registro do pedido
+async function bloquearLead(l) {
+  delete l.resumoIA; delete l.proximoPasso; delete l.ultimaLeitura; delete l.interesse;
+  l.proximoContato = '';
+  await apagarConversaDoLead(l.id);
+}
+
+function gerarMensagemDaConversa() {
+  const l = conversaLeadAtual;
+  if (!l) return;
+  closeModal('modalConversa');
+  abrirAbordagem(l.id);
+}
+
+// ════════ Prompt de retomada ════════
+// Usado quando o lead já tem conversa: a IA escreve a CONTINUAÇÃO,
+// sem se reapresentar e a partir do que o lead disse.
+function montarPromptRetomada(l, inters, objetivo, canal, produtos, instrucaoExtra) {
+  const ehEmail = canal === 'email';
+  const objTxt = {
+    auto: 'Escolha você o melhor próximo passo, a partir do que a conversa mostra.',
+    retomar: 'Retomar a conversa que esfriou, de forma leve, com uma pergunta fácil de responder.',
+    responder: 'Responder diretamente ao que o lead perguntou ou disse por último.',
+    amostra: 'Oferecer uma amostra física de um ou dois produtos, para o lead ver e pegar na mão.',
+    comprador: 'Descobrir com quem falar sobre compras, caso quem respondeu não decida.',
+    agendar: 'Combinar uma data concreta para voltar a falar ou para uma visita.'
+  }[objetivo] || 'Escolha você o melhor próximo passo, a partir do que a conversa mostra.';
+
+  let ctx = `Você é o assistente comercial da Vangardis Expertise, fabricante de Curitiba de produtos personalizados por impressão 3D, corte a laser e NFC.
+
+Escreva a PRÓXIMA mensagem ${ehEmail ? 'de e-mail' : 'de WhatsApp'} do Petare numa conversa que JÁ ESTÁ EM ANDAMENTO com a loja abaixo.
+
+OBJETIVO DESTA MENSAGEM: ${objTxt}
+
+REGRAS:
+1. NÃO se reapresente e NÃO repita como encontrou a loja — isso já foi dito.
+2. Parta do que o lead disse. Se ele fez uma pergunta, responda. Se levantou uma objeção, trate-a com respeito, sem insistir.
+3. Não repita produtos ou argumentos que já foram enviados, a não ser para responder a uma dúvida sobre eles.
+4. Termine com UMA pergunta fácil de responder ou com um próximo passo concreto (data, amostra, ligação). Nunca termine só agradecendo.
+5. Curta: ${ehEmail ? 'no máximo 2 parágrafos curtos, com uma linha "Assunto: ..." no início' : 'de 2 a 5 linhas'}.
+6. Sem emojis, em nenhuma hipótese. Não prometa preço, prazo ou condição que não esteja aqui.
+7. Se as respostas do lead forem só automáticas (robô), escreva pedindo, com educação, para falar com a pessoa responsável pelas compras.
+
+LOJA: ${l.nome}${l.segmento ? ' — ramo: ' + l.segmento : ''}${l.cidade ? ' — ' + l.cidade : ''}
+${l.contato ? 'PESSOA DE CONTATO: ' + l.contato + ' (dirija-se a ela pelo nome)' : ''}
+${l.resumoIA ? 'RESUMO DA RELAÇÃO: ' + l.resumoIA : ''}
+${l.ficha ? 'ANOTAÇÕES DO PETARE: ' + l.ficha : ''}
+
+CONVERSA ATÉ AQUI (mais recente por último):
+${conversaParaPrompt(inters, 8)}`;
+
+  if (produtos && produtos.length) {
+    ctx += `\n\nPRODUTOS QUE PODEM SER CITADOS (nenhum outro):\n- ${produtos.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`;
+  }
+  if (instrucaoExtra && instrucaoExtra.trim()) {
+    ctx += `\n\nINSTRUÇÃO OBRIGATÓRIA DO REMETENTE — precisa constar na mensagem, adaptada ao tom, sem alterar o sentido:\n"${instrucaoExtra.trim()}"\nNada na mensagem pode contradizê-la.`;
+  }
+  ctx += `\n\nEscreva APENAS o texto da mensagem, pronto para enviar, sem aspas e sem explicações.`;
+  return ctx;
+}
+
+// ════════ Importar conversas exportadas do WhatsApp ════════
+let importacaoAtual = [];
+
+function abrirImportarConversas() {
+  importacaoAtual = [];
+  document.getElementById('impArquivos').value = '';
+  document.getElementById('impPreview').innerHTML = '';
+  document.getElementById('impStatus').textContent = '';
+  document.getElementById('impBtn').style.display = 'none';
+  openModal('modalImportarConversas');
+}
+
+async function carregarJSZip() {
+  if (window.JSZip) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+const RUIDO_WHATSAPP = /criptografia de ponta a ponta|mensagens temporárias|duração padrão|desativou as mensagens|ativou as mensagens|serviço seguro da Meta|IA da Meta|mudou o código de segurança|bloqueou este contato|desbloqueou/i;
+
+// Entende os dois formatos de exportação:
+// iPhone:  [22/09/2026, 11:37:04] Nome: texto
+// Android: 22/09/2026 11:37 - Nome: texto
+function lerConversaExportada(txt) {
+  const linhas = String(txt).replace(/\r/g, '').replace(/[\u200e\u200f\u202a-\u202e]/g, '').split('\n');
+  const reIOS = /^\[(\d{1,2})\/(\d{1,2})\/(\d{2,4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):\s?([\s\S]*)$/;
+  const reAnd = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),? (\d{1,2}):(\d{2}) - ([^:]+):\s?([\s\S]*)$/;
+  // Linha com data mas sem autor = aviso do sistema (Android). Não é continuação de nada.
+  const reSistema = /^(\[\d{1,2}\/\d{1,2}\/\d{2,4},? \d{1,2}:\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4},? \d{1,2}:\d{2} - )/;
+  const msgs = [];
+  let atual = null;
+  linhas.forEach(linha => {
+    let m = linha.match(reIOS), autor, texto, d, mo, a, h, mi, s;
+    if (m) { [, d, mo, a, h, mi, s, autor, texto] = m; }
+    else if ((m = linha.match(reAnd))) { [, d, mo, a, h, mi, autor, texto] = m; s = '0'; }
+    if (m) {
+      if (a.length === 2) a = '20' + a;
+      const iso = new Date(`${a}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T${h.padStart(2, '0')}:${mi}:${(s || '0').padStart(2, '0')}-03:00`).toISOString();
+      atual = { autor: autor.trim(), texto: texto.trim(), data: iso };
+      msgs.push(atual);
+    } else if (reSistema.test(linha)) {
+      atual = null;
+    } else if (atual && linha.trim()) {
+      atual.texto += '\n' + linha;   // continuação de mensagem com várias linhas
+    }
+  });
+  return msgs.filter(x => x.texto.trim() && !RUIDO_WHATSAPP.test(x.texto));
+}
+
+function normalizarTxt(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function encontrarLeadDoArquivo(nomeArquivo, autores) {
+  const digitos = (nomeArquivo.match(/\d[\d\s-]{7,}\d/g) || []).map(x => x.replace(/\D/g, ''));
+  for (const dg of digitos) {
+    const fim = dg.slice(-8);
+    const l = LEADS.find(x => x.whatsapp && x.whatsapp.replace(/\D/g, '').slice(-8) === fim);
+    if (l) return l;
+  }
+  const candidatos = [nomeArquivo.replace(/^.*WhatsApp[_ ]Chat[_ -]*/i, '').replace(/\.(zip|txt)$/i, '')].concat(autores);
+  for (const c of candidatos) {
+    const n = normalizarTxt(c);
+    if (n.length < 3) continue;
+    const l = LEADS.find(x => { const ln = normalizarTxt(x.nome); return ln && (ln.includes(n) || n.includes(ln)); });
+    if (l) return l;
+  }
+  return null;
+}
+
+async function lerArquivosImportacao(ev) {
+  const arquivos = Array.from(ev.target.files || []);
+  const status = document.getElementById('impStatus');
+  importacaoAtual = [];
+  status.textContent = '⏳ Lendo os arquivos…';
+  for (const f of arquivos) {
+    try {
+      let txt = '';
+      if (/\.zip$/i.test(f.name)) {
+        await carregarJSZip();
+        const zip = await JSZip.loadAsync(f);
+        const alvo = Object.values(zip.files).find(z => /\.txt$/i.test(z.name) && !z.dir);
+        if (!alvo) throw new Error('sem arquivo de texto dentro do .zip');
+        txt = await alvo.async('string');
+      } else {
+        txt = await f.text();
+      }
+      const msgs = lerConversaExportada(txt);
+      const autores = [...new Set(msgs.map(m => m.autor))];
+      const eu = autores.find(a => /petare|vangardis|^voc[eê]$/i.test(a)) || '';
+      const outros = autores.filter(a => a !== eu);
+      const lead = encontrarLeadDoArquivo(f.name, outros);
+      importacaoAtual.push({ arquivo: f.name, msgs, autores, eu, leadId: lead ? lead.id : '' });
+    } catch (e) {
+      importacaoAtual.push({ arquivo: f.name, msgs: [], autores: [], eu: '', leadId: '', erro: e.message });
+    }
+  }
+  status.textContent = '';
+  renderPreviewImportacao();
+}
+
+function renderPreviewImportacao() {
+  const el = document.getElementById('impPreview');
+  if (!importacaoAtual.length) { el.innerHTML = ''; return; }
+  const opcoesLead = LEADS.slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    .map(l => `<option value="${l.id}">${escaparHtml(l.nome)}${l.cidade ? ' — ' + escaparHtml(l.cidade) : ''}</option>`).join('');
+  el.innerHTML = `<table style="width:100%;font-size:12px"><thead><tr><th>Arquivo</th><th>Lead</th><th>Você é</th><th>Msgs</th></tr></thead><tbody>` +
+    importacaoAtual.map((it, i) => `<tr>
+      <td style="max-width:190px;word-break:break-all">${escaparHtml(it.arquivo)}${it.erro ? `<div style="color:#A33B3B">${escaparHtml(it.erro)}</div>` : ''}</td>
+      <td><select onchange="importacaoAtual[${i}].leadId=this.value" style="max-width:210px;font-size:12px">
+        <option value="">— não importar —</option>${opcoesLead}</select></td>
+      <td><select onchange="importacaoAtual[${i}].eu=this.value" style="max-width:130px;font-size:12px">
+        <option value="">—</option>${it.autores.map(a => `<option value="${escaparHtml(a)}">${escaparHtml(a)}</option>`).join('')}</select></td>
+      <td style="text-align:center">${it.msgs.length}</td></tr>`).join('') + '</tbody></table>';
+  // seleciona os valores detectados
+  el.querySelectorAll('tbody tr').forEach((tr, i) => {
+    const sels = tr.querySelectorAll('select');
+    sels[0].value = importacaoAtual[i].leadId ? String(importacaoAtual[i].leadId) : '';
+    sels[1].value = importacaoAtual[i].eu || '';
+  });
+  const achados = importacaoAtual.filter(x => x.leadId).length;
+  document.getElementById('impStatus').innerHTML = `${importacaoAtual.length} arquivo(s) lido(s) · ${achados} associado(s) a um lead automaticamente. Confira as colunas antes de importar.`;
+  document.getElementById('impBtn').style.display = 'inline-block';
+}
+
+async function importarConversas() {
+  const validos = importacaoAtual.filter(x => x.leadId && x.msgs.length);
+  if (!validos.length) { showToast('⚠️ Nenhum arquivo associado a um lead.', 'warning'); return; }
+  const semEu = validos.filter(x => !x.eu);
+  if (semEu.length && !confirm(`${semEu.length} arquivo(s) estão sem a coluna "Você é" preenchida — todas as mensagens deles serão tratadas como do lead. Continuar?`)) return;
+  const resumir = document.getElementById('impResumir').checked;
+  if (resumir && !iaPermitida(validos.length)) return;
+
+  const btn = document.getElementById('impBtn');
+  const status = document.getElementById('impStatus');
+  btn.disabled = true;
+  let n = 0, totalMsgs = 0;
+  for (const it of validos) {
+    n++;
+    status.textContent = `⏳ Importando ${n} de ${validos.length}…`;
+    const l = LEADS.find(x => String(x.id) === String(it.leadId));
+    if (!l) continue;
+    const itens = it.msgs.map(m => {
+      const minha = it.eu && m.autor === it.eu;
+      return { leadId: l.id, data: m.data, direcao: minha ? 'saida' : 'entrada', tipo: minha ? 'mensagem' : 'retorno', texto: m.texto, origem: 'importado' };
+    });
+    await registrarInteracoes(itens);
+    totalMsgs += itens.length;
+    if (resumir) {
+      status.textContent = `⏳ IA resumindo ${n} de ${validos.length}: ${l.nome}…`;
+      try {
+        const mapa = await carregarInteracoes([l.id], true);
+        const inters = mapa[String(l.id)] || [];
+        const ultimaDoLead = [...inters].reverse().find(x => x.direcao === 'entrada');
+        const j = await lerRetornoComIA(l, inters, ultimaDoLead ? ultimaDoLead.texto : '(sem resposta do lead)', 'retorno');
+        aplicarLeituraNoLead(l, j);
+      } catch (e) { /* segue sem resumo */ }
+    }
+  }
+  saveLeads();
+  renderProspeccao();
+  btn.disabled = false;
+  status.innerHTML = `✅ ${validos.length} conversa(s) importada(s), ${totalMsgs} mensagens. Mensagens repetidas são ignoradas, então pode reimportar sem medo.${resumir ? ' Abra cada lead (💬) para ver o resumo e as sugestões da IA.' : ''}`;
 }
 
 function renderAll(){
