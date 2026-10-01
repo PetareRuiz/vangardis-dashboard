@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root {
   --navy: #1B2A4A;
@@ -472,6 +473,19 @@ th.sortable:hover { background: var(--navy-mid); }
 </style>
 </head>
 <body>
+<!-- ═══════ TELA DE LOGIN ═══════ -->
+<div id="loginOverlay" style="position:fixed;inset:0;z-index:99999;background:#1B2A4A;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:34px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.35);border-top:4px solid #C9940A">
+    <div style="font-family:'Playfair Display',Georgia,serif;font-size:24px;color:#1B2A4A">Vangardis Expertise</div>
+    <div style="font-size:12px;color:#8A8F9C;letter-spacing:.06em;text-transform:uppercase;margin-top:4px">Dashboard de Gestão</div>
+    <div style="height:1px;background:#EEE7D8;margin:22px 0"></div>
+    <div id="loginMsg" style="font-size:13px;color:#586072;margin-bottom:18px;line-height:1.5">Entre com a sua conta Google para acessar.</div>
+    <div id="gsiButton" style="display:flex;justify-content:center;min-height:44px"></div>
+    <div id="loginErro" style="display:none;margin-top:16px;font-size:12px;color:#A33B3B;background:#FBEDEC;border-radius:8px;padding:10px 12px;line-height:1.45"></div>
+    <div style="font-size:11px;color:#A0A5B0;margin-top:22px;line-height:1.5">Acesso restrito às contas autorizadas.</div>
+  </div>
+</div>
+
 
 <!-- SIDEBAR -->
 <nav class="sidebar" id="sidebar">
@@ -496,6 +510,10 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="nav-item" onclick="goTab('abc')"><span class="icon">📈</span> Curva ABC</div>
   </div>
   <div class="sidebar-footer">
+    <div id="usuarioLogado" style="display:none;font-size:11px;color:rgba(255,255,255,.75);text-align:center;margin-bottom:8px;line-height:1.4">
+      <span id="usuarioEmail"></span><br>
+      <a href="#" onclick="sairDoDashboard();return false;" style="color:#E8C96A;font-weight:600;text-decoration:none">Sair</a>
+    </div>
     <div id="syncStatus" style="font-size:11px;text-align:center;margin-bottom:10px;color:#E67E22;min-height:16px">🔄 Carregando…</div>
     <button class="export-btn" onclick="forceSyncFromCloud()" style="margin-bottom:6px">🔄 Sincronizar Agora</button>
     <button class="export-btn" onclick="exportData()" style="background:rgba(201,148,10,0.3);margin-bottom:6px">⬇ Exportar JSON</button>
@@ -2336,6 +2354,173 @@ let DB = {
 // ════════════════════════════════════════════════════
 const GS_URL = 'https://script.google.com/macros/s/AKfycbwzH3r748SH-FdPn_iJPbu91l4OaUCNCcXmwrCR5SfXaYZsWBeEcOvcsxtvHuy8HHkJ/exec';
 
+// ════════════════════════════════════════════════════
+// LOGIN COM GOOGLE
+// A tela de login é só conforto: quem garante a segurança é o Apps Script,
+// que confere o "crachá" (ID token) do Google em TODO pedido e recusa quem
+// não estiver na lista de e-mails autorizados.
+// O Client ID não é segredo — ele identifica o app, não dá acesso a nada.
+// ════════════════════════════════════════════════════
+const GOOGLE_CLIENT_ID = '395176834257-u9fe6ovvcqckmtheubd6phrfbq7diso0.apps.googleusercontent.com';
+let _idToken = null;
+let _gisIniciado = false;
+let _dashboardIniciado = false;
+let _renovacaoTimer = null;
+
+function decodificarToken(t) {
+  try {
+    let p = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    p += '='.repeat((4 - p.length % 4) % 4);
+    return JSON.parse(decodeURIComponent(escape(atob(p))));
+  } catch (e) { return null; }
+}
+function authToken() { return _idToken || ''; }
+// Válido se ainda faltar mais de 1 minuto para vencer
+function tokenValido(t) {
+  const d = t && decodificarToken(t);
+  return !!(d && d.exp * 1000 > Date.now() + 60000);
+}
+
+// Toda conversa com o Apps Script passa por aqui: anexa o crachá do login
+// e, se o servidor recusar a sessão, abre a tela de login — sem consumir a
+// resposta, que continua inteira para quem chamou.
+async function apiFetch(payload) {
+  const res = await fetch(GS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, idToken: authToken() })
+  });
+  res.clone().json().then(j => { if (j && j.authError) tratarErroAuth(j); }).catch(() => {});
+  return res;
+}
+
+function quandoGoogleCarregar(cb, inicio) {
+  inicio = inicio || Date.now();
+  if (window.google && google.accounts && google.accounts.id) { cb(); return; }
+  if (Date.now() - inicio > 12000) {
+    mostrarErroLogin('Não consegui carregar o login do Google. Verifique a conexão e recarregue a página.');
+    return;
+  }
+  setTimeout(() => quandoGoogleCarregar(cb, inicio), 150);
+}
+
+function iniciarGoogle() {
+  if (_gisIniciado) return;
+  _gisIniciado = true;
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: aoReceberCredencial,
+    auto_select: true,             // quem já entrou antes volta com um toque, ou nenhum
+    cancel_on_tap_outside: false
+  });
+}
+
+function mostrarLogin(mensagem) {
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('loginMsg').textContent = mensagem || 'Entre com a sua conta Google para acessar.';
+  quandoGoogleCarregar(() => {
+    iniciarGoogle();
+    const el = document.getElementById('gsiButton');
+    el.innerHTML = '';
+    google.accounts.id.renderButton(el, { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', locale: 'pt-BR' });
+    google.accounts.id.prompt();
+  });
+}
+
+function mostrarErroLogin(msg) {
+  const el = document.getElementById('loginErro');
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+function esconderLogin() {
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('loginErro').style.display = 'none';
+}
+
+function aoReceberCredencial(resposta) {
+  if (!resposta || !resposta.credential) return;
+  _idToken = resposta.credential;
+  localStorage.setItem('vangardis_auth', _idToken);
+  entrarNoDashboard();
+}
+
+async function entrarNoDashboard() {
+  esconderLogin();
+  const u = decodificarToken(_idToken) || {};
+  document.getElementById('usuarioEmail').textContent = u.email || '';
+  document.getElementById('usuarioLogado').style.display = 'block';
+  agendarRenovacao();
+
+  if (!_dashboardIniciado) {
+    _dashboardIniciado = true;
+    await Promise.all([loadDB(), loadLeads()]);
+    renderAll();
+  } else {
+    // Voltou depois de a sessão expirar: envia o que ficou pendente nesse meio-tempo
+    if (localStorage.getItem('vangardis_db_dirty') === '1') syncToCloud();
+    if (localStorage.getItem('vangardis_leads_dirty') === '1') syncLeadsToCloud();
+  }
+}
+
+// O crachá do Google vale cerca de 1 hora. Cinco minutos antes de vencer,
+// o Google é consultado de novo — para quem já entrou, costuma bastar um toque.
+function agendarRenovacao() {
+  clearTimeout(_renovacaoTimer);
+  const d = decodificarToken(_idToken);
+  if (!d) return;
+  const ms = d.exp * 1000 - Date.now() - 5 * 60000;
+  _renovacaoTimer = setTimeout(() => {
+    quandoGoogleCarregar(() => { iniciarGoogle(); google.accounts.id.prompt(); });
+  }, Math.max(ms, 10000));
+}
+
+let _tratandoAuth = false;
+function tratarErroAuth(j) {
+  if (_tratandoAuth) return;
+  _tratandoAuth = true;
+  setTimeout(() => { _tratandoAuth = false; }, 3000);
+  _idToken = null;
+  localStorage.removeItem('vangardis_auth');
+  document.getElementById('usuarioLogado').style.display = 'none';
+  if (j.notAllowed) {
+    try { google.accounts.id.disableAutoSelect(); } catch (e) {}
+    mostrarLogin('Entre com uma conta autorizada.');
+    mostrarErroLogin(`A conta ${j.email || 'escolhida'} não tem acesso a este dashboard.`);
+  } else {
+    mostrarLogin('Sua sessão expirou. Entre de novo — nada do que você fez foi perdido.');
+  }
+}
+
+async function sairDoDashboard() {
+  // Antes de apagar a cópia local, tenta mandar o que ainda não subiu
+  const pendente = () => localStorage.getItem('vangardis_db_dirty') === '1' || localStorage.getItem('vangardis_leads_dirty') === '1';
+  if (pendente()) {
+    showToast('⏳ Enviando alterações pendentes…', 'warning');
+    try { await syncToCloud(); } catch (e) {}
+    try { await syncLeadsToCloud(); } catch (e) {}
+  }
+  if (pendente()) {
+    if (!confirm('Ainda há alterações que não chegaram à nuvem. Se sair agora, elas serão perdidas. Sair mesmo assim?')) return;
+  } else if (!confirm('Sair do dashboard?\n\nA cópia dos dados guardada neste navegador será apagada. Tudo volta da nuvem no próximo login.')) {
+    return;
+  }
+  ['vangardis_auth','vangardis_db','vangardis_leads','vangardis_db_dirty','vangardis_leads_dirty']
+    .forEach(k => localStorage.removeItem(k));
+  try { google.accounts.id.disableAutoSelect(); } catch (e) {}
+  location.reload();
+}
+
+function iniciarAutenticacao() {
+  const salvo = localStorage.getItem('vangardis_auth');
+  if (salvo && tokenValido(salvo)) {
+    _idToken = salvo;
+    entrarNoDashboard();
+  } else {
+    localStorage.removeItem('vangardis_auth');
+    mostrarLogin();
+  }
+}
+
 let syncPending   = false;
 let syncTimer     = null;
 let lastSyncTime  = null;
@@ -2358,10 +2543,7 @@ function scheduleSyncToCloud() {
 
 async function syncToCloud() {
   try {
-    const res = await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'save', data: DB })
-    });
+    const res = await apiFetch({ action: 'save', data: DB });
     const json = await res.json();
     if (json.ok) {
       lastSyncTime = new Date();
@@ -2381,13 +2563,13 @@ async function syncToCloud() {
 function flushPendingSyncOnExit() {
   if (localStorage.getItem('vangardis_db_dirty') === '1') {
     try {
-      const blob = new Blob([JSON.stringify({ action: 'save', data: DB })], { type: 'text/plain;charset=UTF-8' });
+      const blob = new Blob([JSON.stringify({ action: 'save', data: DB, idToken: authToken() })], { type: 'text/plain;charset=UTF-8' });
       navigator.sendBeacon(GS_URL, blob);
     } catch (e) {}
   }
   if (localStorage.getItem('vangardis_leads_dirty') === '1') {
     try {
-      const blob = new Blob([JSON.stringify({ action: 'saveLeads', data: LEADS })], { type: 'text/plain;charset=UTF-8' });
+      const blob = new Blob([JSON.stringify({ action: 'saveLeads', data: LEADS, idToken: authToken() })], { type: 'text/plain;charset=UTF-8' });
       navigator.sendBeacon(GS_URL, blob);
     } catch (e) {}
   }
@@ -2416,7 +2598,7 @@ async function loadDB() {
 
   setSyncStatus('🔄 Carregando da nuvem…', 'warning');
   try {
-    const res  = await fetch(GS_URL + '?action=load');
+    const res  = await apiFetch({ action: 'load' });
     const json = await res.json();
     if (json && json.pedidos !== undefined) {
       DB = { barcodes:{}, ...json };
@@ -2447,7 +2629,7 @@ async function forceSyncFromCloud() {
   }
   setSyncStatus('🔄 Sincronizando…', 'warning');
   try {
-    const res  = await fetch(GS_URL + '?action=load');
+    const res  = await apiFetch({ action: 'load' });
     const json = await res.json();
     if (json && json.pedidos !== undefined) {
       DB = { barcodes:{}, ...json };
@@ -4525,10 +4707,7 @@ async function gerarMensagemReativacao() {
   document.getElementById('reativErro').style.display = 'none';
 
   try {
-    const res = await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'gerarMensagem', prompt })
-    });
+    const res = await apiFetch({ action: 'gerarMensagem', prompt });
     const json = await res.json();
     document.getElementById('reativLoading').style.display = 'none';
 
@@ -7012,10 +7191,7 @@ function saveLeads() {
 
 async function syncLeadsToCloud() {
   try {
-    const res = await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'saveLeads', data: LEADS })
-    });
+    const res = await apiFetch({ action: 'saveLeads', data: LEADS });
     const json = await res.json();
     if (json.ok) {
       localStorage.removeItem('vangardis_leads_dirty');
@@ -7033,7 +7209,7 @@ async function loadLeads() {
     return;
   }
   try {
-    const res = await fetch(GS_URL + '?action=loadLeads');
+    const res = await apiFetch({ action: 'loadLeads' });
     const json = await res.json();
     if (json && Array.isArray(json.leads)) {
       LEADS = json.leads;
@@ -7596,10 +7772,7 @@ async function buscarLugares() {
   document.getElementById('buscaResultados').style.display = 'none';
 
   try {
-    const res = await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'buscarLugares', termo, local, maxResultados: 20 })
-    });
+    const res = await apiFetch({ action: 'buscarLugares', termo, local, maxResultados: 20 });
     const json = await res.json();
 
     if (!json.ok) {
@@ -7842,10 +8015,7 @@ async function gerarMensagemAbordagem() {
   document.getElementById('abordResultado').style.display = 'none';
 
   try {
-    const res = await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'gerarMensagem', prompt: montarPromptAbordagem(l, tom) })
-    });
+    const res = await apiFetch({ action: 'gerarMensagem', prompt: montarPromptAbordagem(l, tom) });
     const json = await res.json();
     document.getElementById('abordLoading').style.display = 'none';
 
@@ -8031,10 +8201,7 @@ async function gerarMensagensLote() {
     document.getElementById('loteProgressoBarra').style.width = ((i) / loteFila.length * 100) + '%';
 
     try {
-      const res = await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'gerarMensagem', prompt: montarPromptAbordagem(item.lead, tom, 'whatsapp', produtosDoLote(), instrucaoLote) })
-      });
+      const res = await apiFetch({ action: 'gerarMensagem', prompt: montarPromptAbordagem(item.lead, tom, 'whatsapp', produtosDoLote(), instrucaoLote) });
       const json = await res.json();
       if (json.ok && json.mensagem) item.mensagem = removerEmojis(json.mensagem.trim());
       else item.erro = json.error || 'não consegui gerar';
@@ -8237,12 +8404,9 @@ document.getElementById('topbarDate').textContent = new Date().toLocaleDateStrin
 document.getElementById('pedData').value  = new Date().toISOString().slice(0,10);
 document.getElementById('despData').value = new Date().toISOString().slice(0,10);
 
-// loadDB é async — carrega local imediatamente, depois sincroniza nuvem
-// Os leads têm armazenamento próprio e carregam em paralelo
-(async () => {
-  await Promise.all([loadDB(), loadLeads()]);
-  renderAll();
-})();
+// Nada é carregado antes do login. Depois de entrar, loadDB e loadLeads
+// rodam em paralelo (ver entrarNoDashboard).
+iniciarAutenticacao();
 </script>
 </body>
 </html>
