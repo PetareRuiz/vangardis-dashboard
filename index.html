@@ -784,6 +784,7 @@ th.sortable:hover { background: var(--navy-mid); }
         <div class="card-header">
           <div class="card-title">Leads</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost" onclick="abrirPlaybooks()" title="Playbooks por tipo de negócio">📘 Playbooks</button>
             <button class="btn btn-ghost" onclick="abrirImportarConversas()" title="Importar conversas exportadas do WhatsApp">📥 Importar conversas</button>
             <button class="btn btn-gold" onclick="abrirNovoLead()">+ Novo Lead</button>
           </div>
@@ -818,6 +819,7 @@ th.sortable:hover { background: var(--navy-mid); }
             <button class="btn btn-sm" id="leadLoteCongelar" style="background:#E8F1F8;color:#2B5F87" onclick="congelarSelecionados(true)">❄️ Congelar</button>
             <button class="btn btn-sm" id="leadLoteDescongelar" style="background:var(--gold);color:var(--navy-dark);display:none" onclick="congelarSelecionados(false)">☀️ Descongelar</button>
             <button class="btn btn-sm" id="leadLoteAbordar" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirLoteAbordagem()">✨ Abordar em lote</button>
+            <button class="btn btn-sm btn-ghost" id="leadLoteClassificar" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="classificarSelecionadosIA()">🧭 Classificar tipo (IA)</button>
             <button class="btn btn-sm btn-ghost" id="leadLoteHistorico" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparHistoricoSelecionados()">🗑️ Limpar histórico</button>
             <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparSelecaoLeads()">Limpar seleção</button>
           </div>
@@ -1879,8 +1881,26 @@ th.sortable:hover { background: var(--navy-mid); }
       </div>
       <div class="form-group">
         <label>🏷️ Segmento / Ramo</label>
-        <input type="text" id="leadSegmento" list="leadSegmentosList" placeholder="Ex: bebidas e destilados">
+        <input type="text" id="leadSegmento" list="leadSegmentosList" placeholder="Ex: bebidas e destilados" oninput="atualizarInfoPlaybookFicha()">
         <datalist id="leadSegmentosList"></datalist>
+      </div>
+    </div>
+    <div class="form-row" style="align-items:flex-end">
+      <div class="form-group" style="max-width:240px">
+        <label>🧭 Tipo de comprador</label>
+        <select id="leadTipoComprador" onchange="atualizarInfoPlaybookFicha()">
+          <option value="">— não definido —</option>
+          <option value="revenda">Revenda — compra para revender</option>
+          <option value="uso_proprio">Uso próprio — lembrança, cenário</option>
+          <option value="eventos">Eventos — lembrança de convidado</option>
+          <option value="corporativo">Corporativo — brinde de empresa</option>
+        </select>
+      </div>
+      <div class="form-group" style="max-width:110px">
+        <button type="button" class="btn btn-ghost btn-sm" id="leadTipoSugerirBtn" style="width:100%" onclick="sugerirTipoNaFicha()">✨ Sugerir</button>
+      </div>
+      <div class="form-group" style="flex:1">
+        <div id="leadPlaybookInfo" style="font-size:12px;line-height:1.4;padding-bottom:8px"></div>
       </div>
     </div>
     <div class="form-row">
@@ -2214,6 +2234,89 @@ th.sortable:hover { background: var(--navy-mid); }
   </div>
 </div>
 
+<!-- ═══════ MODAL PLAYBOOKS ═══════ -->
+<div class="modal-overlay" id="modalPlaybooks">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-title">📘 Playbooks de prospecção</div>
+    <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:14px">
+      Cada playbook ensina a IA a falar com um tipo de loja: por que ela compra, que palavras usar, que pergunta fazer, como tratar as objeções e quando abordar.
+      O playbook certo é escolhido pelo <b>segmento</b> e pelo <b>tipo de comprador</b> de cada lead.
+    </div>
+
+    <div class="flex-between" style="margin-bottom:8px">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Playbooks</div>
+      <button class="btn btn-sm btn-gold" onclick="novoPlaybook()">+ Novo playbook</button>
+    </div>
+    <div id="pbLista" style="max-height:280px;overflow-y:auto;margin-bottom:16px"></div>
+
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Regras gerais — valem para todo contato</div>
+    <div class="text-muted" style="font-size:11.5px;margin-bottom:6px">Uma regra por linha. Vieram do diagnóstico de setembro.</div>
+    <textarea id="pbRegras" rows="8" style="width:100%;font-family:inherit;font-size:12.5px;line-height:1.5;padding:10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)"></textarea>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button class="btn btn-sm btn-gold" onclick="salvarRegrasGerais()">Salvar regras</button>
+      <button class="btn btn-sm btn-ghost" onclick="restaurarRegrasPadrao()">Voltar às do diagnóstico</button>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalPlaybooks')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL EDITAR PLAYBOOK ═══════ -->
+<div class="modal-overlay" id="modalPlaybookEdit">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-title" id="pbeTitulo">Playbook</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Segmento</label>
+        <input type="text" id="pbe_segmento" placeholder="Ex.: Fotografia, Adegas, Lojas de souvenir">
+      </div>
+      <div class="form-group">
+        <label>Tipo de comprador</label>
+        <select id="pbe_tipoComprador">
+          <option value="revenda">Revenda</option>
+          <option value="uso_proprio">Uso próprio</option>
+          <option value="eventos">Eventos</option>
+          <option value="corporativo">Corporativo</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Situação</label>
+        <select id="pbe_status">
+          <option value="rascunho">Rascunho</option>
+          <option value="validado">Validado</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin:-4px 0 10px">
+      <button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark)" onclick="rascunharPlaybookIA()">✨ Rascunhar com IA</button>
+      <span id="pbeStatusIA" style="font-size:11.5px;color:var(--gray-600)"></span>
+    </div>
+    <div class="form-group">
+      <label>Palavras que identificam o segmento <span class="text-muted" style="font-weight:400;font-size:11px">(separadas por vírgula — comparadas com o ramo de cada lead)</span></label>
+      <input type="text" id="pbe_termos">
+    </div>
+    <div class="form-group"><label>Por que esse tipo de loja compra</label><textarea id="pbe_porQueCompram" rows="2"></textarea></div>
+    <div class="form-group"><label>Linguagem (usar / evitar)</label><textarea id="pbe_linguagem" rows="2"></textarea></div>
+    <div class="form-group"><label>Pergunta de abertura</label><input type="text" id="pbe_perguntaAbertura"></div>
+    <div class="form-group"><label>Objeções comuns e como tratar <span class="text-muted" style="font-weight:400;font-size:11px">(uma por linha)</span></label><textarea id="pbe_objecoes" rows="4"></textarea></div>
+    <div class="form-group"><label>Calendário — datas e quando abordar</label><textarea id="pbe_calendario" rows="2"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label>Próximo passo típico</label><input type="text" id="pbe_proximoPasso"></div>
+      <div class="form-group"><label>Produtos em foco</label><input type="text" id="pbe_produtosFoco"></div>
+    </div>
+    <div class="form-group"><label>Origem <span class="text-muted" style="font-weight:400;font-size:11px">(de onde veio esse conhecimento)</span></label><input type="text" id="pbe_origem"></div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" id="pbeExcluir" style="color:var(--warning)" onclick="excluirPlaybook()">🗑️ Excluir</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-ghost" onclick="closeModal('modalPlaybookEdit')">Cancelar</button>
+        <button class="btn btn-gold" onclick="salvarPlaybook()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ MODAL PRODUTO CATÁLOGO ═══════ -->
 <div class="modal-overlay" id="modalProdCatalogo">
   <div class="modal" style="max-width:640px">
@@ -2526,6 +2629,7 @@ async function entrarNoDashboard() {
     await Promise.all([loadDB(), loadLeads()]);
     renderAll();
     iniciarFase1();
+    iniciarFase2();
   } else {
     // Voltou depois de a sessão expirar: envia o que ficou pendente nesse meio-tempo
     if (localStorage.getItem('vangardis_db_dirty') === '1') syncToCloud();
@@ -7325,7 +7429,9 @@ function abrirNovoLead() {
   document.getElementById('leadMotivo').value = '';
   document.getElementById('leadHistoricoWrap').style.display = 'none';
   document.getElementById('leadConverterBtn').style.display = 'none';
+  document.getElementById('leadTipoComprador').value = '';
   toggleMotivoPerdido();
+  atualizarInfoPlaybookFicha();
   openModal('modalLead');
 }
 
@@ -7336,6 +7442,7 @@ function editarLead(id) {
   document.getElementById('leadId').value = id;
   document.getElementById('leadTitulo').textContent = l.nome;
   document.getElementById('leadNome').value       = l.nome || '';
+  document.getElementById('leadTipoComprador').value = l.tipoComprador || '';
   document.getElementById('leadSegmento').value   = l.segmento || '';
   document.getElementById('leadCidade').value     = l.cidade || '';
   document.getElementById('leadBairro').value     = l.bairro || '';
@@ -7354,6 +7461,7 @@ function editarLead(id) {
   renderHistoricoLead(l);
   document.getElementById('leadConverterBtn').style.display =
     (l.estagio === 'cliente' || l.convertido) ? 'none' : 'inline-block';
+  atualizarInfoPlaybookFicha();
   openModal('modalLead');
 }
 
@@ -7365,6 +7473,7 @@ function salvarLead() {
   const dados = {
     nome,
     segmento:  document.getElementById('leadSegmento').value.trim(),
+    tipoComprador: document.getElementById('leadTipoComprador').value,
     cidade:    document.getElementById('leadCidade').value.trim(),
     bairro:    document.getElementById('leadBairro').value.trim(),
     contato:   document.getElementById('leadContato').value.trim(),
@@ -7387,6 +7496,7 @@ function salvarLead() {
       const estagioAnterior = l.estagio;
       if (estagio === 'bloqueado' && estagioAnterior !== 'bloqueado' &&
           !confirm('Marcar como "Não perturbar"? A conversa registrada com este lead será apagada e ele não poderá mais ser abordado.')) return;
+      if (l.tipoComprador !== dados.tipoComprador) delete l.tipoPelaIA;
       Object.assign(l, dados);
       if (estagioAnterior !== estagio) registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[estagioAnterior]?.label||estagioAnterior} → ${ESTAGIOS_LEAD[estagio]?.label||estagio}`);
       if (estagio === 'bloqueado' && estagioAnterior !== 'bloqueado') bloquearLead(l);
@@ -7583,6 +7693,8 @@ function atualizarBarraLote() {
   document.getElementById('leadLoteCongelar').style.display   = verCongelados ? 'none' : 'inline-block';
   const btnAb = document.getElementById('leadLoteAbordar');
   if (btnAb) btnAb.style.display = verCongelados ? 'none' : 'inline-block';
+  const btnCl = document.getElementById('leadLoteClassificar');
+  if (btnCl) btnCl.style.display = verCongelados ? 'none' : 'inline-block';
   document.getElementById('leadLoteDescongelar').style.display = verCongelados ? 'inline-block' : 'none';
 }
 
@@ -7803,7 +7915,7 @@ function renderLeads() {
         ${verCongelados && l.dataCongelamento ? `<div class="text-muted" style="font-size:10px">congelado em ${new Date(l.dataCongelamento).toLocaleDateString('pt-BR')}</div>` : ''}
       </td>
       <td class="text-muted">${l.cidade||'—'}${l.bairro ? '<div style="font-size:11px">'+l.bairro+'</div>' : ''}</td>
-      <td class="text-muted" style="font-size:12px">${l.segmento||'—'}</td>
+      <td class="text-muted" style="font-size:12px">${l.segmento||'—'}${l.tipoComprador && TIPOS_COMPRADOR[l.tipoComprador] ? `<div><span class="badge" style="background:${TIPOS_COMPRADOR[l.tipoComprador].cor}1A;color:${TIPOS_COMPRADOR[l.tipoComprador].cor};font-size:10px" title="${l.tipoPelaIA ? 'sugerido pela IA — ' + escaparHtml(l.tipoPelaIA.motivo || '') : 'definido por você'}">${TIPOS_COMPRADOR[l.tipoComprador].label}${l.tipoPelaIA ? ' · IA' : ''}</span></div>` : ''}</td>
       <td>
         <span class="badge" style="background:${est.cor};color:#fff">${est.label||l.estagio}</span>
         ${l.motivo ? `<div class="text-muted" style="font-size:10px;margin-top:2px">${MOTIVOS_PERDIDO[l.motivo]||l.motivo}</div>` : ''}
@@ -8058,6 +8170,9 @@ function renderDadosAbordagem(l) {
     <div>• Cidade: ${l.cidade ? '✅ '+l.cidade : check(false)}</div>
     <div>• Como chegou até ele: ${ORIGENS_LEAD[l.origem] || 'não informado'}</div>
     <div>• Anotações da ficha: ${check(l.ficha)}</div>
+    <div>• Playbook: ${(() => { const s = situacaoPlaybook(l); return s.pb
+      ? `✅ ${escaparHtml(s.pb.segmento)} × ${TIPOS_COMPRADOR[s.pb.tipoComprador].label}${s.pb.status === 'rascunho' ? ' <span style="color:#8A6508">(rascunho)</span>' : ''}`
+      : `<span style="color:var(--warning)">⚠️ sem playbook — ${escaparHtml(s.msg)}</span>`; })()}</div>
     <div>• Produtos que a IA pode oferecer: ${cat.length}${exclusivos ? ` <span class="text-muted">(${exclusivos} exclusivo(s) de clientes ficaram de fora)</span>` : ''}</div>
     ${!l.segmento ? '<div style="margin-top:6px;color:var(--warning)">💡 Preencher o segmento é o que mais melhora a abordagem. <a href="#" onclick="closeModal(\'modalAbordagem\');editarLead('+l.id+');return false;" style="color:var(--gold);font-weight:600">Editar ficha</a></div>' : ''}
   `;
@@ -8069,38 +8184,45 @@ function montarPromptAbordagem(l, tom, canalParam, produtosEscolhidos, instrucao
   const canal = canalParam || (document.getElementById('abordCanal') || {}).value || 'whatsapp';
   const ehEmail = canal === 'email';
   const tomDesc = TONS_ABORDAGEM[tom] || TONS_ABORDAGEM.apresentacao;
-  // Se o envio em lote definiu os produtos do panfleto, a mensagem fala
-  // exatamente sobre eles — assim texto e anexo combinam
-  const cat = (produtosEscolhidos && produtosEscolhidos.length) ? produtosEscolhidos : catalogoParaLead();
+  const comPanfleto = !!(produtosEscolhidos && produtosEscolhidos.length);
+  const cat = comPanfleto ? produtosEscolhidos : catalogoParaLead();
+  const pb = playbookDoLead(l);
 
-  let ctx = `Você é o assistente comercial da Vangardis Expertise, empresa de Curitiba que fabrica produtos personalizados por impressão 3D, corte a laser e itens com NFC, e vende no ATACADO para lojistas de todo o Brasil.
+  // Estrutura do primeiro contato definida pelo diagnóstico de setembro/2026:
+  // curta, na língua do tipo de negócio, terminando numa pergunta fácil.
+  let ctx = `Você é o assistente comercial da Vangardis Expertise, fabricante de Curitiba de produtos personalizados por impressão 3D, corte a laser e NFC, que vende para lojas e empresas de todo o Brasil.
 
-Escreva ${ehEmail ? 'um E-MAIL' : 'uma mensagem de WhatsApp'} de PRIMEIRO CONTATO com uma loja que ainda não é cliente. É prospecção: não existe relacionamento anterior nem histórico de compras.
+Escreva ${ehEmail ? 'um E-MAIL' : 'uma mensagem de WhatsApp'} de PRIMEIRO CONTATO com uma loja que ainda não é cliente. Não existe relacionamento anterior.
 
-TIPO DE ABORDAGEM: ${tomDesc}
+TOM: ${tomDesc}
 
-A mensagem deve:
-1. Cumprimentar ${l.contato ? 'a pessoa de contato pelo nome' : 'a loja pelo nome'} de forma cordial
-2. Se apresentar rapidamente: quem é a Vangardis e o que ela fabrica
-3. Dizer de forma natural e transparente como você chegou até a loja (você encontrou a loja pesquisando estabelecimentos do ramo dela na região). Isso é exigência de transparência da LGPD — não omita, mas também não faça disso o assunto principal
-4. Conectar o que a Vangardis faz ao RAMO e ao público específico dessa loja
-5. Sugerir 1 ou 2 produtos ESTRITAMENTE da lista "PRODUTOS DISPONÍVEIS" abaixo, escolhendo os que fazem sentido para o ramo dela. Nunca invente produtos nem cite itens fora dessa lista. Se nada da lista combinar com o ramo, não cite produto nenhum e fale apenas da capacidade de produzir sob medida
-6. Terminar com um chamado para ação leve e de baixo compromisso (ex: enviar o catálogo, conversar sobre uma amostra) — primeiro contato não fecha venda
-7. NÃO usar emojis em nenhuma parte da mensagem, nem no assunto, nem como marcador. Apenas texto puro
-8. Não prometer preço, prazo ou condição que não foi informada aqui
-${ehEmail
-  ? '9. Como é e-mail, comece com uma linha "Assunto: ..." e depois pule uma linha antes do corpo. No máximo 3 parágrafos curtos.'
-  : '9. Ser curta — no máximo 6 a 8 linhas, adequada para WhatsApp de primeiro contato, que precisa ser fácil de ler e responder.'}
+ESTRUTURA OBRIGATÓRIA:
+1. Cumprimente ${l.contato ? 'a pessoa de contato pelo nome' : 'a loja pelo nome'}.
+2. Em UMA frase: quem é (Petare, da Vangardis Expertise, fabricante de Curitiba).
+3. Em UMA frase: o que a Vangardis faz pelo TIPO DE NEGÓCIO dessa loja, com a linguagem do playbook abaixo, se houver.
+4. Em meia frase, com transparência: você encontrou a loja pesquisando estabelecimentos do ramo dela na região. É exigência da LGPD — não omita, mas não faça disso o assunto.
+5. Termine com UMA pergunta fácil, que se responde em segundos — de preferência a pergunta de abertura do playbook. Nunca peça visita nem reunião no primeiro contato.
+6. ${comPanfleto
+    ? 'Um panfleto com os produtos listados abaixo vai ANEXADO a esta mensagem: mencione-o em meia frase e cite no máximo 1 produto da lista.'
+    : 'Não mande nem ofereça o catálogo completo de saída. Se citar produto, no máximo 1, e somente da lista abaixo.'} Nunca invente produtos.
+7. Sem emojis, em nenhuma parte. Não prometa preço, prazo ou condição que não esteja aqui.
+8. ${ehEmail
+    ? 'Comece com uma linha "Assunto: ..." e escreva um único parágrafo curto.'
+    : 'De 3 a 4 linhas no total.'}
 
 DADOS DA LOJA:
 - Nome: ${l.nome}
 ${l.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + l.contato : '- Pessoa de contato: não se sabe, dirija-se à loja'}
 - Cidade: ${l.cidade || 'não informada'}${l.bairro ? ' / ' + l.bairro : ''}
-- Ramo de atividade: ${l.segmento || 'NÃO INFORMADO — escreva de forma mais geral e não presuma o que a loja vende'}`;
+- Ramo: ${l.segmento || 'NÃO INFORMADO — escreva de forma geral e não presuma o que a loja vende'}
+- Tipo de comprador: ${l.tipoComprador ? TIPOS_COMPRADOR[l.tipoComprador].label + ' — ' + TIPOS_COMPRADOR[l.tipoComprador].desc : 'não classificado'}`;
 
-  const rotuloLista = (produtosEscolhidos && produtosEscolhidos.length)
-    ? 'PRODUTOS DESTE ENVIO (são os que vão no panfleto anexado — cite apenas estes)'
-    : 'PRODUTOS DISPONÍVEIS (única fonte permitida para o item 5)';
+  ctx += blocoRegrasGerais();
+  ctx += blocoPlaybook(pb);
+
+  const rotuloLista = comPanfleto
+    ? 'PRODUTOS DESTE ENVIO (são os do panfleto anexado — cite apenas estes)'
+    : 'PRODUTOS DISPONÍVEIS (únicos que podem ser citados)';
   ctx += cat.length
     ? `\n\n${rotuloLista}:\n- ${cat.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`
     : `\n\nNão há produtos cadastrados no catálogo — não cite nenhum produto específico.`;
@@ -8110,7 +8232,7 @@ ${l.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + l.contato : 
   // Instrução do remetente: obrigatória e com prioridade sobre o resto,
   // para a mensagem não acabar contradizendo o que ele quer comunicar
   if (instrucaoExtra && instrucaoExtra.trim()) {
-    ctx += `\n\nINSTRUÇÃO OBRIGATÓRIA DO REMETENTE — o conteúdo abaixo PRECISA constar na mensagem. Adapte as palavras ao tom escolhido, mas sem alterar o sentido nem omitir nada:\n"${instrucaoExtra.trim()}"\n\nNenhuma outra parte da mensagem pode contradizer, enfraquecer ou desmentir essa instrução. Se ela conflitar com qualquer orientação anterior deste pedido, a instrução do remetente prevalece. Não a apresente como um aviso separado: integre naturalmente ao texto.`;
+    ctx += `\n\nINSTRUÇÃO OBRIGATÓRIA DO REMETENTE — o conteúdo abaixo PRECISA constar na mensagem. Adapte as palavras ao tom escolhido, mas sem alterar o sentido nem omitir nada:\n"${instrucaoExtra.trim()}"\n\nNenhuma outra parte da mensagem pode contradizer, enfraquecer ou desmentir essa instrução. Se ela conflitar com qualquer orientação anterior deste pedido, a instrução do remetente prevalece — inclusive o limite de linhas. Não a apresente como um aviso separado: integre naturalmente ao texto.`;
   }
 
   ctx += `\n\nEscreva APENAS o texto ${ehEmail ? 'do e-mail (com a linha de Assunto)' : 'da mensagem'}, pronto para copiar e enviar, sem explicações antes ou depois e sem aspas ao redor. Nenhum emoji em nenhuma hipótese.`;
@@ -8284,6 +8406,9 @@ function abrirLoteAbordagem() {
     ${bloqueados.length ? `<div style="color:#A33B3B;font-size:12px;margin-top:4px">🚫 ${bloqueados.length} marcada(s) como "não perturbar" — ficaram de fora</div>` : ''}
     ${congelados.length ? `<div class="text-muted" style="font-size:12px;margin-top:4px">❄️ ${congelados.length} congelada(s) — ficaram de fora</div>` : ''}
     ${semSegmento ? `<div class="text-muted" style="font-size:12px;margin-top:4px">💡 ${semSegmento} sem segmento preenchido — a mensagem sai mais genérica para essas</div>` : ''}
+    ${(() => { const semPb = aptos.filter(l => !playbookDoLead(l)); const semTipo = semPb.filter(l => !l.tipoComprador).length;
+      return semPb.length ? `<div style="font-size:12px;margin-top:6px;color:#8A6508">📘 ${semPb.length} sem playbook${semTipo ? ` (${semTipo} sem tipo de comprador)` : ''} — a mensagem sai sem a linguagem do tipo de negócio.
+        ${semTipo ? `<a href="#" onclick="classificarFilaLoteIA();return false;" style="color:var(--gold);font-weight:700;margin-left:4px">Classificar com IA agora</a>` : ''}</div>` : ''; })()}
   `;
 
   const custo = (aptos.length * 0.015).toFixed(2);
@@ -8822,6 +8947,7 @@ ${l.resumoIA ? 'RESUMO ANTERIOR: ' + l.resumoIA : ''}
 CONVERSA ATÉ AQUI:
 ${inters.length ? conversaParaPrompt(inters, 10) : '(nenhuma mensagem registrada antes)'}
 
+${blocoPlaybookLeitura(playbookDoLead(l))}
 NOVA MENSAGEM ${tipo === 'audio' ? '(resumo, escrito pelo Petare, de um áudio do lead)' : 'DO LEAD'}:
 ${novoTexto}
 
@@ -8968,6 +9094,8 @@ ${l.ficha ? 'ANOTAÇÕES DO PETARE: ' + l.ficha : ''}
 CONVERSA ATÉ AQUI (mais recente por último):
 ${conversaParaPrompt(inters, 8)}`;
 
+  ctx += blocoRegrasGerais();
+  ctx += blocoPlaybook(playbookDoLead(l));
   if (produtos && produtos.length) {
     ctx += `\n\nPRODUTOS QUE PODEM SER CITADOS (nenhum outro):\n- ${produtos.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`;
   }
@@ -9145,6 +9273,385 @@ async function importarConversas() {
   renderProspeccao();
   btn.disabled = false;
   status.innerHTML = `✅ ${validos.length} conversa(s) importada(s), ${totalMsgs} mensagens. Mensagens repetidas são ignoradas, então pode reimportar sem medo.${resumir ? ' Abra cada lead (💬) para ver o resumo e as sugestões da IA.' : ''}`;
+}
+
+// ════════════════════════════════════════════════════
+// FASE 2 — PLAYBOOKS POR TIPO DE NEGÓCIO
+// O diagnóstico de setembro/2026 mostrou que o segmento sozinho não basta:
+// "fotografia" junta quem revende, quem compra para dar às clientes e quem
+// atende eventos. O playbook é escolhido por SEGMENTO + TIPO DE COMPRADOR,
+// e entra em todo pedido à IA da prospecção.
+// ════════════════════════════════════════════════════
+
+const TIPOS_COMPRADOR = {
+  revenda:     { label: 'Revenda',     desc: 'compra para revender na loja', cor: '#2E7D52' },
+  uso_proprio: { label: 'Uso próprio', desc: 'presta serviço e compra para usar ou dar às clientes (lembrança, cenário)', cor: '#3D6E9C' },
+  eventos:     { label: 'Eventos',     desc: 'atende eventos e compra lembrança para os convidados', cor: '#A8651A' },
+  corporativo: { label: 'Corporativo', desc: 'empresa que compra brindes para funcionários ou clientes', cor: '#7A5B12' }
+};
+
+// Escritas para a IA. A regra do diagnóstico "registrar o que o lead disse"
+// é um hábito seu, não da mensagem — por isso não está aqui.
+const REGRAS_GERAIS_PADRAO = [
+  'Fale a língua do tipo de negócio da loja: revenda ouve atacado, margem e giro; uso próprio ouve lembrança para as clientes e cenário; eventos ouve lembrança para os convidados.',
+  'Primeiro contato tem de 3 a 4 linhas.',
+  'Termine com uma pergunta fácil, que se responde em segundos. Nunca peça visita ou reunião no primeiro contato.',
+  'O catálogo completo vai depois do primeiro "sim": pergunte se pode mandar, não mande de saída.',
+  'Nunca termine só agradecendo: termine com uma pergunta ou com um próximo passo com data.',
+  'Se quem respondeu foi um robô de atendimento, responda em uma linha dizendo quem é e o que quer, e peça para falar com a pessoa responsável.',
+  'Leve em conta o calendário do segmento: se a data já passou, proponha a próxima.'
+];
+
+const PLAYBOOKS_SEMENTE = [
+  {
+    id: 'pb_foto_uso', segmento: 'Fotografia', tipoComprador: 'uso_proprio', status: 'validado',
+    termos: 'fotografia, fotógrafo, fotografa, foto, estúdio, studio, ensaio, newborn, gestante',
+    porQueCompram: 'Compram para dar às clientes depois do ensaio (lembrança), para montar o cenário das sessões e como brinde em campanhas de datas comemorativas. Não revendem.',
+    linguagem: 'Usar: lembrança, suas clientes, o ensaio, kit do ensaio, cenário. Evitar: atacado, margem, ponto de venda, lojista, revenda.',
+    perguntaAbertura: 'Vocês costumam dar alguma lembrança às clientes depois do ensaio?',
+    objecoes: '"Já tenho para este Natal" → não é recusa: perguntar em que mês começam a planejar a próxima campanha e se há outras datas no ano (Dia das Mães, mesversário); agendar a volta 3 a 4 meses antes.\n"Vou ver com calma" → retomar em 5 a 7 dias com uma pergunta específica sobre lembranças e oferecer amostra.\n"Está caro" (em peça sob medida) → oferecer versão mais simples, por exemplo em corte a laser, e perguntar o valor por unidade que faz sentido.\nPediu o Instagram → mandar 2 ou 3 fotos dos produtos reais direto na conversa.',
+    calendario: 'Páscoa (fim de março): abordar em dezembro e janeiro. Dia das Mães (maio): abordar em fevereiro e março. Dia dos Pais (agosto): abordar em abril e maio. Natal: abordar de junho a agosto. Newborn, gestante e mesversário acontecem o ano todo.',
+    proximoPasso: 'Amostra física (Polaroid ou porta-retrato) entregue em mãos em Curitiba.',
+    produtosFoco: 'Porta-retratos e polaroids.',
+    origem: 'Diagnóstico de setembro/2026 — 25 conversas reais com estúdios de Curitiba.'
+  },
+  {
+    id: 'pb_foto_revenda', segmento: 'Fotografia', tipoComprador: 'revenda', status: 'rascunho',
+    termos: 'fotografia, foto, revelação, laboratório, impressão de fotos, presentes, papelaria',
+    porQueCompram: 'Revendem no balcão: porta-retrato é complemento natural de quem revela ou imprime fotos, e produto de presente com giro em datas comemorativas.',
+    linguagem: 'Usar: atacado, margem, giro, exposição no balcão, reposição, pedido mínimo. Evitar: lembrança para clientes do ensaio.',
+    perguntaAbertura: 'Quem cuida das compras de porta-retratos aí na loja?',
+    objecoes: '"Já tenho fornecedor" → mostrar o diferencial (formatos em 3D que não existem no mercado comum, personalização com a marca da loja) e propor um pedido pequeno para testar o giro.\n"Não tenho espaço" → sugerir um mostruário pequeno de balcão com poucos modelos.',
+    calendario: 'Lojas abastecem de 1 a 2 meses antes das datas: Dia das Mães (maio), Dia dos Namorados (junho), Dia dos Pais (agosto), Natal.',
+    proximoPasso: 'Visita com as peças na mão, ou kit de teste com pedido mínimo.',
+    produtosFoco: 'Porta-retratos e polaroids.',
+    origem: 'Hipótese a partir do diagnóstico: as revendas encontradas só responderam por robô, então ainda não há conversa real com elas.'
+  },
+  {
+    id: 'pb_foto_eventos', segmento: 'Fotografia', tipoComprador: 'eventos', status: 'rascunho',
+    termos: 'cabine, fotocabine, cabine de fotos, totem, eventos, fotopop',
+    porQueCompram: 'Para os convidados levarem a foto da cabine para casa numa moldura ou porta-polaroid personalizado com o nome dos noivos, da formatura ou da empresa.',
+    linguagem: 'Usar: lembrança para os convidados, personalizado com o nome do evento, valor por convidado. Evitar: atacado, revenda.',
+    perguntaAbertura: 'Vocês oferecem alguma moldura ou porta-foto para os convidados levarem a foto da cabine?',
+    objecoes: '"Fica caro por convidado" → oferecer versão em corte a laser e preço por faixa de quantidade.\n"O prazo é curto" → informar a antecedência necessária e propor deixar modelos-padrão prontos.',
+    calendario: 'Formaturas (novembro e dezembro) e casamentos são contratados com meses de antecedência: abordar com 3 a 4 meses de folga.',
+    proximoPasso: 'Amostra personalizada com o nome de um evento real da empresa.',
+    produtosFoco: 'Porta-polaroids e molduras.',
+    origem: 'Hipótese a partir do diagnóstico: um único contato do tipo (cabine de fotos), sem resposta de pessoa.'
+  }
+];
+
+function garantirPlaybooks() {
+  if (DB.playbooks && Array.isArray(DB.playbooks.itens)) return;
+  DB.playbooks = {
+    regras: REGRAS_GERAIS_PADRAO.slice(),
+    itens: PLAYBOOKS_SEMENTE.map(p => ({ ...p, atualizadoEm: new Date().toISOString() }))
+  };
+  saveDB();
+}
+
+function termosDoPlaybook(pb) {
+  return [pb.segmento].concat(String(pb.termos || '').split(','))
+    .map(normalizarTxt).filter(t => t.length >= 3);
+}
+
+// Escolhe o playbook pelo ramo do lead (ou pelo nome, se o ramo estiver vazio)
+// e pelo tipo de comprador. Sem tipo definido e com mais de um candidato,
+// não escolhe — melhor nenhum playbook que o errado.
+function playbookDoLead(l) {
+  const pbs = (DB.playbooks && DB.playbooks.itens) || [];
+  if (!l || !pbs.length) return null;
+  const alvo = ' ' + normalizarTxt(l.segmento || l.nome || '') + ' ';
+  const candidatos = pbs.filter(pb => termosDoPlaybook(pb).some(t => alvo.includes(' ' + t) || alvo.includes(t + ' ')));
+  if (!candidatos.length) return null;
+  if (l.tipoComprador) return candidatos.find(pb => pb.tipoComprador === l.tipoComprador) || null;
+  return candidatos.length === 1 ? candidatos[0] : null;
+}
+
+// Diz por que um lead está sem playbook (para mostrar na tela)
+function situacaoPlaybook(l) {
+  const pb = playbookDoLead(l);
+  if (pb) return { pb, msg: '' };
+  const pbs = (DB.playbooks && DB.playbooks.itens) || [];
+  const alvo = ' ' + normalizarTxt(l.segmento || l.nome || '') + ' ';
+  const doSegmento = pbs.filter(p => termosDoPlaybook(p).some(t => alvo.includes(' ' + t) || alvo.includes(t + ' ')));
+  if (doSegmento.length && !l.tipoComprador) return { pb: null, msg: 'defina o tipo de comprador para escolher o playbook' };
+  if (doSegmento.length) return { pb: null, msg: `não há playbook de ${doSegmento[0].segmento} × ${TIPOS_COMPRADOR[l.tipoComprador]?.label}` };
+  return { pb: null, msg: l.segmento ? `não há playbook para "${l.segmento}"` : 'preencha o segmento' };
+}
+
+function blocoRegrasGerais() {
+  const regras = (DB.playbooks && DB.playbooks.regras) || REGRAS_GERAIS_PADRAO;
+  if (!regras.length) return '';
+  return `\n\nREGRAS GERAIS DA PROSPECÇÃO (valem para todo contato):\n${regras.map((r, i) => `${i + 1}. ${r}`).join('\n')}`;
+}
+
+function blocoPlaybook(pb) {
+  if (!pb) return '';
+  const aviso = pb.status === 'rascunho'
+    ? ' — RASCUNHO, ainda não validado em conversas reais: use como orientação, sem forçar'
+    : ' — validado em conversas reais';
+  return `\n\nPLAYBOOK DESTE TIPO DE LOJA (${pb.segmento} × ${TIPOS_COMPRADOR[pb.tipoComprador]?.label || pb.tipoComprador})${aviso}:
+- Por que esse tipo de loja compra: ${pb.porQueCompram}
+- Linguagem: ${pb.linguagem}
+- Pergunta de abertura recomendada: ${pb.perguntaAbertura}
+- Objeções comuns e como tratar:\n${String(pb.objecoes || '').split('\n').filter(Boolean).map(x => '  ' + x).join('\n')}
+- Calendário: ${pb.calendario}
+- Próximo passo típico: ${pb.proximoPasso}
+- Produtos em foco: ${pb.produtosFoco}`;
+}
+
+// Versão curta para a leitura de retornos: só o que ajuda a interpretar a resposta
+function blocoPlaybookLeitura(pb) {
+  if (!pb) return '';
+  return `\nREFERÊNCIA DO PLAYBOOK (${pb.segmento} × ${TIPOS_COMPRADOR[pb.tipoComprador]?.label || ''}) — use para interpretar objeções e calcular a data de volta:
+- Objeções comuns: ${String(pb.objecoes || '').replace(/\n/g, ' | ')}
+- Calendário: ${pb.calendario}
+`;
+}
+
+// ════════ Tela de playbooks ════════
+let playbookEditando = null;
+
+function abrirPlaybooks() {
+  garantirPlaybooks();
+  renderListaPlaybooks();
+  document.getElementById('pbRegras').value = DB.playbooks.regras.join('\n');
+  openModal('modalPlaybooks');
+}
+
+function renderListaPlaybooks() {
+  const el = document.getElementById('pbLista');
+  const itens = DB.playbooks.itens.slice().sort((a, b) =>
+    a.segmento.localeCompare(b.segmento, 'pt-BR') || a.tipoComprador.localeCompare(b.tipoComprador));
+  const usos = {};
+  LEADS.forEach(l => { const pb = playbookDoLead(l); if (pb) usos[pb.id] = (usos[pb.id] || 0) + 1; });
+  el.innerHTML = itens.map(pb => {
+    const t = TIPOS_COMPRADOR[pb.tipoComprador] || {};
+    const status = pb.status === 'validado'
+      ? '<span class="badge" style="background:#E5F2EA;color:#2E7D52;font-size:10px">validado</span>'
+      : '<span class="badge" style="background:#FBF1D6;color:#8A6508;font-size:10px">rascunho</span>';
+    return `<div style="border:1px solid var(--gray-200);border-left:4px solid ${t.cor || '#999'};border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff">
+      <div class="flex-between">
+        <div><strong style="color:var(--navy)">${escaparHtml(pb.segmento)} × ${t.label || pb.tipoComprador}</strong> ${status}
+          <div class="text-muted" style="font-size:11.5px;margin-top:2px">${usos[pb.id] || 0} lead(s) usando · pergunta: "${escaparHtml(pb.perguntaAbertura)}"</div></div>
+        <button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;margin-left:10px" onclick="editarPlaybook('${pb.id}')">✏️ Abrir</button>
+      </div></div>`;
+  }).join('') || '<div class="text-muted">Nenhum playbook ainda.</div>';
+}
+
+function salvarRegrasGerais() {
+  DB.playbooks.regras = document.getElementById('pbRegras').value.split('\n').map(x => x.trim()).filter(Boolean);
+  saveDB();
+  showToast('✅ Regras gerais salvas.');
+}
+
+function restaurarRegrasPadrao() {
+  if (!confirm('Voltar as regras gerais para as do diagnóstico de setembro? As suas alterações nelas serão perdidas.')) return;
+  document.getElementById('pbRegras').value = REGRAS_GERAIS_PADRAO.join('\n');
+  salvarRegrasGerais();
+}
+
+const CAMPOS_PB = ['segmento','tipoComprador','status','termos','porQueCompram','linguagem','perguntaAbertura','objecoes','calendario','proximoPasso','produtosFoco','origem'];
+
+function novoPlaybook() {
+  playbookEditando = null;
+  CAMPOS_PB.forEach(c => { document.getElementById('pbe_' + c).value = ''; });
+  document.getElementById('pbe_tipoComprador').value = 'revenda';
+  document.getElementById('pbe_status').value = 'rascunho';
+  document.getElementById('pbeTitulo').textContent = 'Novo playbook';
+  document.getElementById('pbeExcluir').style.display = 'none';
+  document.getElementById('pbeStatusIA').textContent = '';
+  openModal('modalPlaybookEdit');
+}
+
+function editarPlaybook(id) {
+  const pb = DB.playbooks.itens.find(x => x.id === id);
+  if (!pb) return;
+  playbookEditando = id;
+  CAMPOS_PB.forEach(c => { document.getElementById('pbe_' + c).value = pb[c] || ''; });
+  document.getElementById('pbeTitulo').textContent = `${pb.segmento} × ${TIPOS_COMPRADOR[pb.tipoComprador]?.label || ''}`;
+  document.getElementById('pbeExcluir').style.display = 'inline-block';
+  document.getElementById('pbeStatusIA').textContent = '';
+  openModal('modalPlaybookEdit');
+}
+
+function salvarPlaybook() {
+  const dados = {};
+  CAMPOS_PB.forEach(c => { dados[c] = document.getElementById('pbe_' + c).value.trim(); });
+  if (!dados.segmento) { showToast('⚠️ Informe o segmento.', 'warning'); return; }
+  const repetido = DB.playbooks.itens.find(x => x.id !== playbookEditando &&
+    normalizarTxt(x.segmento) === normalizarTxt(dados.segmento) && x.tipoComprador === dados.tipoComprador);
+  if (repetido) { showToast('⚠️ Já existe um playbook para esse segmento e tipo de comprador.', 'warning'); return; }
+  dados.atualizadoEm = new Date().toISOString();
+  if (playbookEditando) {
+    Object.assign(DB.playbooks.itens.find(x => x.id === playbookEditando), dados);
+  } else {
+    DB.playbooks.itens.push({ id: 'pb_' + Date.now().toString(36), ...dados });
+  }
+  saveDB();
+  closeModal('modalPlaybookEdit');
+  renderListaPlaybooks();
+  renderProspeccao();
+  showToast('✅ Playbook salvo.');
+}
+
+function excluirPlaybook() {
+  if (!playbookEditando) return;
+  const pb = DB.playbooks.itens.find(x => x.id === playbookEditando);
+  if (!confirm(`Excluir o playbook "${pb.segmento} × ${TIPOS_COMPRADOR[pb.tipoComprador]?.label}"? Os leads desse tipo passam a receber mensagens sem playbook.`)) return;
+  DB.playbooks.itens = DB.playbooks.itens.filter(x => x.id !== playbookEditando);
+  saveDB();
+  closeModal('modalPlaybookEdit');
+  renderListaPlaybooks();
+  renderProspeccao();
+}
+
+// A IA rascunha um playbook novo; você revisa antes de salvar
+async function rascunharPlaybookIA() {
+  const segmento = document.getElementById('pbe_segmento').value.trim();
+  const tipo = document.getElementById('pbe_tipoComprador').value;
+  if (!segmento) { showToast('⚠️ Escreva o segmento antes (ex.: Adegas, Lojas de souvenir).', 'warning'); return; }
+  if (!iaPermitida(1)) return;
+  const status = document.getElementById('pbeStatusIA');
+  status.textContent = '⏳ A IA está rascunhando…';
+  const exemplo = DB.playbooks.itens.find(x => x.status === 'validado') || PLAYBOOKS_SEMENTE[0];
+  const cats = [...new Set((DB.catalogo || []).filter(p => !p.exclusivo).flatMap(p => getCategoriasProduto(p)))];
+  const nomes = (DB.catalogo || []).filter(p => !p.exclusivo).map(p => p.nome).slice(0, 60);
+  const prompt = `Você ajuda a Vangardis Expertise, fabricante de Curitiba de produtos personalizados por impressão 3D, corte a laser e NFC, a montar um PLAYBOOK de prospecção.
+
+Monte o playbook para: SEGMENTO "${segmento}" × TIPO DE COMPRADOR "${TIPOS_COMPRADOR[tipo].label}" (${TIPOS_COMPRADOR[tipo].desc}).
+
+Isto é um rascunho: escreva hipóteses razoáveis e concretas sobre como esse tipo de negócio compra no Brasil, sem inventar dados ou números de mercado. Use APENAS produtos que existam no catálogo abaixo.
+
+CATÁLOGO — categorias: ${cats.join(', ') || '(nenhuma)'}
+CATÁLOGO — produtos: ${nomes.join('; ') || '(nenhum)'}
+
+EXEMPLO DE PLAYBOOK VALIDADO, para você seguir o formato e o nível de detalhe:
+${JSON.stringify({ porQueCompram: exemplo.porQueCompram, linguagem: exemplo.linguagem, perguntaAbertura: exemplo.perguntaAbertura, objecoes: exemplo.objecoes, calendario: exemplo.calendario, proximoPasso: exemplo.proximoPasso, produtosFoco: exemplo.produtosFoco }, null, 1)}
+
+Responda SOMENTE com um objeto JSON, sem texto fora dele e sem cercas de código, com as chaves:
+"termos" (palavras que aparecem no ramo ou no nome desse tipo de loja, separadas por vírgula),
+"porQueCompram", "linguagem" (no formato "Usar: ... Evitar: ..."), "perguntaAbertura" (uma pergunta fácil de responder),
+"objecoes" (uma por linha, no formato "objeção → como tratar"), "calendario" (datas do segmento e quando abordar: 3 a 4 meses antes),
+"proximoPasso", "produtosFoco".`;
+  try {
+    const j = extrairJSON(await chamarIA(prompt, 1200));
+    ['termos','porQueCompram','linguagem','perguntaAbertura','objecoes','calendario','proximoPasso','produtosFoco'].forEach(c => {
+      if (j[c]) document.getElementById('pbe_' + c).value = String(j[c]);
+    });
+    document.getElementById('pbe_status').value = 'rascunho';
+    if (!document.getElementById('pbe_origem').value) {
+      document.getElementById('pbe_origem').value = `Rascunho da IA em ${new Date().toLocaleDateString('pt-BR')} — a validar com conversas reais.`;
+    }
+    status.textContent = '✅ Rascunho pronto. Revise cada campo antes de salvar — é aqui que a sua experiência faz diferença.';
+  } catch (e) {
+    status.textContent = '⚠️ ' + (e.message || 'Não consegui gerar o rascunho.');
+  }
+}
+
+// ════════ Tipo de comprador: classificação pela IA ════════
+// Várias lojas numa chamada só, para sair barato.
+async function classificarTiposIA(leads) {
+  const resultados = [];
+  for (let i = 0; i < leads.length; i += 20) {
+    const bloco = leads.slice(i, i + 20);
+    const prompt = `Você classifica lojas para a prospecção da Vangardis Expertise, fabricante de produtos personalizados (porta-retratos, polaroids, chaveiros, ímãs, abridores, itens com NFC, peças em corte a laser).
+
+Para cada loja, diga o TIPO DE COMPRADOR mais provável:
+${Object.entries(TIPOS_COMPRADOR).map(([k, v]) => `- "${k}": ${v.desc}`).join('\n')}
+
+Exemplos: laboratório de revelação ou loja de presentes → revenda; estúdio fotográfico ou fotógrafo → uso_proprio; cabine de fotos para festas → eventos; escritório, indústria ou clínica que daria brinde → corporativo. Use o nome, o ramo e o site como pistas. Se não der para saber, use confiança "baixa".
+
+LOJAS:
+${bloco.map(l => JSON.stringify({ id: String(l.id), nome: l.nome, ramo: l.segmento || '', site: l.site || '', notas: String(l.resumoIA || l.ficha || '').slice(0, 200) })).join('\n')}
+
+Responda SOMENTE com um array JSON, sem texto fora dele e sem cercas de código: [{"id": "...", "tipo": "revenda|uso_proprio|eventos|corporativo", "confianca": "alta|media|baixa", "motivo": "até 8 palavras"}]`;
+    const txt = await chamarIA(prompt, 1500);
+    const limpo = String(txt).replace(/```json|```/g, '').trim();
+    const arr = JSON.parse(limpo.slice(limpo.indexOf('['), limpo.lastIndexOf(']') + 1));
+    arr.forEach(r => { if (TIPOS_COMPRADOR[r.tipo]) resultados.push(r); });
+  }
+  return resultados;
+}
+
+function aplicarTiposClassificados(resultados) {
+  let n = 0;
+  resultados.forEach(r => {
+    const l = LEADS.find(x => String(x.id) === String(r.id));
+    if (!l) return;
+    l.tipoComprador = r.tipo;
+    l.tipoPelaIA = { confianca: r.confianca || '', motivo: r.motivo || '', em: new Date().toISOString() };
+    registrarHistoricoLead(l, `Tipo de comprador: ${TIPOS_COMPRADOR[r.tipo].label} (sugerido pela IA${r.confianca ? ', confiança ' + r.confianca : ''})`);
+    n++;
+  });
+  if (n) saveLeads();
+  return n;
+}
+
+async function classificarSelecionadosIA() {
+  const alvo = [...leadsSelecionados].map(id => LEADS.find(l => l.id === id)).filter(Boolean);
+  if (!alvo.length) return;
+  const jaTem = alvo.filter(l => l.tipoComprador).length;
+  if (jaTem && !confirm(`${jaTem} dos ${alvo.length} leads selecionados já têm tipo de comprador. Reclassificar todos com a IA?`)) return;
+  if (!iaPermitida(Math.ceil(alvo.length / 20))) return;
+  showToast(`⏳ Classificando ${alvo.length} lead(s)…`, 'warning');
+  try {
+    const n = aplicarTiposClassificados(await classificarTiposIA(alvo));
+    limparSelecaoLeads();
+    renderProspeccao();
+    showToast(`🏷️ ${n} lead(s) classificado(s). Confira na tabela — dá para corrigir na ficha.`);
+  } catch (e) {
+    showToast('⚠️ Não consegui classificar: ' + (e.message || 'erro'), 'warning');
+  }
+}
+
+// Na ficha do lead: sugere o tipo só para ele
+async function sugerirTipoNaFicha() {
+  const nome = document.getElementById('leadNome').value.trim();
+  if (!nome) { showToast('⚠️ Preencha o nome da loja primeiro.', 'warning'); return; }
+  if (!iaPermitida(1)) return;
+  const btn = document.getElementById('leadTipoSugerirBtn');
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    const temp = { id: 'tmp', nome, segmento: document.getElementById('leadSegmento').value, site: document.getElementById('leadSite').value, ficha: document.getElementById('leadFicha').value };
+    const [r] = await classificarTiposIA([temp]);
+    if (r) {
+      document.getElementById('leadTipoComprador').value = r.tipo;
+      atualizarInfoPlaybookFicha();
+      showToast(`🏷️ ${TIPOS_COMPRADOR[r.tipo].label}${r.motivo ? ' — ' + r.motivo : ''}`);
+    }
+  } catch (e) {
+    showToast('⚠️ Não consegui sugerir agora.', 'warning');
+  }
+  btn.disabled = false; btn.textContent = '✨ Sugerir';
+}
+
+function atualizarInfoPlaybookFicha() {
+  const el = document.getElementById('leadPlaybookInfo');
+  if (!el) return;
+  const temp = { nome: document.getElementById('leadNome').value, segmento: document.getElementById('leadSegmento').value, tipoComprador: document.getElementById('leadTipoComprador').value };
+  const { pb, msg } = situacaoPlaybook(temp);
+  el.innerHTML = pb
+    ? `📘 Playbook: <b>${escaparHtml(pb.segmento)} × ${TIPOS_COMPRADOR[pb.tipoComprador].label}</b> ${pb.status === 'validado' ? '<span style="color:#2E7D52">· validado</span>' : '<span style="color:#8A6508">· rascunho</span>'}`
+    : `<span style="color:var(--warning)">📘 Sem playbook — ${escaparHtml(msg)}</span>`;
+}
+
+function iniciarFase2() {
+  garantirPlaybooks();
+}
+
+// No lote: classifica quem está sem tipo de comprador e reabre o resumo
+async function classificarFilaLoteIA() {
+  const alvo = loteFila.map(x => x.lead).filter(l => !l.tipoComprador);
+  if (!alvo.length || !iaPermitida(Math.ceil(alvo.length / 20))) return;
+  showToast(`⏳ Classificando ${alvo.length} lead(s)…`, 'warning');
+  try {
+    const n = aplicarTiposClassificados(await classificarTiposIA(alvo));
+    renderProspeccao();
+    abrirLoteAbordagem();
+    showToast(`🧭 ${n} lead(s) classificado(s).`);
+  } catch (e) { showToast('⚠️ Não consegui classificar agora.', 'warning'); }
 }
 
 function renderAll(){
