@@ -9282,15 +9282,20 @@ const RUIDO_WHATSAPP = /criptografia de ponta a ponta|mensagens temporárias|dur
 // Android: 22/09/2026 11:37 - Nome: texto
 function lerConversaExportada(txt) {
   const linhas = String(txt).replace(/\r/g, '').replace(/[\u200e\u200f\u202a-\u202e]/g, '').split('\n');
-  const reIOS = /^\[(\d{1,2})\/(\d{1,2})\/(\d{2,4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):\s?([\s\S]*)$/;
-  const reAnd = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),? (\d{1,2}):(\d{2}) - ([^:]+):\s?([\s\S]*)$/;
-  // Linha com data mas sem autor = aviso do sistema (Android). Não é continuação de nada.
-  const reSistema = /^(\[\d{1,2}\/\d{1,2}\/\d{2,4},? \d{1,2}:\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4},? \d{1,2}:\d{2} - )/;
+  // Exportação do celular e cópia do WhatsApp Web usam ordens diferentes:
+  //   celular:  [06/10/2026, 10:14:32] Autor: texto   (data primeiro)
+  //   desktop:  [10:14, 06/10/2026] Autor: texto      (hora primeiro)
+  const reIOS  = /^\[(\d{1,2})\/(\d{1,2})\/(\d{2,4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?\] ([^:]+):\s?([\s\S]*)$/;
+  const reDesk = /^\[(\d{1,2}):(\d{2})(?::(\d{2}))?,? (\d{1,2})\/(\d{1,2})\/(\d{2,4})\] ([^:]+):\s?([\s\S]*)$/;
+  const reAnd  = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),? (\d{1,2}):(\d{2}) - ([^:]+):\s?([\s\S]*)$/;
+  // Linha com data mas sem autor = aviso do sistema. Não é continuação de nada.
+  const reSistema = /^(\[\d{1,2}\/\d{1,2}\/\d{2,4},? \d{1,2}:\d{2}|\[\d{1,2}:\d{2}(?::\d{2})?,? \d{1,2}\/\d{1,2}\/\d{2,4}|\d{1,2}\/\d{1,2}\/\d{2,4},? \d{1,2}:\d{2} - )/;
   const msgs = [];
   let atual = null;
   linhas.forEach(linha => {
     let m = linha.match(reIOS), autor, texto, d, mo, a, h, mi, s;
     if (m) { [, d, mo, a, h, mi, s, autor, texto] = m; }
+    else if ((m = linha.match(reDesk))) { [, h, mi, s, d, mo, a, autor, texto] = m; }
     else if ((m = linha.match(reAnd))) { [, d, mo, a, h, mi, autor, texto] = m; s = '0'; }
     if (m) {
       if (a.length === 2) a = '20' + a;
