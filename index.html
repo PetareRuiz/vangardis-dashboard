@@ -2197,6 +2197,7 @@ th.sortable:hover { background: var(--navy-mid); }
       <div class="form-group" style="max-width:200px">
         <select id="convTipo">
           <option value="retorno">💬 Retorno do lead (texto)</option>
+          <option value="mensagem">📤 Mensagem que eu enviei</option>
           <option value="audio">🎙️ Áudio do lead (seu resumo)</option>
           <option value="ligacao">📞 Ligação</option>
           <option value="visita">🤝 Visita</option>
@@ -2205,7 +2206,9 @@ th.sortable:hover { background: var(--navy-mid); }
         </select>
       </div>
       <div class="form-group" style="flex:1">
-        <textarea id="convTexto" rows="3" placeholder="Cole aqui a resposta do lead, copiada do WhatsApp — ou descreva o que aconteceu"></textarea>
+        <textarea id="convTexto" rows="3" placeholder="Cole aqui a resposta do lead, copiada do WhatsApp — ou descreva o que aconteceu" oninput="analisarColagem()"></textarea>
+        <div class="text-muted" style="font-size:11px;margin-top:3px">💡 No WhatsApp, selecione <b>várias mensagens</b> e copie: o dashboard separa sozinho o que é seu e o que é do lead, com data e hora.</div>
+        <div id="convColagem" style="display:none;background:#E5F2EA;border-left:3px solid #2E7D52;border-radius:6px;padding:9px 12px;font-size:12px;line-height:1.5;margin-top:8px"></div>
       </div>
     </div>
     <div class="flex-between" style="margin-top:-4px">
@@ -8868,6 +8871,8 @@ async function abrirConversa(leadId) {
     [l.segmento, l.cidade, l.contato ? 'contato: ' + l.contato : ''].filter(Boolean).join(' · ');
   document.getElementById('convTexto').value = '';
   document.getElementById('convTipo').value = 'retorno';
+  conversaColagem = null;
+  document.getElementById('convColagem').style.display = 'none';
   document.getElementById('convLeitura').style.display = 'none';
   renderResumoConversa(l);
   document.getElementById('convTimeline').innerHTML = '<div class="text-muted" style="padding:14px;text-align:center">Carregando a conversa…</div>';
@@ -8927,6 +8932,90 @@ async function apagarInteracaoUI(id) {
   try { await apiFetch({ action: 'apagarInteracao', id }); } catch (e) {}
 }
 
+// ── Colar várias mensagens de uma vez ──
+// No WhatsApp, copiar várias mensagens traz data, hora e autor no mesmo
+// formato da exportação — então dá para reaproveitar o mesmo leitor.
+let conversaColagem = null;
+
+function analisarColagem() {
+  const txt = document.getElementById('convTexto').value;
+  const msgs = txt.trim().length > 20 ? lerConversaExportada(txt) : [];
+  // Uma mensagem só, sem autor repetido, não vale a pena tratar como bloco
+  if (msgs.length < 2) { conversaColagem = null; document.getElementById('convColagem').style.display = 'none'; return; }
+
+  const l = conversaLeadAtual || {};
+  const autores = [...new Set(msgs.map(m => m.autor))];
+  const ehVoce = a => /petare|vangardis/i.test(a) || /^voc[eê]$/i.test(a);
+  const ehLead = a => {
+    const n = normalizarTxt(a);
+    return n && [l.nome, l.contato].filter(Boolean).some(x => {
+      const xn = normalizarTxt(x);
+      return xn && (xn.includes(n) || n.includes(xn));
+    });
+  };
+  let eu = autores.find(ehVoce) || '';
+  if (!eu && autores.length === 2) eu = autores.find(a => !ehLead(a)) || '';
+
+  conversaColagem = { msgs, autores, eu };   // texto novo: volta a detectar sozinho
+  renderColagem();
+}
+
+// Só redesenha, usando a escolha atual — não refaz a detecção
+function renderColagem() {
+  const box = document.getElementById('convColagem');
+  if (!conversaColagem) { box.style.display = 'none'; return; }
+  const { msgs, autores, eu } = conversaColagem;
+  const opts = autores.map(a => `<option value="${escaparHtml(a)}" ${a === eu ? 'selected' : ''}>${escaparHtml(a)}</option>`).join('');
+  const meus = msgs.filter(m => m.autor === eu).length;
+  box.style.display = 'block';
+  box.innerHTML = `<b>📋 ${msgs.length} mensagens reconhecidas</b> — ${meus} sua(s) e ${msgs.length - meus} do lead, com data e hora.
+    <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span>Nessa conversa, você é:</span>
+      <select onchange="definirEuNaColagem(this.value)" style="font-size:12px;padding:3px 6px">
+        <option value="">— ninguém (tudo é do lead) —</option>${opts}
+      </select>
+    </div>`;
+}
+
+function definirEuNaColagem(v) {
+  if (!conversaColagem) return;
+  conversaColagem.eu = v;
+  renderColagem();
+}
+
+// Registra um bloco colado de uma vez
+async function registrarColagem(l, pedeLeitura) {
+  const { msgs, eu } = conversaColagem;
+  const itens = msgs.map(m => {
+    const minha = eu && m.autor === eu;
+    return { leadId: l.id, data: m.data, direcao: minha ? 'saida' : 'entrada',
+             tipo: minha ? 'mensagem' : 'retorno', texto: m.texto, origem: 'colado' };
+  });
+  atualizarMarcadores(l, await registrarInteracoes(itens));
+
+  // A IA lê a última mensagem do lead do bloco, se houver
+  const ultimaDoLead = [...itens].reverse().find(x => x.direcao === 'entrada');
+  let leitura = null;
+  if (pedeLeitura && ultimaDoLead && iaPermitida(1)) {
+    try {
+      const mapa = await carregarInteracoes([l.id]);
+      const anteriores = (mapa[String(l.id)] || []).filter(x => x.data < ultimaDoLead.data);
+      leitura = await lerRetornoComIA(l, anteriores, ultimaDoLead.texto, 'retorno');
+      if (leitura.e_robo) leitura = null;   // num bloco, o robô é só mais uma linha
+    } catch (e) {
+      showToast('⚠️ Não consegui a leitura da IA — as mensagens foram salvas.', 'warning');
+    }
+  }
+  if (leitura) aplicarLeituraNoLead(l, leitura);
+  else if (ultimaDoLead && l.estagio === 'contatado') {
+    l.estagio = 'conversa';
+    registrarHistoricoLead(l, 'Respondeu — marcado como Em conversa');
+  }
+  registrarHistoricoLead(l, `${itens.length} mensagens coladas do WhatsApp`);
+  saveLeads();
+  return { itens, leitura };
+}
+
 // ── Registrar algo na conversa ──
 async function registrarNaConversa() {
   const l = conversaLeadAtual;
@@ -8937,10 +9026,27 @@ async function registrarNaConversa() {
 
   const btn = document.getElementById('convRegistrarBtn');
   btn.disabled = true;
-  const pedeLeitura = (tipo === 'retorno' || tipo === 'audio') && document.getElementById('convLerIA').checked;
+  const pedeLeitura = document.getElementById('convLerIA').checked;
+
+  // Bloco colado do WhatsApp: cada mensagem entra com seu autor, data e hora
+  if (conversaColagem && conversaColagem.msgs.length >= 2) {
+    btn.textContent = '⏳ Registrando…';
+    const { leitura: lt } = await registrarColagem(l, pedeLeitura);
+    conversaColagem = null;
+    document.getElementById('convColagem').style.display = 'none';
+    document.getElementById('convTexto').value = '';
+    btn.disabled = false; btn.textContent = 'Registrar';
+    renderTimelineConversa((await carregarInteracoes([l.id]))[String(l.id)] || []);
+    renderResumoConversa(l);
+    if (lt) renderLeituraIA(l, lt);
+    renderProspeccao();
+    showToast('✅ Mensagens registradas na conversa.');
+    return;
+  }
+
   let leitura = null;
 
-  if (pedeLeitura && iaPermitida(1)) {
+  if (pedeLeitura && (tipo === 'retorno' || tipo === 'audio') && iaPermitida(1)) {
     btn.textContent = '⏳ A IA está lendo…';
     try {
       const mapa = await carregarInteracoes([l.id]);
@@ -8951,7 +9057,8 @@ async function registrarNaConversa() {
   }
 
   const tipoFinal = leitura && leitura.e_robo ? 'robo' : tipo;
-  atualizarMarcadores(l, await registrarInteracoes([{ leadId: l.id, tipo: tipoFinal, texto, origem: 'manual' }]));
+  const dir = TIPOS_INTERACAO[tipoFinal] ? TIPOS_INTERACAO[tipoFinal].direcao : 'nota';
+  atualizarMarcadores(l, await registrarInteracoes([{ leadId: l.id, tipo: tipoFinal, direcao: dir, texto, origem: 'manual' }]));
 
   if (leitura) aplicarLeituraNoLead(l, leitura);
   if (tipoFinal !== 'robo' && (tipo === 'retorno' || tipo === 'audio') && l.estagio === 'contatado' && !(leitura && leitura.estagio_sugerido)) {
