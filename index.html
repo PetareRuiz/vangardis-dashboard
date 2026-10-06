@@ -723,6 +723,24 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="tab" id="tab-prospeccao">
       <div id="kpiLeads" class="kpi-grid" style="margin-bottom:20px"></div>
 
+      <!-- Lista de trabalho do dia -->
+      <div class="card" id="cardHoje" style="margin-bottom:20px;display:none">
+        <div class="card-header">
+          <div>
+            <div class="card-title">☀️ Hoje</div>
+            <div class="text-muted" id="hojeContador" style="font-size:12px"></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" id="hojeSugBtn" onclick="atualizarSugestoesIA()" title="A IA analisa os leads que tiveram novidade e sugere a próxima ação">💡 Sugestões da IA</button>
+            <button class="btn btn-ghost btn-sm" onclick="abrirCadencia()" title="Prazos de retomada">⏱️ Cadência</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="hojeChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+          <div id="hojeLista"></div>
+        </div>
+      </div>
+
       <!-- Busca de novos leads por região -->
       <div class="card" style="margin-bottom:20px">
         <div class="card-header">
@@ -767,16 +785,6 @@ th.sortable:hover { background: var(--navy-mid); }
               </table>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Próximos contatos / leads parados -->
-      <div class="card" id="cardLeadsAtencao" style="margin-bottom:20px;display:none">
-        <div class="card-header">
-          <div class="card-title">⏰ Precisam de atenção</div>
-        </div>
-        <div class="card-body">
-          <div id="leadsAtencaoList"></div>
         </div>
       </div>
 
@@ -2209,6 +2217,7 @@ th.sortable:hover { background: var(--navy-mid); }
 
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalConversa')">Fechar</button>
+      <button class="btn btn-ghost" onclick="abrirAmostra(conversaLeadAtual && conversaLeadAtual.id)">📦 Amostra entregue</button>
       <button class="btn btn-gold" onclick="gerarMensagemDaConversa()">✨ Escrever a próxima mensagem</button>
     </div>
   </div>
@@ -2230,6 +2239,60 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalImportarConversas')">Fechar</button>
       <button class="btn btn-gold" id="impBtn" style="display:none" onclick="importarConversas()">📥 Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL CADÊNCIA ═══════ -->
+<div class="modal-overlay" id="modalCadencia">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">⏱️ Cadência de retomada</div>
+    <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:14px">
+      Os prazos que fazem um lead aparecer na lista <b>Hoje</b>. Nada é enviado sozinho — eles só decidem quando o lead volta a pedir a sua atenção.
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Retomar depois de</label><input type="number" id="cad_retomar" min="0" max="365"><div class="text-muted" style="font-size:11px;margin-top:3px">dias sem resposta desde o contato</div></div>
+      <div class="form-group"><label>Última tentativa</label><input type="number" id="cad_ultima" min="0" max="365"><div class="text-muted" style="font-size:11px;margin-top:3px">dias sem resposta</div></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Sugerir congelar</label><input type="number" id="cad_congelar" min="0" max="365"><div class="text-muted" style="font-size:11px;margin-top:3px">dias sem nenhuma resposta</div></div>
+      <div class="form-group"><label>Perguntar da amostra</label><input type="number" id="cad_amostra" min="0" max="365"><div class="text-muted" style="font-size:11px;margin-top:3px">dias depois de entregar</div></div>
+    </div>
+    <div class="form-group" style="max-width:220px">
+      <label>Responder o lead em</label><input type="number" id="cad_responder" min="0" max="30">
+      <div class="text-muted" style="font-size:11px;margin-top:3px">dias depois que ele falou</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalCadencia')">Cancelar</button>
+      <button class="btn btn-gold" onclick="salvarCadencia()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL REGISTRAR AMOSTRA ═══════ -->
+<div class="modal-overlay" id="modalAmostra">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">📦 Amostra entregue</div>
+    <div style="font-size:12.5px;color:var(--gray-600);margin-bottom:12px">Para <strong id="amoLead" style="color:var(--navy)"></strong></div>
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">O que foi entregue</div>
+    <div id="amoProdutos" style="max-height:200px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12.5px;margin-bottom:12px"></div>
+    <div class="form-row">
+      <div class="form-group" style="max-width:180px">
+        <label>Custo para você (R$)</label>
+        <input type="number" id="amoCusto" step="0.01" min="0" oninput="this.dataset.editado='1'">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">sugerido pelo preço de venda — ajuste para o seu custo</div>
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <input type="text" id="amoObs" placeholder="Ex: entregue em mãos, falei com a Joyce">
+      </div>
+    </div>
+    <div style="background:#FFFBF0;border-left:3px solid var(--gold);padding:9px 12px;font-size:11.5px;color:var(--gray-600);line-height:1.5">
+      O lead passa para <b>Proposta</b> e o dashboard já agenda o lembrete para perguntar o que achou.
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAmostra')">Cancelar</button>
+      <button class="btn btn-gold" onclick="registrarAmostra()">Registrar</button>
     </div>
   </div>
 </div>
@@ -2630,6 +2693,7 @@ async function entrarNoDashboard() {
     renderAll();
     iniciarFase1();
     iniciarFase2();
+    iniciarFase3();
   } else {
     // Voltou depois de a sessão expirar: envia o que ficou pendente nesse meio-tempo
     if (localStorage.getItem('vangardis_db_dirty') === '1') syncToCloud();
@@ -7735,7 +7799,7 @@ function congelarLead(id, congelar, emLote) {
 function renderProspeccao() {
   renderKpiLeads();
   renderFunilTrilha();
-  renderLeadsAtencao();
+  renderHoje();
   popularFiltrosLead();
   popularBuscaAuxiliares();
   renderLeads();
@@ -7755,6 +7819,7 @@ function renderKpiLeads() {
     <div class="kpi-card"><div class="kpi-label">Contatados</div><div class="kpi-value">${contatados}</div></div>
     <div class="kpi-card"><div class="kpi-label">Viraram cliente</div><div class="kpi-value" style="color:#2E7D52">${convertidos}</div></div>
     <div class="kpi-card"><div class="kpi-label">Conversão</div><div class="kpi-value">${taxa.toFixed(0)}%</div></div>
+    ${kpiAmostras()}
     ${kpiCardIA()}
   `;
 }
@@ -7833,35 +7898,6 @@ function popularFiltrosLead() {
 }
 
 // Lembretes de contato ignoram os congelados
-function renderLeadsAtencao() {
-  const card = document.getElementById('cardLeadsAtencao');
-  const el = document.getElementById('leadsAtencaoList');
-  if (!el) return;
-  const hoje = new Date(); hoje.setHours(23,59,59,999);
-  const vencidos = leadsAtivosNaoCongelados().filter(l =>
-    l.proximoContato && !['cliente','perdido','bloqueado'].includes(l.estagio) &&
-    parseLocalDate(l.proximoContato) <= hoje);
-
-  if (!vencidos.length) { card.style.display = 'none'; return; }
-  card.style.display = 'block';
-  el.innerHTML = vencidos
-    .sort((a,b) => parseLocalDate(a.proximoContato) - parseLocalDate(b.proximoContato))
-    .map(l => {
-      const est = ESTAGIOS_LEAD[l.estagio] || {};
-      return `<div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--gray-100)">
-        <div>
-          <strong>${l.nome}</strong> <span class="badge" style="background:${est.cor};color:#fff;font-size:10px">${est.label}</span>
-          <div class="text-muted" style="font-size:12px">${l.cidade||'—'} · contato previsto para ${formatDate(l.proximoContato)}</div>
-        </div>
-        <div style="display:flex;gap:6px">
-          ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="whatsappLead(${l.id})">📱</button>` : ''}
-          <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})" title="Conversa e registro de retorno">💬</button>
-          <button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirAbordagem(${l.id})" title="Gerar abordagem com IA">✨</button>
-          <button class="btn btn-sm btn-gold" onclick="editarLead(${l.id})">Abrir</button>
-        </div>
-      </div>`;
-    }).join('');
-}
 
 function renderLeads() {
   const tbody = document.getElementById('tabelaLeads');
@@ -8362,7 +8398,10 @@ function registrarAbordagemEnviada() {
   const texto = (document.getElementById('abordMensagem').value || '').trim();
   if (!texto || texto === abordagemRegistrado) return;
   abordagemRegistrado = texto;
-  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: document.getElementById('abordCanal').value, texto, origem: 'dashboard' }]);
+  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: document.getElementById('abordCanal').value, texto, origem: 'dashboard' }])
+    .then(itens => { atualizarMarcadores(l, itens); saveLeads(); renderProspeccao(); });
+  // Cadência: a data combinada já passou (ou não existia) — reagenda sozinho
+  if (!l.proximoContato || parseLocalDate(l.proximoContato) <= new Date()) agendarProximoAuto(l);
   const canal = document.getElementById('abordCanal').value === 'email' ? 'e-mail' : 'WhatsApp';
   const tom = document.getElementById('abordTom').value;
   if (['descoberto','qualificado'].includes(l.estagio)) {
@@ -8569,7 +8608,8 @@ function enviarItemFila() {
   // Registra no lead e na linha do tempo da conversa
   if (['descoberto','qualificado'].includes(l.estagio)) l.estagio = 'contatado';
   registrarHistoricoLead(l, item.retomada ? 'Retomada por WhatsApp (envio em lote)' : 'Abordagem por WhatsApp (envio em lote)');
-  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt.trim(), origem: 'lote' }]);
+  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt.trim(), origem: 'lote' }])
+    .then(itens => { atualizarMarcadores(l, itens); saveLeads(); });
 
   const dias = parseInt(document.getElementById('loteRetorno').value) || 0;
   if (dias && !l.proximoContato) {
@@ -8911,7 +8951,7 @@ async function registrarNaConversa() {
   }
 
   const tipoFinal = leitura && leitura.e_robo ? 'robo' : tipo;
-  await registrarInteracoes([{ leadId: l.id, tipo: tipoFinal, texto, origem: 'manual' }]);
+  atualizarMarcadores(l, await registrarInteracoes([{ leadId: l.id, tipo: tipoFinal, texto, origem: 'manual' }]));
 
   if (leitura) aplicarLeituraNoLead(l, leitura);
   if (tipoFinal !== 'robo' && (tipo === 'retorno' || tipo === 'audio') && l.estagio === 'contatado' && !(leitura && leitura.estagio_sugerido)) {
@@ -9256,7 +9296,7 @@ async function importarConversas() {
       const minha = it.eu && m.autor === it.eu;
       return { leadId: l.id, data: m.data, direcao: minha ? 'saida' : 'entrada', tipo: minha ? 'mensagem' : 'retorno', texto: m.texto, origem: 'importado' };
     });
-    await registrarInteracoes(itens);
+    atualizarMarcadores(l, await registrarInteracoes(itens));
     totalMsgs += itens.length;
     if (resumir) {
       status.textContent = `⏳ IA resumindo ${n} de ${validos.length}: ${l.nome}…`;
@@ -9652,6 +9692,385 @@ async function classificarFilaLoteIA() {
     abrirLoteAbordagem();
     showToast(`🧭 ${n} lead(s) classificado(s).`);
   } catch (e) { showToast('⚠️ Não consegui classificar agora.', 'warning'); }
+}
+
+// ════════════════════════════════════════════════════
+// FASE 3 — PRÓXIMOS PASSOS E ROTINA
+// A lista "Hoje" nasce de regras simples sobre o que aconteceu em cada
+// conversa: quem falou por último, há quantos dias, e o que foi combinado.
+// A IA entra só para explicar e redigir, nunca para decidir sozinha.
+// ════════════════════════════════════════════════════
+
+const CADENCIA_PADRAO = {
+  retomar: 3,        // dias depois do contato, sem resposta, para a 1ª retomada
+  ultima: 10,        // dias para a última tentativa
+  congelar: 21,      // dias sem nenhuma resposta para sugerir congelar
+  amostra: 5,        // dias depois de entregar a amostra para perguntar
+  responder: 1       // dias com a bola do seu lado antes de virar urgência
+};
+
+function cadencia() {
+  return Object.assign({}, CADENCIA_PADRAO, (DB.prospeccao && DB.prospeccao.cadencia) || {});
+}
+
+const TIPOS_TAREFA = {
+  responder:  { label: 'Responder', cor: '#A33B3B', prio: 1, desc: 'o lead falou por último' },
+  amostra:    { label: 'Perguntar da amostra', cor: '#7A5B12', prio: 2, desc: 'amostra entregue e sem retorno' },
+  agendado:   { label: 'Contato agendado', cor: '#C9940A', prio: 3, desc: 'a data combinada chegou' },
+  retomar:    { label: 'Retomar', cor: '#3D6E9C', prio: 4, desc: 'sem resposta desde o contato' },
+  ultima:     { label: 'Última tentativa', cor: '#A8651A', prio: 5, desc: 'já insistiu e não houve resposta' },
+  qualificar: { label: 'Qualificar', cor: '#7D8794', prio: 6, desc: 'descoberto, ainda não avaliado' },
+  tipo:       { label: 'Definir o tipo', cor: '#7D8794', prio: 7, desc: 'sem tipo de comprador, a IA fica sem playbook' },
+  congelar:   { label: 'Congelar', cor: '#9A9A9A', prio: 8, desc: 'sem retorno há muito tempo' }
+};
+
+function diasDesde(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+// Telefone fixo não tem WhatsApp. O Places devolve o telefone comercial da
+// loja, que muitas vezes é fixo — daí os envios que "não funcionam".
+function pareceFixo(tel) {
+  const n = String(tel || '').replace(/\D/g, '').replace(/^55/, '');
+  return n.length === 10 && !/^[9]/.test(n.slice(2));
+}
+
+// ── Marcadores: quem falou por último em cada lead ──
+// Ficam no próprio lead (leves) e são atualizados a cada registro.
+function atualizarMarcadores(lead, itens) {
+  itens.forEach(it => {
+    if (it.direcao === 'saida') {
+      lead.saidas = (lead.saidas || 0) + 1;
+      if (!lead.ultimaSaidaEm || it.data > lead.ultimaSaidaEm) lead.ultimaSaidaEm = it.data;
+    } else if (it.direcao === 'entrada' && it.tipo !== 'robo') {
+      lead.entradas = (lead.entradas || 0) + 1;
+      if (!lead.ultimaEntradaEm || it.data > lead.ultimaEntradaEm) lead.ultimaEntradaEm = it.data;
+    }
+    if (it.tipo === 'amostra' && (!lead.ultimaAmostraEm || it.data > lead.ultimaAmostraEm)) lead.ultimaAmostraEm = it.data;
+  });
+}
+
+// Uma vez por sessão, confere os marcadores com o servidor (resposta leve)
+async function sincronizarMarcadores() {
+  try {
+    const r = await apiFetch({ action: 'resumoInteracoes' });
+    const j = await r.json();
+    if (!j.ok || !j.resumo) return;
+    let mudou = false;
+    LEADS.forEach(l => {
+      const s = j.resumo[String(l.id)];
+      if (!s) return;
+      if (l.ultimaSaidaEm !== (s.ultimaSaida || undefined) || l.entradas !== s.entradas) mudou = true;
+      l.ultimaSaidaEm = s.ultimaSaida || '';
+      l.ultimaEntradaEm = s.ultimaEntrada || '';
+      l.ultimaAmostraEm = s.ultimaAmostra || '';
+      l.saidas = s.saidas; l.entradas = s.entradas;
+    });
+    if (mudou) { saveLeads(); renderProspeccao(); }
+  } catch (e) { /* offline: usa o que já está no lead */ }
+}
+
+// ── O motor de tarefas ──
+function gerarTarefas() {
+  const c = cadencia();
+  const hoje = new Date(); hoje.setHours(23, 59, 59, 999);
+  const tarefas = [];
+
+  leadsAtivosNaoCongelados().forEach(l => {
+    if (['cliente', 'perdido', 'bloqueado'].includes(l.estagio)) return;
+    const dSaida = diasDesde(l.ultimaSaidaEm);
+    const dEntrada = diasDesde(l.ultimaEntradaEm);
+    const dAmostra = diasDesde(l.ultimaAmostraEm);
+    const respondeuPorUltimo = l.ultimaEntradaEm && (!l.ultimaSaidaEm || l.ultimaEntradaEm > l.ultimaSaidaEm);
+    const add = (tipo, motivo, dias) => tarefas.push({ lead: l, tipo, motivo, dias: dias == null ? 999 : dias });
+
+    // 1. A bola está com você — foi o maior achado do diagnóstico
+    if (respondeuPorUltimo && dEntrada >= c.responder) {
+      add('responder', `${l.nome} respondeu há ${dEntrada} dia(s) e ainda não teve resposta sua.`, dEntrada);
+      return;
+    }
+    // 2. Amostra entregue e sem retorno
+    if (dAmostra !== null && dAmostra >= c.amostra && !(l.ultimaEntradaEm && l.ultimaEntradaEm > l.ultimaAmostraEm)) {
+      add('amostra', `Amostra entregue há ${dAmostra} dias, sem retorno desde então.`, dAmostra);
+      return;
+    }
+    // 3. Data combinada chegou
+    if (l.proximoContato && parseLocalDate(l.proximoContato) <= hoje) {
+      const atraso = Math.floor((hoje - parseLocalDate(l.proximoContato)) / 86400000);
+      add('agendado', atraso > 0 ? `Contato combinado para ${formatDate(l.proximoContato)} — ${atraso} dia(s) de atraso.` : 'O contato combinado é para hoje.', atraso);
+      return;
+    }
+    // 4 a 6. Contatado e sem resposta: retomar, última tentativa, congelar
+    if (l.estagio === 'contatado' && dSaida !== null && !l.entradas) {
+      if (dSaida >= c.congelar) add('congelar', `${dSaida} dias desde o contato, sem nenhuma resposta.`, dSaida);
+      else if (dSaida >= c.ultima) add('ultima', `${dSaida} dias sem resposta, após ${l.saidas || 1} tentativa(s).`, dSaida);
+      else if (dSaida >= c.retomar) add('retomar', `${dSaida} dias desde o contato, sem resposta.`, dSaida);
+      return;
+    }
+    // 7. Descoberto: decidir se vale a pena
+    if (l.estagio === 'descoberto') {
+      add('qualificar', 'Encontrado na busca e ainda não avaliado.', diasDesde(l.dataDescoberta));
+      return;
+    }
+    // 8. Qualificado sem tipo de comprador: a IA fica sem playbook
+    if (l.estagio === 'qualificado' && !l.tipoComprador) {
+      add('tipo', 'Sem tipo de comprador — a mensagem sai sem a linguagem do tipo de negócio.', diasDesde(l.dataDescoberta));
+    }
+  });
+
+  return tarefas.sort((a, b) =>
+    TIPOS_TAREFA[a.tipo].prio - TIPOS_TAREFA[b.tipo].prio || b.dias - a.dias ||
+    a.lead.nome.localeCompare(b.lead.nome, 'pt-BR'));
+}
+
+let filtroTarefa = '';
+
+function renderHoje() {
+  const card = document.getElementById('cardHoje');
+  const el = document.getElementById('hojeLista');
+  if (!el) return;
+  const todas = gerarTarefas();
+
+  const chips = document.getElementById('hojeChips');
+  const porTipo = {};
+  todas.forEach(t => { porTipo[t.tipo] = (porTipo[t.tipo] || 0) + 1; });
+  chips.innerHTML = Object.entries(TIPOS_TAREFA)
+    .filter(([k]) => porTipo[k])
+    .map(([k, v]) => `<div onclick="filtrarTarefa('${k}')" title="${v.desc}"
+      style="cursor:pointer;padding:5px 9px;border-radius:6px;font-size:11.5px;font-weight:600;border:1.5px solid ${v.cor};
+      background:${filtroTarefa === k ? v.cor : 'var(--gray-100)'};color:${filtroTarefa === k ? '#fff' : 'var(--navy)'}">
+      ${v.label} <strong>${porTipo[k]}</strong></div>`).join('');
+
+  const lista = filtroTarefa ? todas.filter(t => t.tipo === filtroTarefa) : todas;
+  document.getElementById('hojeContador').textContent =
+    todas.length ? `${todas.length} lead(s) esperando uma ação sua` : '';
+
+  if (!todas.length) {
+    card.style.display = 'block';
+    el.innerHTML = '<div class="text-muted" style="text-align:center;padding:22px 10px;font-size:13px">✅ Nada pendente por aqui. Quando um lead responder, passar da data combinada ou ficar sem retorno, ele aparece nesta lista.</div>';
+    return;
+  }
+  card.style.display = 'block';
+
+  el.innerHTML = lista.slice(0, 40).map(t => {
+    const l = t.lead, v = TIPOS_TAREFA[t.tipo];
+    const est = ESTAGIOS_LEAD[l.estagio] || {};
+    const sug = l.sugestaoIA;
+    const fixo = pareceFixo(l.whatsapp);
+    return `<div style="display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--gray-100)">
+      <div>
+        <div style="font-size:10.5px;font-weight:700;color:${v.cor}">${v.label}</div>
+        <strong style="font-size:13px;color:var(--navy);display:block;line-height:1.25">${escaparHtml(l.nome)}</strong>
+        <span class="badge" style="background:${est.cor};color:#fff;font-size:9.5px">${est.label}</span>
+      </div>
+      <div style="font-size:12px;color:var(--gray-600);line-height:1.4">
+        ${escaparHtml(t.motivo)}
+        ${fixo ? '<div style="color:var(--warning);font-size:11px">⚠️ O telefone parece fixo — pode não ter WhatsApp.</div>' : ''}
+        ${sug ? `<div style="color:#2E7D52;margin-top:2px">💡 ${escaparHtml(sug.acao)}${sug.motivo ? ' — ' + escaparHtml(sug.motivo) : ''}</div>` : ''}
+        ${l.proximoPasso && !sug ? `<div style="color:#2E7D52;margin-top:2px">→ ${escaparHtml(l.proximoPasso)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:4px;white-space:nowrap">
+        <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})" title="Conversa">💬</button>
+        ${t.tipo === 'congelar'
+          ? `<button class="btn btn-sm btn-ghost" onclick="congelarLead(${l.id}, true)" title="Congelar">❄️</button>`
+          : t.tipo === 'qualificar'
+            ? `<button class="btn btn-sm btn-gold" onclick="qualificarLead(${l.id})">Qualificar</button>`
+            : t.tipo === 'tipo'
+              ? `<button class="btn btn-sm btn-gold" onclick="editarLead(${l.id})">Definir</button>`
+              : `<button class="btn btn-sm" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirAbordagem(${l.id})" title="Escrever a mensagem">✨</button>`}
+        <button class="btn btn-sm btn-ghost" onclick="adiarTarefa(${l.id})" title="Adiar 3 dias">⏰</button>
+      </div>
+    </div>`;
+  }).join('') + (lista.length > 40 ? `<div class="text-muted" style="text-align:center;padding:8px;font-size:12px">e mais ${lista.length - 40}…</div>` : '');
+}
+
+function filtrarTarefa(k) {
+  filtroTarefa = filtroTarefa === k ? '' : k;
+  renderHoje();
+}
+
+function qualificarLead(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  l.estagio = 'qualificado';
+  registrarHistoricoLead(l, 'Qualificado pela lista Hoje');
+  saveLeads();
+  renderProspeccao();
+  showToast('✅ Qualificado. Agora é escrever a abordagem.');
+}
+
+function adiarTarefa(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  const d = new Date(); d.setDate(d.getDate() + 3);
+  l.proximoContato = d.toISOString().slice(0, 10);
+  registrarHistoricoLead(l, 'Adiado por 3 dias pela lista Hoje');
+  saveLeads();
+  renderProspeccao();
+  showToast('⏰ Adiado para ' + formatDate(l.proximoContato));
+}
+
+// ── Cadência automática ──
+// Depois de enviar uma mensagem, agenda sozinho o próximo contato.
+function agendarProximoAuto(l, dias) {
+  const d = new Date(); d.setDate(d.getDate() + (dias || cadencia().retomar));
+  l.proximoContato = d.toISOString().slice(0, 10);
+}
+
+function abrirCadencia() {
+  const c = cadencia();
+  Object.keys(CADENCIA_PADRAO).forEach(k => { document.getElementById('cad_' + k).value = c[k]; });
+  openModal('modalCadencia');
+}
+
+function salvarCadencia() {
+  const nova = {};
+  for (const k of Object.keys(CADENCIA_PADRAO)) {
+    const v = parseInt(document.getElementById('cad_' + k).value, 10);
+    if (isNaN(v) || v < 0 || v > 365) { showToast('⚠️ Use números de 0 a 365.', 'warning'); return; }
+    nova[k] = v;
+  }
+  if (nova.ultima <= nova.retomar || nova.congelar <= nova.ultima) {
+    showToast('⚠️ Os prazos precisam crescer: retomar < última tentativa < congelar.', 'warning');
+    return;
+  }
+  DB.prospeccao = Object.assign({}, DB.prospeccao, { cadencia: nova });
+  saveDB();
+  closeModal('modalCadencia');
+  renderProspeccao();
+  showToast('✅ Cadência salva.');
+}
+
+// ── Amostras ──
+function abrirAmostra(leadId) {
+  const l = LEADS.find(x => x.id === leadId) || conversaLeadAtual;
+  if (!l) return;
+  amostraLeadAtual = l;
+  document.getElementById('amoLead').textContent = l.nome;
+  document.getElementById('amoObs').value = '';
+  document.getElementById('amoCusto').value = '';
+  const cat = catalogoParaLead().slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  document.getElementById('amoProdutos').innerHTML = cat.length
+    ? cat.map(p => `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+        <input type="checkbox" value="${p.id}" onchange="somarCustoAmostra()" data-valor="${p.valor || 0}" style="cursor:pointer">
+        <span>${escaparHtml(p.nome)}${p.valor ? ` <span class="text-muted">— venda R$ ${Number(p.valor).toFixed(2)}</span>` : ''}</span></label>`).join('')
+    : '<span class="text-muted">Nenhum produto no catálogo.</span>';
+  openModal('modalAmostra');
+}
+
+let amostraLeadAtual = null;
+
+// Sugere o custo pela soma dos preços de venda; é só um ponto de partida
+function somarCustoAmostra() {
+  const campo = document.getElementById('amoCusto');
+  if (campo.dataset.editado === '1') return;
+  const total = Array.from(document.querySelectorAll('#amoProdutos input:checked'))
+    .reduce((s, el) => s + (parseFloat(el.dataset.valor) || 0), 0);
+  campo.value = total ? total.toFixed(2) : '';
+}
+
+async function registrarAmostra() {
+  const l = amostraLeadAtual;
+  if (!l) return;
+  const ids = Array.from(document.querySelectorAll('#amoProdutos input:checked')).map(e => parseInt(e.value));
+  const produtos = (DB.catalogo || []).filter(p => ids.includes(p.id));
+  if (!produtos.length) { showToast('⚠️ Selecione ao menos um produto.', 'warning'); return; }
+  const custo = parseFloat(document.getElementById('amoCusto').value) || 0;
+  const obs = document.getElementById('amoObs').value.trim();
+
+  const texto = `Amostra entregue: ${produtos.map(p => p.nome).join(', ')}` +
+    (custo ? ` · custo R$ ${custo.toFixed(2)}` : '') + (obs ? `\n${obs}` : '');
+  const itens = await registrarInteracoes([{ leadId: l.id, tipo: 'amostra', direcao: 'nota', texto, origem: 'dashboard' }]);
+  atualizarMarcadores(l, itens);
+
+  if (!l.amostras) l.amostras = [];
+  l.amostras.push({ data: new Date().toISOString(), produtos: produtos.map(p => p.nome), custo });
+  if (ESTAGIOS_LEAD[l.estagio] && ESTAGIOS_LEAD[l.estagio].ordem < 5) {
+    l.estagio = 'proposta';
+    registrarHistoricoLead(l, 'Amostra entregue — estágio: Proposta');
+  } else {
+    registrarHistoricoLead(l, 'Amostra entregue');
+  }
+  agendarProximoAuto(l, cadencia().amostra);
+  saveLeads();
+  closeModal('modalAmostra');
+  renderProspeccao();
+  showToast(`📦 Amostra registrada. Lembrete para perguntar em ${formatDate(l.proximoContato)}.`);
+}
+
+function kpiAmostras() {
+  const comAmostra = LEADS.filter(l => (l.amostras || []).length);
+  if (!comAmostra.length) return '';
+  const custo = comAmostra.reduce((s, l) => s + l.amostras.reduce((a, b) => a + (b.custo || 0), 0), 0);
+  const viraram = comAmostra.filter(l => l.estagio === 'cliente').length;
+  return `<div class="kpi-card" title="Leads que receberam amostra física">
+    <div class="kpi-label">Amostras</div>
+    <div class="kpi-value">${comAmostra.length}</div>
+    <div class="text-muted" style="font-size:10.5px;margin-top:3px">R$ ${custo.toFixed(2)} investido${viraram ? ` · ${viraram} virou cliente` : ''}</div>
+  </div>`;
+}
+
+// ── Sugestões da IA para a lista ──
+async function atualizarSugestoesIA() {
+  const tarefas = gerarTarefas().filter(t => !['qualificar', 'tipo'].includes(t.tipo));
+  // Só reanalisa quem teve novidade desde a última sugestão
+  const alvo = tarefas.filter(t => {
+    const s = t.lead.sugestaoIA;
+    if (!s) return true;
+    const marca = t.lead.ultimaEntradaEm || t.lead.ultimaSaidaEm || '';
+    return !s.em || (marca && marca > s.em) || diasDesde(s.em) >= 7;
+  }).slice(0, 40);
+
+  if (!alvo.length) { showToast('Tudo em dia — nenhum lead teve novidade desde a última análise.'); return; }
+  if (!iaPermitida(Math.ceil(alvo.length / 10))) return;
+
+  const btn = document.getElementById('hojeSugBtn');
+  btn.disabled = true; btn.textContent = '⏳ Analisando…';
+  let n = 0;
+  try {
+    for (let i = 0; i < alvo.length; i += 10) {
+      const bloco = alvo.slice(i, i + 10);
+      const prompt = `Você orienta a prospecção da Vangardis Expertise, fabricante de Curitiba de produtos personalizados (porta-retratos, polaroids, chaveiros, ímãs, abridores, NFC, corte a laser), que vende para lojas e empresas.
+
+Para cada lead abaixo, diga a PRÓXIMA AÇÃO concreta do Petare. Seja específico e curto. Use o que o lead disse, não generalidades.
+
+Ações possíveis: "Retomar com pergunta", "Enviar amostra", "Achar quem compra", "Agendar a volta", "Ligar", "Responder a dúvida", "Congelar", "Descartar".
+${blocoRegrasGerais()}
+
+LEADS:
+${bloco.map(t => JSON.stringify({
+        id: String(t.lead.id), nome: t.lead.nome, ramo: t.lead.segmento || '',
+        tipo: t.lead.tipoComprador || '', estagio: t.lead.estagio,
+        situacao: t.motivo,
+        resumo: String(t.lead.resumoIA || '').slice(0, 400),
+        telefone_parece_fixo: pareceFixo(t.lead.whatsapp)
+      })).join('\n')}
+
+Responda SOMENTE com um array JSON, sem texto fora dele e sem cercas de código:
+[{"id":"...","acao":"uma das ações acima","motivo":"até 12 palavras explicando, citando o que o lead disse quando houver"}]`;
+      const txt = await chamarIA(prompt, 1200);
+      const limpo = String(txt).replace(/```json|```/g, '').trim();
+      JSON.parse(limpo.slice(limpo.indexOf('['), limpo.lastIndexOf(']') + 1)).forEach(r => {
+        const l = LEADS.find(x => String(x.id) === String(r.id));
+        if (!l || !r.acao) return;
+        l.sugestaoIA = { acao: String(r.acao).slice(0, 60), motivo: String(r.motivo || '').slice(0, 120), em: new Date().toISOString() };
+        n++;
+      });
+    }
+    saveLeads();
+    renderHoje();
+    showToast(`💡 ${n} sugestão(ões) atualizada(s).`);
+  } catch (e) {
+    showToast('⚠️ Não consegui analisar agora: ' + (e.message || 'erro'), 'warning');
+  }
+  btn.disabled = false; btn.textContent = '💡 Sugestões da IA';
+}
+
+function iniciarFase3() {
+  sincronizarMarcadores();
 }
 
 function renderAll(){
