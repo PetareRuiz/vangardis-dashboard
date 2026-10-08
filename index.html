@@ -723,6 +723,9 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="tab" id="tab-prospeccao">
       <div id="kpiLeads" class="kpi-grid" style="margin-bottom:20px"></div>
 
+      <!-- Aviso do diagnóstico mensal (fase 4) -->
+      <div id="avisoDiagnostico" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:#FBF1D6;border:1px solid #E8C96A;border-radius:8px;padding:10px 13px;margin-bottom:16px;font-size:12.5px;color:#6B4E07"></div>
+
       <!-- Lista de trabalho do dia -->
       <div class="card" id="cardHoje" style="margin-bottom:20px;display:none">
         <div class="card-header">
@@ -732,6 +735,7 @@ th.sortable:hover { background: var(--navy-mid); }
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" id="hojeSugBtn" onclick="atualizarSugestoesIA()" title="A IA analisa os leads que tiveram novidade e sugere a próxima ação">💡 Sugestões da IA</button>
+            <button class="btn btn-ghost btn-sm" onclick="abrirDiagnostico()" title="Diagnóstico do mês: a IA compara os números com as conversas e propõe ajustes">🔬 Diagnóstico</button>
             <button class="btn btn-ghost btn-sm" onclick="abrirCadencia()" title="Prazos de retomada">⏱️ Cadência</button>
           </div>
         </div>
@@ -792,6 +796,8 @@ th.sortable:hover { background: var(--navy-mid); }
         <div class="card-header">
           <div class="card-title">Leads</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost" onclick="abrirMetricas()" title="Taxa de resposta por versão de playbook, segmento e tom">📊 Resultados</button>
+            <button class="btn btn-ghost" onclick="abrirJanelas()" title="Em que mês abordar para cada data comemorativa">📅 Calendário</button>
             <button class="btn btn-ghost" onclick="abrirPlaybooks()" title="Playbooks por tipo de negócio">📘 Playbooks</button>
             <button class="btn btn-ghost" onclick="abrirImportarConversas()" title="Importar conversas exportadas do WhatsApp">📥 Importar conversas</button>
             <button class="btn btn-gold" onclick="abrirNovoLead()">+ Novo Lead</button>
@@ -2383,6 +2389,141 @@ th.sortable:hover { background: var(--navy-mid); }
   </div>
 </div>
 
+<!-- ═══════ MODAL RESULTADOS (FASE 4) ═══════ -->
+<div class="modal-overlay" id="modalMetricas">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-title">📊 Resultados da prospecção</div>
+    <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:14px">
+      Quanta gente responde a cada versão de playbook, a cada segmento e a cada tom. É daqui que sai a decisão de
+      manter ou mudar um playbook — e é o que o diagnóstico do mês lê antes de propor ajustes.
+    </div>
+    <div id="metConteudo"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalMetricas')">Fechar</button>
+      <button class="btn btn-gold" onclick="abrirDiagnostico()">🔬 Diagnóstico do mês</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL CALENDÁRIO DE JANELAS (FASE 4) ═══════ -->
+<div class="modal-overlay" id="modalJanelas">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-title">📅 Calendário de janelas</div>
+    <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:14px">
+      A data comemorativa acontece num mês; a hora de <b>abordar</b> é meses antes. Cada janela diz em que meses falar
+      e com que tipo de comprador. Quando uma janela abre, os leads daquele perfil que estão parados aparecem na lista
+      <b>Hoje</b>, e a IA passa a usar a data como gancho da mensagem.
+    </div>
+
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Aberto agora</div>
+    <div id="jnAgora" style="margin-bottom:18px"></div>
+
+    <div class="flex-between" style="margin-bottom:6px">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px">O ano inteiro</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="text-muted" style="font-size:11px">
+          <span style="display:inline-block;width:9px;height:9px;background:var(--gold);border-radius:2px"></span> abordar
+          <span style="display:inline-block;width:9px;height:9px;background:var(--navy);border-radius:2px;margin-left:6px"></span> o evento
+        </span>
+        <button class="btn btn-sm btn-gold" onclick="novaJanela()">+ Nova janela</button>
+      </div>
+    </div>
+    <div id="jnQuadro" style="max-height:300px;overflow-y:auto"></div>
+
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost btn-sm" onclick="restaurarJanelasPadrao()">Voltar às do diagnóstico</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalJanelas')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL EDITAR JANELA (FASE 4) ═══════ -->
+<div class="modal-overlay" id="modalJanelaEdit">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title" id="jneTitulo">Janela</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Nome da data</label>
+        <input type="text" id="jne_nome" placeholder="Ex.: Dia das Mães, Formaturas, Black Friday">
+      </div>
+      <div class="form-group" style="max-width:170px">
+        <label>Mês do evento</label>
+        <select id="jne_mesEvento">
+          <option value="1">janeiro</option><option value="2">fevereiro</option><option value="3">março</option>
+          <option value="4">abril</option><option value="5">maio</option><option value="6">junho</option>
+          <option value="7">julho</option><option value="8">agosto</option><option value="9">setembro</option>
+          <option value="10">outubro</option><option value="11">novembro</option><option value="12">dezembro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Meses de abordar <span class="text-muted" style="font-weight:400;font-size:11px">(quando falar com a loja, não quando a data acontece)</span></label>
+      <div id="jneMeses" style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;font-size:12px">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="1"> jan</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="2"> fev</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="3"> mar</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="4"> abr</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="5"> mai</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="6"> jun</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="7"> jul</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="8"> ago</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="9"> set</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="10"> out</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="11"> nov</label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" value="12"> dez</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Vale para quais tipos de comprador <span class="text-muted" style="font-weight:400;font-size:11px">(nenhum marcado = todos)</span></label>
+      <div id="jneTipos" style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="revenda"> Revenda</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="uso_proprio"> Uso próprio</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="eventos"> Eventos</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" value="corporativo"> Corporativo</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Só para estes segmentos <span class="text-muted" style="font-weight:400;font-size:11px">(palavras separadas por vírgula — em branco vale para todos)</span></label>
+      <input type="text" id="jne_termos" placeholder="Ex.: fotografia, estúdio">
+    </div>
+    <div class="form-group">
+      <label>Observação <span class="text-muted" style="font-weight:400;font-size:11px">(vai para a IA junto com a data)</span></label>
+      <input type="text" id="jne_nota" placeholder="Ex.: lojas abastecem de 1 a 2 meses antes">
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;margin-bottom:4px">
+      <input type="checkbox" id="jne_ativo"> Janela ligada
+    </label>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-ghost" id="jneExcluir" style="color:var(--warning)" onclick="excluirJanela()">🗑️ Excluir</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-ghost" onclick="closeModal('modalJanelaEdit')">Cancelar</button>
+        <button class="btn btn-gold" onclick="salvarJanela()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL DIAGNÓSTICO DO MÊS (FASE 4) ═══════ -->
+<div class="modal-overlay" id="modalDiagnostico">
+  <div class="modal" style="max-width:820px">
+    <div class="modal-title">🔬 Diagnóstico do mês</div>
+    <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:12px">
+      A IA lê os números de resposta e as conversas reais do período e <b>propõe</b> ajustes nos playbooks e nas regras
+      gerais. Nada muda sozinho: cada proposta mostra o texto de hoje ao lado do proposto, e espera o seu aplicar ou recusar.
+      Aplicar cria uma versão nova do playbook, para medir se o ajuste melhorou.
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-gold btn-sm" id="diagRodarBtn" onclick="rodarDiagnostico()">Rodar o diagnóstico agora</button>
+      <select id="diagHistorico" onchange="verDiagnostico(this.value)" style="display:none;padding:7px 9px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12.5px"></select>
+      <span id="diagStatus" style="font-size:12px;color:var(--gray-600)"></span>
+    </div>
+    <div id="diagConteudo"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalDiagnostico')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════ MODAL PRODUTO CATÁLOGO ═══════ -->
 <div class="modal-overlay" id="modalProdCatalogo">
   <div class="modal" style="max-width:640px">
@@ -2697,6 +2838,7 @@ async function entrarNoDashboard() {
     iniciarFase1();
     iniciarFase2();
     iniciarFase3();
+    iniciarFase4();
   } else {
     // Voltou depois de a sessão expirar: envia o que ficou pendente nesse meio-tempo
     if (localStorage.getItem('vangardis_db_dirty') === '1') syncToCloud();
@@ -7806,6 +7948,7 @@ function renderProspeccao() {
   popularFiltrosLead();
   popularBuscaAuxiliares();
   renderLeads();
+  verificarDiagnosticoMensal();
 }
 
 // Indicadores sempre ignoram os congelados
@@ -8140,6 +8283,7 @@ function extrairCidadeDoEndereco(end) {
 let abordagemLeadAtual = null;
 let abordagemInteracoes = [];   // conversa do lead aberto (fase 1)
 let abordagemRegistrado = '';   // evita gravar duas vezes o mesmo texto (copiar + enviar)
+let abordagemVariante = '';     // fase 4: tom usado (ou 'retomada'), para medir resultado
 
 const TONS_ABORDAGEM = {
   apresentacao: 'APRESENTAÇÃO DA EMPRESA — apresente a Vangardis de forma breve e confiável, mostrando o que ela fabrica e por que isso interessa a uma loja como a dele. Cordial e profissional.',
@@ -8175,6 +8319,7 @@ function abrirAbordagem(leadId) {
 
   abordagemInteracoes = [];
   abordagemRegistrado = '';
+  abordagemVariante = '';
   document.getElementById('abordRetomada').style.display = 'none';
   document.getElementById('abordObjetivoWrap').style.display = 'none';
   document.getElementById('abordObjetivo').value = 'auto';
@@ -8258,6 +8403,7 @@ ${l.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + l.contato : 
 
   ctx += blocoRegrasGerais();
   ctx += blocoPlaybook(pb);
+  ctx += blocoJanelas(l);
 
   const rotuloLista = comPanfleto
     ? 'PRODUTOS DESTE ENVIO (são os do panfleto anexado — cite apenas estes)'
@@ -8286,6 +8432,7 @@ async function gerarMensagemAbordagem() {
   const canal = document.getElementById('abordCanal').value;
   if (!iaPermitida(1)) return;
   const retomada = abordagemInteracoes.length > 0 && objetivo !== 'primeiro';
+  abordagemVariante = retomada ? 'retomada' : tom;
 
   document.getElementById('abordLoading').style.display = 'block';
   document.getElementById('abordErro').style.display = 'none';
@@ -8401,7 +8548,8 @@ function registrarAbordagemEnviada() {
   const texto = (document.getElementById('abordMensagem').value || '').trim();
   if (!texto || texto === abordagemRegistrado) return;
   abordagemRegistrado = texto;
-  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: document.getElementById('abordCanal').value, texto, origem: 'dashboard' }])
+  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: document.getElementById('abordCanal').value, texto,
+    origem: origemComVersao('dashboard', l, abordagemVariante) }])
     .then(itens => { atualizarMarcadores(l, itens); saveLeads(); renderProspeccao(); });
   // Cadência: a data combinada já passou (ou não existia) — reagenda sozinho
   if (!l.proximoContato || parseLocalDate(l.proximoContato) <= new Date()) agendarProximoAuto(l);
@@ -8507,6 +8655,7 @@ async function gerarMensagensLote() {
         ? montarPromptRetomada(item.lead, inters, objetivoLote, 'whatsapp', produtosLote.length ? produtosLote : catalogoParaLead(), instrucaoLote)
         : montarPromptAbordagem(item.lead, tom, 'whatsapp', produtosLote, instrucaoLote);
       item.mensagem = removerEmojis((await chamarIA(prompt)).trim());
+      item.variante = item.retomada ? 'retomada' : tom;
     } catch (e) {
       item.erro = e.message || 'falha de conexão';
     }
@@ -8611,7 +8760,8 @@ function enviarItemFila() {
   // Registra no lead e na linha do tempo da conversa
   if (['descoberto','qualificado'].includes(l.estagio)) l.estagio = 'contatado';
   registrarHistoricoLead(l, item.retomada ? 'Retomada por WhatsApp (envio em lote)' : 'Abordagem por WhatsApp (envio em lote)');
-  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt.trim(), origem: 'lote' }])
+  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt.trim(),
+    origem: origemComVersao('lote', l, item.variante) }])
     .then(itens => { atualizarMarcadores(l, itens); saveLeads(); });
 
   const dias = parseInt(document.getElementById('loteRetorno').value) || 0;
@@ -8910,7 +9060,8 @@ function renderTimelineConversa(inters) {
     const quando = isNaN(d) ? '' : `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
     const cor = it.tipo === 'robo' ? '#F4F4F4' : it.direcao === 'saida' ? '#F0EEEA' : it.direcao === 'entrada' ? '#E5F2EA' : '#FBF4E1';
     const corTxt = it.tipo === 'robo' ? '#999' : '#1F2430';
-    const origem = it.origem === 'lote' ? ' · envio em lote' : it.origem === 'importado' ? ' · importada' : '';
+    const ob = baseOrigem(it.origem);
+    const origem = ob === 'lote' ? ' · envio em lote' : ob === 'importado' ? ' · importada' : '';
     return `<div style="background:${cor};color:${corTxt};border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12.5px;line-height:1.45">
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:700;opacity:.8;margin-bottom:2px">
         <span>${t.icone} ${t.label}${origem}</span>
@@ -9243,6 +9394,7 @@ ${conversaParaPrompt(inters, 8)}`;
 
   ctx += blocoRegrasGerais();
   ctx += blocoPlaybook(playbookDoLead(l));
+  ctx += blocoJanelas(l);
   if (produtos && produtos.length) {
     ctx += `\n\nPRODUTOS QUE PODEM SER CITADOS (nenhum outro):\n- ${produtos.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`;
   }
@@ -9494,10 +9646,20 @@ const PLAYBOOKS_SEMENTE = [
 ];
 
 function garantirPlaybooks() {
-  if (DB.playbooks && Array.isArray(DB.playbooks.itens)) return;
+  if (DB.playbooks && Array.isArray(DB.playbooks.itens)) {
+    // Fase 4: todo playbook passa a ter número de versão, para medir o
+    // resultado de cada ajuste. Os que já existiam começam na v1.
+    let mudou = false;
+    DB.playbooks.itens.forEach(pb => {
+      if (!pb.versao) { pb.versao = 1; mudou = true; }
+      if (!Array.isArray(pb.revisoes)) { pb.revisoes = []; mudou = true; }
+    });
+    if (mudou) saveDB();
+    return;
+  }
   DB.playbooks = {
     regras: REGRAS_GERAIS_PADRAO.slice(),
-    itens: PLAYBOOKS_SEMENTE.map(p => ({ ...p, atualizadoEm: new Date().toISOString() }))
+    itens: PLAYBOOKS_SEMENTE.map(p => ({ ...p, versao: 1, revisoes: [], atualizadoEm: new Date().toISOString() }))
   };
   saveDB();
 }
@@ -9606,6 +9768,10 @@ function restaurarRegrasPadrao() {
 
 const CAMPOS_PB = ['segmento','tipoComprador','status','termos','porQueCompram','linguagem','perguntaAbertura','objecoes','calendario','proximoPasso','produtosFoco','origem'];
 
+// Campos que mudam o QUE a IA escreve. Alterar qualquer um deles gera uma
+// versão nova do playbook (fase 4); 'status' e 'origem' são só rótulos.
+const CAMPOS_PB_CONTEUDO = ['termos','porQueCompram','linguagem','perguntaAbertura','objecoes','calendario','proximoPasso','produtosFoco'];
+
 function novoPlaybook() {
   playbookEditando = null;
   CAMPOS_PB.forEach(c => { document.getElementById('pbe_' + c).value = ''; });
@@ -9637,9 +9803,15 @@ function salvarPlaybook() {
   if (repetido) { showToast('⚠️ Já existe um playbook para esse segmento e tipo de comprador.', 'warning'); return; }
   dados.atualizadoEm = new Date().toISOString();
   if (playbookEditando) {
-    Object.assign(DB.playbooks.itens.find(x => x.id === playbookEditando), dados);
+    const pb = DB.playbooks.itens.find(x => x.id === playbookEditando);
+    // Mudar o CONTEÚDO cria uma versão nova — é o que permite comparar
+    // depois se o ajuste melhorou a taxa de resposta. Mudar só a situação
+    // (rascunho/validado) não é mudança de conteúdo.
+    const mudados = CAMPOS_PB_CONTEUDO.filter(c => String(pb[c] || '') !== String(dados[c] || ''));
+    Object.assign(pb, dados);
+    if (mudados.length) novaVersaoPlaybook(pb, 'manual', 'Editado por você: ' + mudados.join(', '));
   } else {
-    DB.playbooks.itens.push({ id: 'pb_' + Date.now().toString(36), ...dados });
+    DB.playbooks.itens.push({ id: 'pb_' + Date.now().toString(36), versao: 1, revisoes: [], ...dados });
   }
   saveDB();
   closeModal('modalPlaybookEdit');
@@ -9829,11 +10001,12 @@ const TIPOS_TAREFA = {
   responder:  { label: 'Responder', cor: '#A33B3B', prio: 1, desc: 'o lead falou por último' },
   amostra:    { label: 'Perguntar da amostra', cor: '#7A5B12', prio: 2, desc: 'amostra entregue e sem retorno' },
   agendado:   { label: 'Contato agendado', cor: '#C9940A', prio: 3, desc: 'a data combinada chegou' },
-  retomar:    { label: 'Retomar', cor: '#3D6E9C', prio: 4, desc: 'sem resposta desde o contato' },
-  ultima:     { label: 'Última tentativa', cor: '#A8651A', prio: 5, desc: 'já insistiu e não houve resposta' },
-  qualificar: { label: 'Qualificar', cor: '#7D8794', prio: 6, desc: 'descoberto, ainda não avaliado' },
-  tipo:       { label: 'Definir o tipo', cor: '#7D8794', prio: 7, desc: 'sem tipo de comprador, a IA fica sem playbook' },
-  congelar:   { label: 'Congelar', cor: '#9A9A9A', prio: 8, desc: 'sem retorno há muito tempo' }
+  janela:     { label: 'Janela do calendário', cor: '#2E7D52', prio: 4, desc: 'a época de abordar para uma data comemorativa abriu agora' },
+  retomar:    { label: 'Retomar', cor: '#3D6E9C', prio: 5, desc: 'sem resposta desde o contato' },
+  ultima:     { label: 'Última tentativa', cor: '#A8651A', prio: 6, desc: 'já insistiu e não houve resposta' },
+  qualificar: { label: 'Qualificar', cor: '#7D8794', prio: 7, desc: 'descoberto, ainda não avaliado' },
+  tipo:       { label: 'Definir o tipo', cor: '#7D8794', prio: 8, desc: 'sem tipo de comprador, a IA fica sem playbook' },
+  congelar:   { label: 'Congelar', cor: '#9A9A9A', prio: 9, desc: 'sem retorno há muito tempo' }
 };
 
 function diasDesde(iso) {
@@ -9930,6 +10103,16 @@ function gerarTarefas() {
     // 8. Qualificado sem tipo de comprador: a IA fica sem playbook
     if (l.estagio === 'qualificado' && !l.tipoComprador) {
       add('tipo', 'Sem tipo de comprador — a mensagem sai sem a linguagem do tipo de negócio.', diasDesde(l.dataDescoberta));
+      return;
+    }
+    // 9. Janela do calendário aberta e este lead está parado há tempo.
+    // Entra por último: quem já tem resposta, data combinada ou retomada
+    // pendente continua aparecendo pelo motivo mais urgente.
+    const jn = janelasDoLead(l);
+    if (jn.length && (dSaida === null || dSaida >= DIAS_PARADO_JANELA)) {
+      const j = jn[0];
+      add('janela', `${j.nome} (${MESES_CURTOS[j.mesEvento - 1]}): a época de abordar é agora e ${dSaida === null ? 'esta loja nunca foi contatada' : `o último contato foi há ${dSaida} dias`}.`,
+        dSaida === null ? 999 : dSaida);
     }
   });
 
@@ -10183,6 +10366,818 @@ Responda SOMENTE com um array JSON, sem texto fora dele e sem cercas de código:
 
 function iniciarFase3() {
   sincronizarMarcadores();
+}
+
+// ════════════════════════════════════════════════════
+// FASE 4 — APRENDIZADO CONTÍNUO
+// Três peças que se alimentam da mesma base: cada mensagem enviada guarda
+// QUAL versão de playbook a escreveu; a tela de resultados compara a taxa
+// de resposta por versão, segmento e tom; e o diagnóstico mensal lê as
+// conversas reais e PROPÕE ajustes — que só valem se você aprovar.
+// O calendário de janelas diz de que data falar em cada mês.
+// ════════════════════════════════════════════════════
+
+// ── A) Versão em cada mensagem ──────────────────────────────────
+// A versão viaja no campo 'origem' da interação, no formato
+// "lote · pb_foto_uso.v2 · consultivo". Fica legível na planilha e não
+// exige coluna nova — as conversas antigas continuam valendo, só entram
+// no grupo "antes das versões".
+const SEP_ORIGEM = ' · ';
+
+function refVersao(pb) { return pb ? `${pb.id}.v${pb.versao || 1}` : 'sem-playbook'; }
+
+function origemComVersao(base, lead, variante) {
+  return [base, refVersao(playbookDoLead(lead)), variante || ''].filter(Boolean).join(SEP_ORIGEM);
+}
+
+function partesOrigem(o) {
+  const p = String(o || '').split(SEP_ORIGEM);
+  return { base: p[0] || '', versao: p[1] || '', variante: p[2] || '' };
+}
+function baseOrigem(o) { return partesOrigem(o).base; }
+
+// Toda mudança de conteúdo cria uma versão nova e deixa registro de quem mudou
+function novaVersaoPlaybook(pb, por, resumo) {
+  pb.versao = (pb.versao || 1) + 1;
+  pb.revisoes = (pb.revisoes || []).concat([{
+    v: pb.versao, em: new Date().toISOString(), por: por || 'manual',
+    resumo: String(resumo || '').slice(0, 180)
+  }]).slice(-20);
+  pb.atualizadoEm = new Date().toISOString();
+  return pb.versao;
+}
+
+function nomeVersao(ref) {
+  if (!ref) return 'Antes das versões';
+  if (ref === 'sem-playbook') return 'Sem playbook';
+  const m = String(ref).match(/^(.+)\.v(\d+)$/);
+  if (!m) return ref;
+  const pb = ((DB.playbooks && DB.playbooks.itens) || []).find(x => x.id === m[1]);
+  return pb
+    ? `${pb.segmento} × ${TIPOS_COMPRADOR[pb.tipoComprador] ? TIPOS_COMPRADOR[pb.tipoComprador].label : pb.tipoComprador} · v${m[2]}`
+    : `playbook apagado · v${m[2]}`;
+}
+
+
+// ── B) Resultados: taxa de resposta por versão e por segmento ───
+// Regra de atribuição: uma mensagem conta como respondida quando a
+// PRÓXIMA coisa que acontece na conversa é uma resposta de pessoa. Se você
+// mandou duas e veio uma resposta, só a última leva o crédito — senão a
+// taxa sobe sozinha a cada insistência. Robô não conta como resposta.
+const JANELA_RESPOSTA_DIAS = 14;   // antes disso, a mensagem ainda está "em espera"
+let eventosProsp = null;
+
+async function carregarEventos(forcar) {
+  if (eventosProsp && !forcar) return eventosProsp;
+  const r = await apiFetch({ action: 'eventosProspeccao' });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'Não consegui ler o histórico das mensagens.');
+  eventosProsp = j.eventos || [];
+  return eventosProsp;
+}
+
+// Junta o que ainda não subiu para a planilha, para o envio de agora aparecer
+function eventosComPendentes(evs) {
+  const vistos = new Set(evs.map(e => e.l + '|' + e.d + '|' + e.dir));
+  const pend = lerPendentesInter()
+    .map(p => ({ l: String(p.leadId), d: p.data, dir: p.direcao, t: p.tipo, o: p.origem || '' }))
+    .filter(p => !vistos.has(p.l + '|' + p.d + '|' + p.dir));
+  return evs.concat(pend);
+}
+
+function enviosMedidos(eventos) {
+  const porLead = {};
+  eventos.forEach(e => { (porLead[e.l] = porLead[e.l] || []).push(e); });
+  const envios = [];
+  const agora = Date.now();
+
+  Object.keys(porLead).forEach(id => {
+    const lista = porLead[id].slice().sort((a, b) => (a.d < b.d ? -1 : 1));
+    let pend = null;
+    lista.forEach(e => {
+      const saida = e.dir === 'saida' && e.t === 'mensagem';
+      const resposta = e.dir === 'entrada' && e.t !== 'robo';
+      if (saida) {
+        if (pend) envios.push(pend);
+        const pr = partesOrigem(e.o);
+        pend = { leadId: id, data: e.d, versao: pr.versao, variante: pr.variante, respondida: false, dias: null };
+      } else if (resposta && pend) {
+        const dd = (new Date(e.d) - new Date(pend.data)) / 86400000;
+        pend.respondida = true;
+        pend.dias = dd >= 0 ? dd : null;
+        envios.push(pend);
+        pend = null;
+      }
+    });
+    if (pend) {
+      // Sem resposta ainda: só entra na conta depois do prazo de espera
+      pend.espera = (agora - new Date(pend.data).getTime()) / 86400000 < JANELA_RESPOSTA_DIAS;
+      envios.push(pend);
+    }
+  });
+  return envios;
+}
+
+function agruparEnvios(envios, chaveFn) {
+  const g = {};
+  envios.forEach(e => {
+    if (e.espera) return;
+    const k = chaveFn(e);
+    if (k === null || k === undefined || k === '') return;
+    const o = g[k] = g[k] || { env: 0, resp: 0, dias: [] };
+    o.env++;
+    if (e.respondida) { o.resp++; if (e.dias != null) o.dias.push(e.dias); }
+  });
+  return Object.keys(g).map(k => {
+    const o = g[k];
+    return {
+      chave: k, env: o.env, resp: o.resp,
+      taxa: o.env ? (o.resp / o.env * 100) : 0,
+      mediaDias: o.dias.length ? (o.dias.reduce((a, b) => a + b, 0) / o.dias.length) : null
+    };
+  }).sort((a, b) => b.env - a.env || b.taxa - a.taxa);
+}
+
+function mapaLeads() {
+  const m = {};
+  LEADS.forEach(l => { m[String(l.id)] = l; });
+  return m;
+}
+
+function calcularMetricas(eventos) {
+  const envios = enviosMedidos(eventosComPendentes(eventos || []));
+  const ml = mapaLeads();
+  const contados = envios.filter(e => !e.espera);
+  const respondidas = contados.filter(e => e.respondida);
+  const dias = respondidas.map(e => e.dias).filter(d => d != null).sort((a, b) => a - b);
+  return {
+    envios,
+    total: contados.length,
+    respondidas: respondidas.length,
+    emEspera: envios.filter(e => e.espera).length,
+    taxa: contados.length ? (respondidas.length / contados.length * 100) : 0,
+    medianaDias: dias.length ? dias[Math.floor(dias.length / 2)] : null,
+    porVersao:   agruparEnvios(envios, e => e.versao || '(antes das versões)'),
+    porVariante: agruparEnvios(envios, e => e.variante || ''),
+    porSegmento: agruparEnvios(envios, e => { const l = ml[e.leadId]; return l ? (l.segmento || 'sem segmento') : null; }),
+    porTipo:     agruparEnvios(envios, e => { const l = ml[e.leadId]; return l ? (l.tipoComprador || 'sem tipo') : null; })
+  };
+}
+
+let metricasAtuais = null;
+
+async function abrirMetricas() {
+  openModal('modalMetricas');
+  const el = document.getElementById('metConteudo');
+  el.innerHTML = '<div class="text-muted" style="padding:24px;text-align:center">⏳ Lendo o histórico das conversas…</div>';
+  try {
+    metricasAtuais = calcularMetricas(await carregarEventos(true));
+    renderMetricas();
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-warning">⚠️ ${escaparHtml(e.message || 'Não consegui ler o histórico.')}</div>`;
+  }
+}
+
+function barraTaxa(taxa, cor) {
+  return `<div style="height:6px;background:#EEE;border-radius:3px;overflow:hidden;margin-top:3px">
+    <div style="height:100%;width:${Math.max(1, Math.min(100, taxa)).toFixed(0)}%;background:${cor}"></div></div>`;
+}
+
+function tabelaMetrica(titulo, linhas, rotular, dica) {
+  if (!linhas.length) return '';
+  const melhor = Math.max.apply(null, linhas.map(x => x.taxa));
+  return `<div style="margin-bottom:18px">
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${titulo}</div>
+    ${dica ? `<div class="text-muted" style="font-size:11.5px;margin-bottom:6px">${dica}</div>` : ''}
+    ${linhas.map(x => {
+      const poucos = x.env < 10;
+      const cor = poucos ? '#9A9A9A' : (x.taxa >= melhor - 0.01 ? '#2E7D52' : x.taxa > 0 ? '#3D6E9C' : '#A33B3B');
+      return `<div style="display:grid;grid-template-columns:1fr 150px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--gray-100)">
+        <div>
+          <div style="font-size:12.5px;color:var(--navy);font-weight:600">${escaparHtml(rotular(x.chave))}</div>
+          ${barraTaxa(x.taxa, cor)}
+        </div>
+        <div style="text-align:right;font-size:11.5px;color:var(--gray-600);line-height:1.35">
+          <strong style="color:${cor};font-size:14px">${x.taxa.toFixed(0)}%</strong>
+          <div>${x.resp} de ${x.env} enviada(s)</div>
+          ${x.mediaDias != null ? `<div>responde em ~${x.mediaDias.toFixed(1)} dia(s)</div>` : ''}
+          ${poucos ? '<div style="color:#8A6508">amostra pequena</div>' : ''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderMetricas() {
+  const m = metricasAtuais;
+  const el = document.getElementById('metConteudo');
+  if (!m) return;
+  if (!m.total && !m.emEspera) {
+    el.innerHTML = '<div class="text-muted" style="padding:24px;text-align:center;font-size:13px">Nenhuma mensagem registrada ainda. Assim que você enviar abordagens pelo dashboard, os resultados aparecem aqui separados por versão de playbook.</div>';
+    return;
+  }
+  const rascunhosMaduros = ((DB.playbooks && DB.playbooks.itens) || []).filter(pb => {
+    if (pb.status !== 'rascunho') return false;
+    const total = m.porVersao.filter(v => String(v.chave).indexOf(pb.id + '.v') === 0).reduce((s, v) => s + v.env, 0);
+    return total >= 10;
+  });
+
+  el.innerHTML = `
+    <div class="kpi-grid" style="margin-bottom:18px">
+      <div class="kpi-card"><div class="kpi-label">Mensagens medidas</div><div class="kpi-value">${m.total}</div>
+        ${m.emEspera ? `<div class="text-muted" style="font-size:10.5px;margin-top:3px">+${m.emEspera} ainda no prazo de espera</div>` : ''}</div>
+      <div class="kpi-card"><div class="kpi-label">Respostas de pessoa</div><div class="kpi-value" style="color:#2E7D52">${m.respondidas}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Taxa de resposta</div><div class="kpi-value">${m.taxa.toFixed(0)}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">Tempo até responder</div>
+        <div class="kpi-value">${m.medianaDias != null ? m.medianaDias.toFixed(1) : '—'}</div>
+        <div class="text-muted" style="font-size:10.5px;margin-top:3px">dias, mediana</div></div>
+    </div>
+
+    ${rascunhosMaduros.length ? `<div style="background:#E5F2EA;border-left:3px solid #2E7D52;padding:9px 12px;font-size:12px;color:#1E5A3A;margin-bottom:16px">
+      📘 ${rascunhosMaduros.map(p => escaparHtml(p.segmento + ' × ' + (TIPOS_COMPRADOR[p.tipoComprador] || {}).label)).join(', ')}
+      já passou de 10 envios e continua marcado como <b>rascunho</b>. Se os números fizerem sentido, vale marcar como validado nos playbooks.
+    </div>` : ''}
+
+    ${tabelaMetrica('Por versão de playbook', m.porVersao, nomeVersao,
+      'Cada vez que você muda o conteúdo de um playbook, nasce uma versão nova. É assim que se vê se o ajuste melhorou ou piorou.')}
+    ${tabelaMetrica('Por segmento', m.porSegmento, k => k, 'O ramo da loja, como está na ficha do lead.')}
+    ${tabelaMetrica('Por tipo de comprador', m.porTipo, k => (TIPOS_COMPRADOR[k] || {}).label || k, '')}
+    ${tabelaMetrica('Por tom da mensagem', m.porVariante, k => k === 'retomada' ? 'Retomada (conversa em andamento)' : (k.charAt(0).toUpperCase() + k.slice(1)), '')}
+
+    <div style="background:var(--gray-100);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--gray-600);line-height:1.55">
+      <b>Como a conta é feita:</b> uma mensagem conta como respondida quando a próxima coisa na conversa é uma resposta
+      de pessoa — resposta automática de robô não conta. Se você mandou duas mensagens e veio uma resposta, o crédito é da
+      última. Mensagens enviadas há menos de ${JANELA_RESPOSTA_DIAS} dias e ainda sem resposta ficam de fora da conta, para não
+      derrubar a taxa à toa. Linha com menos de 10 envios é marcada como amostra pequena: nessa faixa a porcentagem oscila
+      muito e não serve para decidir.
+    </div>`;
+}
+
+
+// ── C) Calendário de janelas por segmento ───────────────────────
+// A data comemorativa acontece num mês; a hora de ABORDAR é meses antes.
+// O diagnóstico de setembro mostrou isso doendo: falar de Natal no fim de
+// setembro é tarde. Cada janela diz em que meses falar e com que tipo de
+// comprador — e vira tarefa na lista Hoje quando abre.
+const MESES_CURTOS = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const MESES_NOMES  = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const DIAS_PARADO_JANELA = 45;   // dias sem contato para a janela virar tarefa
+
+const JANELAS_SEMENTE = [
+  { id:'jn_pascoa',    nome:'Páscoa',                 mesEvento:3,  meses:[12,1],    tipos:['uso_proprio','eventos'], termos:'', nota:'Lembrança do ensaio e brinde de campanha.' },
+  { id:'jn_maes_uso',  nome:'Dia das Mães',           mesEvento:5,  meses:[2,3],     tipos:['uso_proprio','eventos'], termos:'', nota:'A data mais forte de quem fotografa.' },
+  { id:'jn_maes_rev',  nome:'Dia das Mães (revenda)', mesEvento:5,  meses:[3,4],     tipos:['revenda'],               termos:'', nota:'Lojas abastecem de 1 a 2 meses antes.' },
+  { id:'jn_namorados', nome:'Dia dos Namorados',      mesEvento:6,  meses:[4,5],     tipos:['revenda'],               termos:'', nota:'Produto de presente, giro no balcão.' },
+  { id:'jn_pais_uso',  nome:'Dia dos Pais',           mesEvento:8,  meses:[4,5],     tipos:['uso_proprio','eventos'], termos:'', nota:'' },
+  { id:'jn_pais_rev',  nome:'Dia dos Pais (revenda)', mesEvento:8,  meses:[6,7],     tipos:['revenda'],               termos:'', nota:'' },
+  { id:'jn_natal_uso', nome:'Natal',                  mesEvento:12, meses:[6,7,8],   tipos:['uso_proprio','eventos'], termos:'', nota:'Quem produz lembrança decide no meio do ano.' },
+  { id:'jn_natal_rev', nome:'Natal (revenda)',        mesEvento:12, meses:[10,11],   tipos:['revenda'],               termos:'', nota:'Reposição de balcão, mais perto da data.' },
+  { id:'jn_formatura', nome:'Formaturas',             mesEvento:11, meses:[7,8],     tipos:['eventos'],               termos:'', nota:'Contratadas com 3 a 4 meses de folga.' },
+  { id:'jn_corp_fim',  nome:'Brindes de fim de ano',  mesEvento:12, meses:[8,9],     tipos:['corporativo'],           termos:'', nota:'Hipótese — ainda sem conversa real para confirmar.' }
+];
+
+function garantirJanelas() {
+  if (!DB.prospeccao) DB.prospeccao = {};
+  if (Array.isArray(DB.prospeccao.janelas)) return;
+  DB.prospeccao.janelas = JANELAS_SEMENTE.map(j => ({ ...j }));
+  saveDB();
+}
+
+function todasJanelas() { return (DB.prospeccao && DB.prospeccao.janelas) || []; }
+
+function janelasAbertas(mes) {
+  const m = mes || (new Date().getMonth() + 1);
+  return todasJanelas().filter(j => j.ativo !== false && (j.meses || []).indexOf(m) !== -1);
+}
+
+function janelaCombinaLead(j, l) {
+  if (j.tipos && j.tipos.length) {
+    if (!l.tipoComprador || j.tipos.indexOf(l.tipoComprador) === -1) return false;
+  }
+  const termos = String(j.termos || '').split(',').map(normalizarTxt).filter(t => t.length >= 3);
+  if (!termos.length) return true;
+  const alvo = ' ' + normalizarTxt(l.segmento || l.nome || '') + ' ';
+  return termos.some(t => alvo.indexOf(t) !== -1);
+}
+
+function janelasDoLead(l, mes) {
+  if (!l || l.congelado || ['cliente','perdido','bloqueado'].indexOf(l.estagio) !== -1) return [];
+  return janelasAbertas(mes).filter(j => janelaCombinaLead(j, l));
+}
+
+function leadsDaJanela(j) {
+  return leadsAtivosNaoCongelados().filter(l =>
+    ['cliente','perdido','bloqueado'].indexOf(l.estagio) === -1 && janelaCombinaLead(j, l));
+}
+
+// Entra em todo pedido à IA: é o gancho concreto para falar com a loja hoje
+function blocoJanelas(l) {
+  const js = janelasDoLead(l);
+  if (!js.length) return '';
+  const mes = MESES_NOMES[new Date().getMonth()];
+  return `\n\nJANELA DO CALENDÁRIO ABERTA AGORA (${mes}): ${js.map(j =>
+    `${j.nome} — o evento é em ${MESES_NOMES[j.mesEvento - 1]}${j.nota ? '; ' + j.nota : ''}`).join(' | ')}.
+Use essa data como o motivo concreto de falar com a loja agora, com naturalidade e sem alarme. Não cite datas cuja época de produção já passou.`;
+}
+
+// ── Tela do calendário ──
+let janelaEditando = null;
+
+function abrirJanelas() {
+  garantirJanelas();
+  renderJanelas();
+  openModal('modalJanelas');
+}
+
+function renderJanelas() {
+  const mesHoje = new Date().getMonth() + 1;
+  const abertas = janelasAbertas(mesHoje);
+
+  document.getElementById('jnAgora').innerHTML = abertas.length
+    ? abertas.map(j => {
+        const leads = leadsDaJanela(j);
+        return `<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:#E5F2EA;border-left:3px solid #2E7D52;border-radius:6px;padding:9px 12px;margin-bottom:6px">
+          <div>
+            <strong style="color:#1E5A3A;font-size:13px">${escaparHtml(j.nome)}</strong>
+            <span class="text-muted" style="font-size:11.5px">· evento em ${MESES_NOMES[j.mesEvento - 1]} · ${leads.length} lead(s) no perfil</span>
+            ${j.nota ? `<div class="text-muted" style="font-size:11.5px">${escaparHtml(j.nota)}</div>` : ''}
+          </div>
+          ${leads.length ? `<button class="btn btn-sm btn-gold" style="white-space:nowrap" onclick="selecionarLeadsDaJanela('${j.id}')">Selecionar os ${leads.length}</button>` : ''}
+        </div>`;
+      }).join('')
+    : `<div class="text-muted" style="font-size:12.5px;padding:10px 12px;background:var(--gray-100);border-radius:6px">
+        Nenhuma janela aberta em ${MESES_NOMES[mesHoje - 1]}. Veja no quadro abaixo qual é a próxima — abordar fora da janela
+        quase sempre significa chegar tarde para a data.
+      </div>`;
+
+  const cab = MESES_CURTOS.map((m, i) => `<div style="text-align:center;font-size:9.5px;font-weight:700;color:${i + 1 === mesHoje ? 'var(--navy)' : 'var(--gray-400)'}">${m}</div>`).join('');
+  const linhas = todasJanelas().slice().sort((a, b) => a.mesEvento - b.mesEvento || a.nome.localeCompare(b.nome, 'pt-BR')).map(j => {
+    const celulas = MESES_CURTOS.map((_, i) => {
+      const m = i + 1;
+      const abordar = (j.meses || []).indexOf(m) !== -1;
+      const evento = j.mesEvento === m;
+      const fundo = evento ? 'var(--navy)' : abordar ? 'var(--gold)' : (m === mesHoje ? '#EEE' : 'transparent');
+      const borda = m === mesHoje ? '1.5px solid var(--navy)' : '1px solid var(--gray-200)';
+      return `<div title="${evento ? 'o evento acontece aqui' : abordar ? 'abordar neste mês' : ''}"
+        style="height:17px;border-radius:3px;background:${fundo};border:${borda}"></div>`;
+    }).join('');
+    const tipos = (j.tipos || []).map(t => (TIPOS_COMPRADOR[t] || {}).label || t).join(', ') || 'todos os tipos';
+    return `<div onclick="editarJanela('${j.id}')" style="cursor:pointer;padding:7px 0;border-bottom:1px solid var(--gray-100);opacity:${j.ativo === false ? .45 : 1}">
+      <div class="flex-between" style="margin-bottom:3px">
+        <span style="font-size:12.5px;font-weight:600;color:var(--navy)">${escaparHtml(j.nome)}${j.ativo === false ? ' <span class="text-muted" style="font-weight:400">(desligada)</span>' : ''}</span>
+        <span class="text-muted" style="font-size:11px">${escaparHtml(tipos)}${j.termos ? ' · ' + escaparHtml(j.termos) : ''}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px">${celulas}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('jnQuadro').innerHTML =
+    `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:4px">${cab}</div>${linhas}`;
+}
+
+function selecionarLeadsDaJanela(id) {
+  const j = todasJanelas().find(x => x.id === id);
+  if (!j) return;
+  const leads = leadsDaJanela(j);
+  if (!leads.length) return;
+  verCongelados = false;
+  document.getElementById('leadBusca').value = '';
+  document.getElementById('leadFiltroEstagio').value = '';
+  document.getElementById('leadFiltroCidade').value = '';
+  leadsSelecionados = new Set(leads.map(l => l.id));
+  closeModal('modalJanelas');
+  renderProspeccao();
+  atualizarBarraLote();
+  const bar = document.getElementById('leadLoteBar');
+  if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast(`📅 ${leads.length} lead(s) da janela "${j.nome}" selecionado(s). Use "Abordar em lote".`);
+}
+
+function novaJanela() {
+  janelaEditando = null;
+  document.getElementById('jneTitulo').textContent = 'Nova janela';
+  document.getElementById('jne_nome').value = '';
+  document.getElementById('jne_mesEvento').value = String(new Date().getMonth() + 1);
+  document.getElementById('jne_termos').value = '';
+  document.getElementById('jne_nota').value = '';
+  document.getElementById('jne_ativo').checked = true;
+  document.querySelectorAll('#jneMeses input').forEach(c => c.checked = false);
+  document.querySelectorAll('#jneTipos input').forEach(c => c.checked = false);
+  document.getElementById('jneExcluir').style.display = 'none';
+  openModal('modalJanelaEdit');
+}
+
+function editarJanela(id) {
+  const j = todasJanelas().find(x => x.id === id);
+  if (!j) return;
+  janelaEditando = id;
+  document.getElementById('jneTitulo').textContent = j.nome;
+  document.getElementById('jne_nome').value = j.nome || '';
+  document.getElementById('jne_mesEvento').value = String(j.mesEvento || 1);
+  document.getElementById('jne_termos').value = j.termos || '';
+  document.getElementById('jne_nota').value = j.nota || '';
+  document.getElementById('jne_ativo').checked = j.ativo !== false;
+  document.querySelectorAll('#jneMeses input').forEach(c => { c.checked = (j.meses || []).indexOf(parseInt(c.value)) !== -1; });
+  document.querySelectorAll('#jneTipos input').forEach(c => { c.checked = (j.tipos || []).indexOf(c.value) !== -1; });
+  document.getElementById('jneExcluir').style.display = 'inline-block';
+  openModal('modalJanelaEdit');
+}
+
+function salvarJanela() {
+  const nome = document.getElementById('jne_nome').value.trim();
+  if (!nome) { showToast('⚠️ Dê um nome à janela.', 'warning'); return; }
+  const meses = Array.from(document.querySelectorAll('#jneMeses input:checked')).map(c => parseInt(c.value));
+  if (!meses.length) { showToast('⚠️ Marque ao menos um mês de abordagem.', 'warning'); return; }
+  const dados = {
+    nome,
+    mesEvento: parseInt(document.getElementById('jne_mesEvento').value) || 1,
+    meses,
+    tipos: Array.from(document.querySelectorAll('#jneTipos input:checked')).map(c => c.value),
+    termos: document.getElementById('jne_termos').value.trim(),
+    nota: document.getElementById('jne_nota').value.trim(),
+    ativo: document.getElementById('jne_ativo').checked
+  };
+  if (janelaEditando) {
+    Object.assign(todasJanelas().find(x => x.id === janelaEditando), dados);
+  } else {
+    DB.prospeccao.janelas.push({ id: 'jn_' + Date.now().toString(36), ...dados });
+  }
+  saveDB();
+  closeModal('modalJanelaEdit');
+  renderJanelas();
+  renderProspeccao();
+  showToast('✅ Janela salva.');
+}
+
+function excluirJanela() {
+  if (!janelaEditando) return;
+  const j = todasJanelas().find(x => x.id === janelaEditando);
+  if (!confirm(`Excluir a janela "${j.nome}"? Os leads desse perfil param de aparecer na lista Hoje por causa dela.`)) return;
+  DB.prospeccao.janelas = todasJanelas().filter(x => x.id !== janelaEditando);
+  saveDB();
+  closeModal('modalJanelaEdit');
+  renderJanelas();
+  renderProspeccao();
+}
+
+function restaurarJanelasPadrao() {
+  if (!confirm('Voltar o calendário para as janelas que vieram do diagnóstico? As que você criou ou alterou serão perdidas.')) return;
+  DB.prospeccao.janelas = JANELAS_SEMENTE.map(j => ({ ...j }));
+  saveDB();
+  renderJanelas();
+  renderProspeccao();
+  showToast('✅ Calendário restaurado.');
+}
+
+
+// ── D) Diagnóstico mensal com propostas de ajuste ───────────────
+// Uma vez por mês a IA lê os números e as conversas do período e PROPÕE
+// mudanças nos playbooks e nas regras gerais. Nada é aplicado sozinho:
+// cada proposta espera o seu "aplicar" ou "recusar".
+const CAMPOS_PROPOSTA = {
+  porQueCompram:   'Por que esse tipo de loja compra',
+  linguagem:       'Linguagem (usar / evitar)',
+  perguntaAbertura:'Pergunta de abertura',
+  objecoes:        'Objeções e como tratar',
+  calendario:      'Calendário',
+  proximoPasso:    'Próximo passo típico',
+  produtosFoco:    'Produtos em foco'
+};
+
+function diagnosticosSalvos() { return (DB.prospeccao && DB.prospeccao.diagnosticos) || []; }
+
+function mesChave(d) {
+  const x = d || new Date();
+  return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0');
+}
+
+function mesAnteriorChave() {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+  return mesChave(d);
+}
+
+function rotuloMes(chave) {
+  const p = String(chave || '').split('-');
+  return p.length === 2 ? `${MESES_NOMES[parseInt(p[1]) - 1]} de ${p[0]}` : chave;
+}
+
+function abrirDiagnostico() {
+  garantirPlaybooks();
+  garantirJanelas();
+  if (!DB.prospeccao) DB.prospeccao = {};
+  if (!Array.isArray(DB.prospeccao.diagnosticos)) DB.prospeccao.diagnosticos = [];
+  diagAberto = diagnosticosSalvos().length ? 0 : -1;
+  renderDiagnostico();
+  openModal('modalDiagnostico');
+}
+
+let diagAberto = -1;   // índice do diagnóstico em exibição
+
+async function rodarDiagnostico() {
+  const btn = document.getElementById('diagRodarBtn');
+  const status = document.getElementById('diagStatus');
+
+  let m;
+  try {
+    status.textContent = '⏳ Lendo o histórico das mensagens…';
+    m = calcularMetricas(await carregarEventos(true));
+  } catch (e) {
+    status.textContent = '⚠️ ' + (e.message || 'Não consegui ler o histórico.');
+    return;
+  }
+  if (m.total < 10) {
+    status.innerHTML = `⚠️ Só ${m.total} mensagem(ns) com prazo de resposta vencido. Com tão pouco, qualquer conclusão é chute — vale esperar mais envios antes de rodar o diagnóstico.`;
+    return;
+  }
+
+  // Conversas que tiveram resposta de pessoa nos últimos 120 dias
+  const candidatos = leadsAtivosNaoCongelados()
+    .filter(l => l.ultimaEntradaEm && diasDesde(l.ultimaEntradaEm) <= 120)
+    .sort((a, b) => (a.ultimaEntradaEm < b.ultimaEntradaEm ? 1 : -1))
+    .slice(0, 25);
+
+  if (!iaPermitida(3)) { status.textContent = ''; return; }
+  btn.disabled = true;
+  status.textContent = `⏳ Lendo ${candidatos.length} conversa(s) e comparando com os números…`;
+
+  let conversas = {};
+  try { conversas = await carregarInteracoes(candidatos.map(l => l.id)); } catch (e) {}
+
+  const pbs = (DB.playbooks && DB.playbooks.itens) || [];
+  const linhaMetrica = (titulo, linhas, rot) => linhas.length
+    ? `${titulo}:\n${linhas.map(x => `- ${rot(x.chave)}: ${x.resp}/${x.env} responderam (${x.taxa.toFixed(0)}%)${x.env < 10 ? ' [amostra pequena]' : ''}`).join('\n')}`
+    : '';
+
+  const prompt = `Você é o analista de prospecção da Vangardis Expertise, fabricante de Curitiba de produtos personalizados por impressão 3D, corte a laser e NFC, que vende para lojas e empresas. Quem prospecta é o Petare, sozinho, pelo WhatsApp.
+
+Sua tarefa: ler os NÚMEROS e as CONVERSAS REAIS abaixo e PROPOR ajustes concretos nos playbooks e nas regras gerais. Você não aplica nada — o Petare aprova ou recusa cada proposta.
+
+COMO PENSAR:
+- Proponha só o que as conversas sustentam. Se a amostra é pequena, diga que é hipótese no campo "porQue" em vez de inventar certeza.
+- Ataque o que impede a resposta ou o próximo passo: linguagem errada para o tipo de negócio, pergunta difícil de responder, objeção mal tratada, conversa que morreu num agradecimento, data do calendário fora de hora.
+- Prefira poucas propostas boas a muitas genéricas. No máximo 6 propostas de playbook e 2 de regra.
+- Texto proposto no mesmo formato e tamanho do campo atual, em português do Brasil, sem emojis.
+- NÃO proponha mudar segmento, tipo de comprador nem as palavras de identificação.
+
+NÚMEROS DO PERÍODO (resposta de pessoa; robô não conta):
+Total: ${m.respondidas} de ${m.total} mensagens tiveram resposta (${m.taxa.toFixed(0)}%)${m.medianaDias != null ? `, mediana de ${m.medianaDias.toFixed(1)} dia(s) até responder` : ''}.
+${linhaMetrica('Por versão de playbook', m.porVersao, nomeVersao)}
+${linhaMetrica('Por segmento', m.porSegmento, k => k)}
+${linhaMetrica('Por tipo de comprador', m.porTipo, k => (TIPOS_COMPRADOR[k] || {}).label || k)}
+${linhaMetrica('Por tom da mensagem', m.porVariante, k => k)}
+
+REGRAS GERAIS DE HOJE:
+${((DB.playbooks && DB.playbooks.regras) || []).map((r, i) => `${i}. ${r}`).join('\n')}
+
+PLAYBOOKS DE HOJE (id · segmento × tipo · versão):
+${pbs.map(pb => `
+id: ${pb.id} · ${pb.segmento} × ${(TIPOS_COMPRADOR[pb.tipoComprador] || {}).label || pb.tipoComprador} · v${pb.versao || 1} · ${pb.status}
+  porQueCompram: ${pb.porQueCompram}
+  linguagem: ${pb.linguagem}
+  perguntaAbertura: ${pb.perguntaAbertura}
+  objecoes: ${String(pb.objecoes || '').replace(/\n/g, ' | ')}
+  calendario: ${pb.calendario}
+  proximoPasso: ${pb.proximoPasso}
+  produtosFoco: ${pb.produtosFoco}`).join('')}
+
+CONVERSAS REAIS (as mais recentes com resposta de pessoa):
+${candidatos.map(l => {
+  const inters = conversas[String(l.id)] || [];
+  if (!inters.length) return '';
+  return `
+--- ${l.nome} — ramo: ${l.segmento || 'não informado'} — tipo: ${l.tipoComprador ? (TIPOS_COMPRADOR[l.tipoComprador] || {}).label : 'não classificado'} — estágio: ${(ESTAGIOS_LEAD[l.estagio] || {}).label || l.estagio}
+${conversaParaPrompt(inters, 6).slice(0, 1400)}`;
+}).filter(Boolean).join('\n')}
+
+Responda SOMENTE com um objeto JSON, sem texto fora dele e sem cercas de código:
+{"resumo":"em até 70 palavras, o que os números e as conversas mostram deste período",
+ "propostas":[{"playbook":"id do playbook","campo":"um de: porQueCompram, linguagem, perguntaAbertura, objecoes, calendario, proximoPasso, produtosFoco","proposto":"o texto novo completo desse campo","porQue":"até 30 palavras, citando o que na conversa ou nos números justifica"}],
+ "regras":[{"acao":"adicionar"|"trocar"|"remover","indice":numero da regra quando for trocar ou remover,"texto":"a regra nova quando for adicionar ou trocar","porQue":"até 25 palavras"}]}`;
+
+  try {
+    const j = extrairJSON(await chamarIA(prompt, 2500));
+    const propostas = (Array.isArray(j.propostas) ? j.propostas : [])
+      .filter(p => p && pbs.some(pb => pb.id === p.playbook) && CAMPOS_PROPOSTA[p.campo] && String(p.proposto || '').trim())
+      .slice(0, 8)
+      .map(p => {
+        const pb = pbs.find(x => x.id === p.playbook);
+        return {
+          playbook: p.playbook, campo: p.campo,
+          atual: String(pb[p.campo] || ''),
+          proposto: String(p.proposto).trim().slice(0, 1200),
+          porQue: String(p.porQue || '').slice(0, 220),
+          status: 'pendente'
+        };
+      })
+      .filter(p => p.proposto !== p.atual);
+
+    const regras = (Array.isArray(j.regras) ? j.regras : [])
+      .filter(r => r && ['adicionar','trocar','remover'].indexOf(r.acao) !== -1)
+      .slice(0, 3)
+      .map(r => ({
+        acao: r.acao, indice: parseInt(r.indice),
+        texto: String(r.texto || '').trim().slice(0, 400),
+        porQue: String(r.porQue || '').slice(0, 220), status: 'pendente'
+      }))
+      .filter(r => r.acao === 'remover' ? !isNaN(r.indice) : !!r.texto);
+
+    DB.prospeccao.diagnosticos.unshift({
+      id: 'dg_' + Date.now().toString(36),
+      mes: mesChave(), em: new Date().toISOString(),
+      resumo: String(j.resumo || '').slice(0, 600),
+      numeros: { total: m.total, respondidas: m.respondidas, taxa: m.taxa, conversas: candidatos.length },
+      propostas, regras
+    });
+    DB.prospeccao.diagnosticos = DB.prospeccao.diagnosticos.slice(0, 12);
+    saveDB();
+    diagAberto = 0;
+    status.textContent = '';
+    renderDiagnostico();
+    renderProspeccao();
+  } catch (e) {
+    status.textContent = '⚠️ ' + (e.message || 'Não consegui gerar o diagnóstico.');
+  }
+  btn.disabled = false;
+}
+
+function renderDiagnostico() {
+  const lista = diagnosticosSalvos();
+  const el = document.getElementById('diagConteudo');
+  const sel = document.getElementById('diagHistorico');
+
+  sel.innerHTML = lista.map((d, i) =>
+    `<option value="${i}">${rotuloMes(d.mes)} — ${new Date(d.em).toLocaleDateString('pt-BR')}</option>`).join('');
+  sel.style.display = lista.length > 1 ? 'inline-block' : 'none';
+  if (diagAberto >= 0) sel.value = String(diagAberto);
+
+  if (!lista.length || diagAberto < 0) {
+    el.innerHTML = `<div class="text-muted" style="font-size:12.5px;line-height:1.6;padding:6px 0">
+      Nenhum diagnóstico rodado ainda. Ele compara a taxa de resposta por versão de playbook, segmento e tom,
+      lê as conversas que tiveram resposta nos últimos meses e devolve propostas de ajuste — uma por campo,
+      para você aplicar ou recusar.
+    </div>`;
+    return;
+  }
+
+  const d = lista[diagAberto];
+  const pend = d.propostas.filter(p => p.status === 'pendente').length + d.regras.filter(r => r.status === 'pendente').length;
+  const pbs = (DB.playbooks && DB.playbooks.itens) || [];
+
+  const cartaoProposta = (p, i) => {
+    const pb = pbs.find(x => x.id === p.playbook);
+    const cor = p.status === 'aplicada' ? '#2E7D52' : p.status === 'recusada' ? '#9A9A9A' : 'var(--gold)';
+    return `<div style="border:1px solid var(--gray-200);border-left:4px solid ${cor};border-radius:8px;padding:11px 13px;margin-bottom:9px;opacity:${p.status === 'recusada' ? .55 : 1}">
+      <div class="flex-between" style="margin-bottom:5px">
+        <div style="font-size:12.5px;color:var(--navy)">
+          <strong>${pb ? escaparHtml(pb.segmento + ' × ' + ((TIPOS_COMPRADOR[pb.tipoComprador] || {}).label || '')) : 'playbook apagado'}</strong>
+          <span class="text-muted"> · ${CAMPOS_PROPOSTA[p.campo]}</span>
+        </div>
+        <span class="badge" style="background:${cor}1A;color:${cor};font-size:10px">${p.status}</span>
+      </div>
+      ${p.porQue ? `<div style="font-size:11.5px;color:#2E7D52;margin-bottom:6px">💡 ${escaparHtml(p.porQue)}</div>` : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11.5px;line-height:1.5">
+        <div><div class="text-muted" style="font-weight:700;margin-bottom:2px">Hoje</div>
+          <div style="background:var(--gray-100);border-radius:6px;padding:7px 9px;white-space:pre-wrap">${escaparHtml(p.atual || '(vazio)')}</div></div>
+        <div><div style="font-weight:700;color:var(--navy);margin-bottom:2px">Proposto</div>
+          <div style="background:#FFFBF0;border:1px solid #F0DFA8;border-radius:6px;padding:7px 9px;white-space:pre-wrap">${escaparHtml(p.proposto)}</div></div>
+      </div>
+      ${p.status === 'pendente' ? `<div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-sm btn-gold" onclick="aplicarProposta(${i})">✅ Aplicar</button>
+        <button class="btn btn-sm btn-ghost" onclick="recusarProposta(${i})">✖ Recusar</button>
+      </div>` : ''}
+    </div>`;
+  };
+
+  const cartaoRegra = (r, i) => {
+    const cor = r.status === 'aplicada' ? '#2E7D52' : r.status === 'recusada' ? '#9A9A9A' : 'var(--gold)';
+    const regras = (DB.playbooks && DB.playbooks.regras) || [];
+    const alvo = !isNaN(r.indice) && regras[r.indice] ? regras[r.indice] : '';
+    const acao = r.acao === 'adicionar' ? 'Acrescentar uma regra' : r.acao === 'trocar' ? 'Trocar uma regra' : 'Remover uma regra';
+    return `<div style="border:1px solid var(--gray-200);border-left:4px solid ${cor};border-radius:8px;padding:11px 13px;margin-bottom:9px;opacity:${r.status === 'recusada' ? .55 : 1}">
+      <div class="flex-between" style="margin-bottom:5px">
+        <strong style="font-size:12.5px;color:var(--navy)">${acao}</strong>
+        <span class="badge" style="background:${cor}1A;color:${cor};font-size:10px">${r.status}</span>
+      </div>
+      ${r.porQue ? `<div style="font-size:11.5px;color:#2E7D52;margin-bottom:6px">💡 ${escaparHtml(r.porQue)}</div>` : ''}
+      ${alvo ? `<div style="font-size:11.5px;background:var(--gray-100);border-radius:6px;padding:7px 9px;margin-bottom:5px">Hoje: ${escaparHtml(alvo)}</div>` : ''}
+      ${r.texto ? `<div style="font-size:11.5px;background:#FFFBF0;border:1px solid #F0DFA8;border-radius:6px;padding:7px 9px">${escaparHtml(r.texto)}</div>` : ''}
+      ${r.status === 'pendente' ? `<div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-sm btn-gold" onclick="aplicarRegraProposta(${i})">✅ Aplicar</button>
+        <button class="btn btn-sm btn-ghost" onclick="recusarRegraProposta(${i})">✖ Recusar</button>
+      </div>` : ''}
+    </div>`;
+  };
+
+  el.innerHTML = `
+    <div style="background:var(--navy);color:#fff;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px">${rotuloMes(d.mes)}</div>
+      <div style="font-size:13px;line-height:1.55;margin-top:4px">${escaparHtml(d.resumo || '')}</div>
+      <div style="font-size:11.5px;opacity:.8;margin-top:6px">
+        Base: ${d.numeros.respondidas} de ${d.numeros.total} mensagens responderam (${Number(d.numeros.taxa || 0).toFixed(0)}%) · ${d.numeros.conversas} conversa(s) lida(s)
+      </div>
+    </div>
+    ${pend ? `<div style="font-size:12px;color:#8A6508;background:#FBF1D6;border-radius:6px;padding:8px 11px;margin-bottom:12px">
+      ${pend} proposta(s) esperando a sua decisão. Aplicar cria uma versão nova do playbook — daí para frente os resultados são medidos separados.
+    </div>` : ''}
+    ${d.propostas.length ? `<div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Ajustes nos playbooks</div>
+      ${d.propostas.map(cartaoProposta).join('')}` : '<div class="text-muted" style="font-size:12.5px;margin-bottom:12px">Nenhum ajuste de playbook proposto neste diagnóstico.</div>'}
+    ${d.regras.length ? `<div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Ajustes nas regras gerais</div>
+      ${d.regras.map(cartaoRegra).join('')}` : ''}`;
+}
+
+function verDiagnostico(i) {
+  diagAberto = parseInt(i);
+  renderDiagnostico();
+}
+
+function diagAtual() {
+  const lista = diagnosticosSalvos();
+  return diagAberto >= 0 ? lista[diagAberto] : null;
+}
+
+function aplicarProposta(i) {
+  const d = diagAtual(); if (!d) return;
+  const p = d.propostas[i]; if (!p || p.status !== 'pendente') return;
+  const pb = (DB.playbooks.itens || []).find(x => x.id === p.playbook);
+  if (!pb) { showToast('⚠️ Esse playbook não existe mais.', 'warning'); p.status = 'recusada'; saveDB(); renderDiagnostico(); return; }
+  pb[p.campo] = p.proposto;
+  const v = novaVersaoPlaybook(pb, 'diagnostico', `Diagnóstico de ${rotuloMes(d.mes)}: ${CAMPOS_PROPOSTA[p.campo]}`);
+  p.status = 'aplicada';
+  p.aplicadaEm = new Date().toISOString();
+  p.versaoGerada = v;
+  saveDB();
+  renderDiagnostico();
+  renderProspeccao();
+  showToast(`✅ Aplicado. ${pb.segmento} × ${(TIPOS_COMPRADOR[pb.tipoComprador] || {}).label} está na v${v}.`);
+}
+
+function recusarProposta(i) {
+  const d = diagAtual(); if (!d) return;
+  const p = d.propostas[i]; if (!p) return;
+  p.status = 'recusada';
+  saveDB();
+  renderDiagnostico();
+}
+
+function aplicarRegraProposta(i) {
+  const d = diagAtual(); if (!d) return;
+  const r = d.regras[i]; if (!r || r.status !== 'pendente') return;
+  if (!DB.playbooks.regras) DB.playbooks.regras = REGRAS_GERAIS_PADRAO.slice();
+  const regras = DB.playbooks.regras;
+  if (r.acao === 'adicionar') regras.push(r.texto);
+  else if (r.acao === 'trocar' && regras[r.indice] !== undefined) regras[r.indice] = r.texto;
+  else if (r.acao === 'remover' && regras[r.indice] !== undefined) regras.splice(r.indice, 1);
+  else { showToast('⚠️ Essa regra não está mais na posição indicada — confira a lista nos playbooks.', 'warning'); return; }
+  r.status = 'aplicada';
+  saveDB();
+  renderDiagnostico();
+  showToast('✅ Regras gerais atualizadas.');
+}
+
+function recusarRegraProposta(i) {
+  const d = diagAtual(); if (!d) return;
+  const r = d.regras[i]; if (!r) return;
+  r.status = 'recusada';
+  saveDB();
+  renderDiagnostico();
+}
+
+// ── Aviso de virada de mês ──
+// Não roda nada sozinho: a chamada à IA custa dinheiro e a decisão é sua.
+function verificarDiagnosticoMensal() {
+  const el = document.getElementById('avisoDiagnostico');
+  if (!el) return;
+  const mesAnt = mesAnteriorChave();
+  const jaTem = diagnosticosSalvos().some(d => d.mes === mesChave() || d.mes === mesAnt);
+  const adiado = localStorage.getItem('vangardis_diag_adiado') === mesChave();
+  const envios = LEADS.reduce((s, l) => s + (l.saidas || 0), 0);
+  const pendentes = diagnosticosSalvos().reduce((s, d) =>
+    s + d.propostas.filter(p => p.status === 'pendente').length + d.regras.filter(r => r.status === 'pendente').length, 0);
+
+  if (pendentes) {
+    el.style.display = 'flex';
+    el.innerHTML = `<span>🔬 <b>${pendentes} proposta(s) de ajuste</b> do último diagnóstico esperando a sua decisão.</span>
+      <button class="btn btn-sm btn-gold" onclick="abrirDiagnostico()">Revisar</button>`;
+    return;
+  }
+  if (jaTem || adiado || envios < 15) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `<span>🔬 Virou o mês e ainda não há diagnóstico de <b>${rotuloMes(mesAnt)}</b>. A IA compara os números com as conversas e propõe ajustes nos playbooks.</span>
+    <button class="btn btn-sm btn-gold" onclick="abrirDiagnostico()">Rodar agora</button>
+    <button class="btn btn-sm btn-ghost" onclick="adiarDiagnostico()">Depois</button>`;
+}
+
+function adiarDiagnostico() {
+  localStorage.setItem('vangardis_diag_adiado', mesChave());
+  verificarDiagnosticoMensal();
+}
+
+function iniciarFase4() {
+  garantirJanelas();
+  if (!DB.prospeccao) DB.prospeccao = {};
+  if (!Array.isArray(DB.prospeccao.diagnosticos)) DB.prospeccao.diagnosticos = [];
+  verificarDiagnosticoMensal();
+  renderHoje();
 }
 
 function renderAll(){
