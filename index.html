@@ -7609,8 +7609,9 @@ async function loadLeads() {
 function popularSelectsLead() {
   const sel = document.getElementById('leadEstagio');
   if (sel && !sel.options.length) {
+    // "Virou cliente" pode ser escolhido aqui: ao salvar, a conversão completa
+    // roda (cadastro na base de Clientes), igual ao botão 🤝 da ficha.
     sel.innerHTML = Object.entries(ESTAGIOS_LEAD)
-      .filter(([k]) => k !== 'cliente') // "virou cliente" acontece pelo botão de conversão
       .map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('');
   }
   const dl = document.getElementById('leadSegmentosList');
@@ -7668,8 +7669,9 @@ function editarLead(id) {
   document.getElementById('leadFicha').value      = l.ficha || '';
   toggleMotivoPerdido();
   renderHistoricoLead(l);
-  document.getElementById('leadConverterBtn').style.display =
-    (l.estagio === 'cliente' || l.convertido) ? 'none' : 'inline-block';
+  // Some só quando a conversão foi feita de verdade (com cliente cadastrado).
+  // Lead marcado como "Virou cliente" pelo campo de estágio ainda mostra o botão.
+  document.getElementById('leadConverterBtn').style.display = l.convertido ? 'none' : 'inline-block';
   atualizarInfoPlaybookFicha();
   openModal('modalLead');
 }
@@ -7705,10 +7707,20 @@ function salvarLead() {
       const estagioAnterior = l.estagio;
       if (estagio === 'bloqueado' && estagioAnterior !== 'bloqueado' &&
           !confirm('Marcar como "Não perturbar"? A conversa registrada com este lead será apagada e ele não poderá mais ser abordado.')) return;
+      if (estagio === 'cliente' && !l.convertido &&
+          !confirm(`Marcar "${nome}" como "Virou cliente"? O cadastro dele será criado na base de Clientes.`)) return;
       if (l.tipoComprador !== dados.tipoComprador) delete l.tipoPelaIA;
       Object.assign(l, dados);
       if (estagioAnterior !== estagio) registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[estagioAnterior]?.label||estagioAnterior} → ${ESTAGIOS_LEAD[estagio]?.label||estagio}`);
       if (estagio === 'bloqueado' && estagioAnterior !== 'bloqueado') bloquearLead(l);
+      if (estagio === 'cliente' && !l.convertido) {
+        const cli = efetivarConversao(l);
+        closeModal('modalLead');
+        renderAll();
+        showToast(`🤝 ${l.nome} agora é cliente!`);
+        oferecerPrimeiroPedido(cli);
+        return;
+      }
     }
     showToast('✅ Lead atualizado!');
   } else {
@@ -7718,6 +7730,14 @@ function salvarLead() {
     const novo = { id: Date.now(), ...dados, dataDescoberta: new Date().toISOString(), historico: [] };
     registrarHistoricoLead(novo, 'Lead cadastrado');
     LEADS.push(novo);
+    if (estagio === 'cliente') {
+      const cli = efetivarConversao(novo);
+      closeModal('modalLead');
+      renderAll();
+      showToast(`🤝 ${novo.nome} cadastrado já como cliente!`);
+      oferecerPrimeiroPedido(cli);
+      return;
+    }
     showToast('✅ Lead cadastrado!');
   }
   saveLeads();
@@ -7801,42 +7821,65 @@ function excluirLead(id) {
 }
 
 // ── Conversão em cliente ──
+// Cria (ou liga) o cadastro de cliente e marca o lead como convertido.
+// Todo caminho que leva um lead a "Virou cliente" passa por aqui — botão da
+// ficha, campo Estágio salvo na ficha e sugestão da IA — para nunca sobrar
+// lead convertido sem cliente cadastrado.
+function efetivarConversao(l) {
+  if (!DB.clientes) DB.clientes = [];
+  let cli = DB.clientes.find(c => c.nome.trim().toLowerCase() === l.nome.trim().toLowerCase());
+  if (!cli) {
+    // Histórico do lead vai junto, anexado à ficha do cliente
+    const histTexto = (l.historico||[]).map(h =>
+      `${new Date(h.data).toLocaleDateString('pt-BR')}: ${h.texto}`).reverse().join('\n');
+    const fichaFinal = [l.ficha, histTexto ? '— Histórico de prospecção —\n' + histTexto : '']
+      .filter(Boolean).join('\n\n');
+    cli = {
+      id: Date.now(),
+      nome: l.nome, cidade: l.cidade || '', contato: l.contato || '',
+      segmento: l.segmento || '', tipoCliente: '',
+      whatsapp: l.whatsapp || '', email: l.email || '', site: l.site || '',
+      telefone: '', instagram: l.instagram || '', facebook: '', tiktok: '', outraRede: '',
+      ficha: fichaFinal
+    };
+    DB.clientes.push(cli);
+    saveDB();
+  }
+  // O lead não é apagado — vira registro de conversão (mantém a métrica do funil honesta)
+  const jaEra = l.convertido;
+  l.estagio = 'cliente';
+  l.convertido = true;
+  if (!l.dataConversao) l.dataConversao = new Date().toISOString();
+  if (!jaEra) registrarHistoricoLead(l, 'Convertido em cliente');
+  saveLeads();
+  return cli;
+}
+
+// Depois de converter, o primeiro pedido já abre com o cliente preenchido
+function oferecerPrimeiroPedido(cli) {
+  if (!cli || typeof abrirNovoPedido !== 'function') return;
+  if (!confirm(`${cli.nome} agora é cliente!\n\nQuer lançar o primeiro pedido agora? Sem pedido, ele não aparece no termômetro nem no faturamento.`)) return;
+  abrirNovoPedido();
+  const campo = document.getElementById('pedCliente');
+  if (campo) campo.value = cli.nome;
+  const cid = document.getElementById('pedCidade');
+  if (cid && cli.cidade) cid.value = cli.cidade;
+}
+
 function converterLeadEmCliente() {
   const id = parseInt(document.getElementById('leadId').value);
   const l = LEADS.find(x => x.id === id);
   if (!l) { showToast('⚠️ Salve o lead antes de convertê-lo.', 'warning'); return; }
-
   const jaCliente = (DB.clientes||[]).find(c => c.nome.trim().toLowerCase() === l.nome.trim().toLowerCase());
-  if (jaCliente) { showToast('⚠️ Já existe um cliente com esse nome.', 'warning'); return; }
-  if (!confirm(`Converter "${l.nome}" em cliente? Ele sai do funil e passa a aparecer no cadastro de clientes.`)) return;
-
-  // Histórico do lead vai junto, anexado à ficha do cliente
-  const histTexto = (l.historico||[]).map(h =>
-    `${new Date(h.data).toLocaleDateString('pt-BR')}: ${h.texto}`).reverse().join('\n');
-  const fichaFinal = [l.ficha, histTexto ? '— Histórico de prospecção —\n' + histTexto : '']
-    .filter(Boolean).join('\n\n');
-
-  if (!DB.clientes) DB.clientes = [];
-  DB.clientes.push({
-    id: Date.now(),
-    nome: l.nome, cidade: l.cidade || '', contato: l.contato || '',
-    segmento: l.segmento || '', tipoCliente: '',
-    whatsapp: l.whatsapp || '', email: l.email || '', site: l.site || '',
-    telefone: '', instagram: l.instagram || '', facebook: '', tiktok: '', outraRede: '',
-    ficha: fichaFinal
-  });
-  saveDB();
-
-  // O lead não é apagado — vira registro de conversão (mantém a métrica do funil honesta)
-  l.estagio = 'cliente';
-  l.convertido = true;
-  l.dataConversao = new Date().toISOString();
-  registrarHistoricoLead(l, 'Convertido em cliente');
-  saveLeads();
-
+  const msg = jaCliente
+    ? `Já existe um cliente chamado "${jaCliente.nome}". Marcar este lead como convertido e ligá-lo a esse cliente?`
+    : `Converter "${l.nome}" em cliente? Ele sai do funil e passa a aparecer no cadastro de clientes.`;
+  if (!confirm(msg)) return;
+  const cli = efetivarConversao(l);
   closeModal('modalLead');
   renderAll();
   showToast(`🤝 ${l.nome} agora é cliente!`);
+  oferecerPrimeiroPedido(cli);
 }
 
 // ── Render ──
@@ -9321,6 +9364,15 @@ async function aplicarSugestaoEstagio() {
   l.motivo = j.estagio_sugerido === 'perdido' ? (j.motivo_perdido || l.motivo || '') : '';
   registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[anterior]?.label} → ${ESTAGIOS_LEAD[l.estagio].label} (sugestão da IA)`);
   if (l.estagio === 'bloqueado') await bloquearLead(l);
+  if (l.estagio === 'cliente' && !l.convertido) {
+    j.estagio_sugerido = '';
+    const cli = efetivarConversao(l);
+    closeModal('modalConversa');
+    renderAll();
+    showToast(`🤝 ${l.nome} agora é cliente!`);
+    oferecerPrimeiroPedido(cli);
+    return;
+  }
   j.estagio_sugerido = '';
   saveLeads();
   renderProspeccao();
