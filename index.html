@@ -726,6 +726,12 @@ th.sortable:hover { background: var(--navy-mid); }
       <!-- Aviso do diagnóstico mensal (fase 4) -->
       <div id="avisoDiagnostico" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:#FBF1D6;border:1px solid #E8C96A;border-radius:8px;padding:10px 13px;margin-bottom:16px;font-size:12.5px;color:#6B4E07"></div>
 
+      <!-- Alerta de venda iminente (agente de vendas) -->
+      <div id="avisoVenda" style="display:none;background:#FDF5F4;border:1px solid #E8B4AC;border-left:4px solid #A33B3B;border-radius:8px;padding:10px 14px 4px;margin-bottom:16px"></div>
+
+      <!-- Agente de vendas: fila do dia -->
+      <div class="card" id="cardAgente" style="margin-bottom:20px"></div>
+
       <!-- Lista de trabalho do dia -->
       <div class="card" id="cardHoje" style="margin-bottom:20px;display:none">
         <div class="card-header">
@@ -2226,6 +2232,7 @@ th.sortable:hover { background: var(--navy-mid); }
 
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalConversa')">Fechar</button>
+      <button class="btn btn-ghost" onclick="enviarCatalogoConversa()" title="Envia o link do catálogo do segmento pelo WhatsApp">📎 Catálogo</button>
       <button class="btn btn-ghost" onclick="abrirAmostra(conversaLeadAtual && conversaLeadAtual.id)">📦 Amostra entregue</button>
       <button class="btn btn-gold" onclick="gerarMensagemDaConversa()">✨ Escrever a próxima mensagem</button>
     </div>
@@ -2379,6 +2386,31 @@ th.sortable:hover { background: var(--navy-mid); }
       <div class="form-group"><label>Produtos em foco</label><input type="text" id="pbe_produtosFoco"></div>
     </div>
     <div class="form-group"><label>Origem <span class="text-muted" style="font-weight:400;font-size:11px">(de onde veio esse conhecimento)</span></label><input type="text" id="pbe_origem"></div>
+
+    <div style="border-top:1px solid var(--gray-200);margin-top:4px;padding-top:12px">
+      <div class="flex-between" style="margin-bottom:8px">
+        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px">🤖 Agente de vendas</div>
+        <label style="font-size:12.5px;cursor:pointer"><input type="checkbox" id="pbe_agente"> Usar este playbook no agente</label>
+      </div>
+      <div class="form-group">
+        <label>Link do catálogo deste segmento <span class="text-muted" style="font-weight:400;font-size:11px">(PDF ou página no R2 — vai quando o lead aceitar)</span></label>
+        <input type="text" id="pbe_catalogoUrl" placeholder="https://img.vangardisexpertise.com.br/catalogos/fotografia.pdf">
+      </div>
+      <label style="font-size:12.5px;font-weight:600;color:var(--navy)">Modelos de primeiro contato</label>
+      <div class="text-muted" style="font-size:11.5px;margin:2px 0 8px;line-height:1.5">
+        O agente só usa os modelos <b>aprovados</b> e alterna entre eles para medir qual responde mais (teste A/B).
+        Use <code>{ola}</code> (vira "Bom dia, Joyce"), <code>{loja}</code>, <code>{cidade}</code> e <code>{bairro}</code>.
+        A primeira mensagem pede permissão, não oferta — e sempre dá a opção de não receber mais.
+      </div>
+      <div id="pbeModelos"></div>
+      <button class="btn btn-ghost btn-sm" onclick="addModeloEditor()" style="margin-bottom:12px">+ Modelo</button>
+      <div class="form-group">
+        <label>Lembrete <span class="text-muted" style="font-weight:400;font-size:11px">(enviado uma única vez a quem não respondeu; depois o lead é congelado)</span></label>
+        <textarea id="pbe_lembrete" rows="3" oninput="avisosLembreteEditor()"></textarea>
+        <div id="pbeLembreteAvisos" style="margin-top:4px"></div>
+        <label style="font-size:12px;cursor:pointer;display:inline-block;margin-top:4px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--gray-600)"><input type="checkbox" id="pbe_lembreteAprovado"> lembrete aprovado para uso</label>
+      </div>
+    </div>
     <div class="modal-footer" style="justify-content:space-between">
       <button class="btn btn-ghost" id="pbeExcluir" style="color:var(--warning)" onclick="excluirPlaybook()">🗑️ Excluir</button>
       <div style="display:flex;gap:8px;margin-left:auto">
@@ -2520,6 +2552,70 @@ th.sortable:hover { background: var(--navy-mid); }
     <div id="diagConteudo"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalDiagnostico')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL FILA DO AGENTE ═══════ -->
+<div class="modal-overlay" id="modalAgente">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-title" id="agTitulo">🤖 Fila de hoje</div>
+    <div id="agCorpo"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAgente');renderProspeccao()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL AJUSTES DO AGENTE ═══════ -->
+<div class="modal-overlay" id="modalAjustesAgente">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-title">⚙️ Ajustes do agente</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2"><label>Nome do agente</label><input type="text" id="agc_nome"></div>
+      <div class="form-group"><label>Leads por dia</label><input type="number" id="agc_limiteDia" min="1" max="100"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Lembrete depois de</label><input type="number" id="agc_lembreteDias" min="2" max="30">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">dias sem resposta (o plano sugere 4 a 7)</div></div>
+      <div class="form-group"><label>Intervalo mínimo</label><input type="number" id="agc_intervaloMin" min="1" max="60">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">dias entre dois contatos com a mesma loja</div></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2"><label>Cidades com prioridade</label><input type="text" id="agc_cidadesPrioritarias" placeholder="Curitiba, São José dos Pinhais">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">separadas por vírgula — onde dá para entregar amostra em mãos</div></div>
+      <div class="form-group"><label>Gasto máximo com IA por dia (US$)</label><input type="number" id="agc_tetoDiaUSD" step="0.05" min="0.05" max="5">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">ao chegar nele, o agente pausa até amanhã</div></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Pontos para o alerta de venda</label><input type="number" id="agc_limiarAlerta" min="1" max="20">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">pedido de proposta ou compra confirmada avisam na hora</div></div>
+      <div class="form-group" style="display:flex;flex-direction:column;justify-content:center;gap:6px;font-size:12.5px">
+        <label style="cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy)"><input type="checkbox" id="agc_personalizarIA"> Personalizar cada mensagem com IA</label>
+        <label style="cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy)"><input type="checkbox" id="agc_incluirDescobertos"> Incluir leads ainda não qualificados</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Nunca dizer <span class="text-muted" style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">(um por linha — a IA é proibida de usar, e toda mensagem é conferida antes do envio. Para padrões: <code>rótulo = /expressão/</code>)</span></label>
+      <textarea id="agc_nuncaDizer" rows="6" style="width:100%;font-family:inherit;font-size:12.5px;line-height:1.5;padding:8px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)"></textarea>
+    </div>
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:6px 0">Registro de opt-out</div>
+    <div class="text-muted" style="font-size:11.5px;margin-bottom:6px;line-height:1.5">Lojas que pediram para não receber mensagens. Ficam aqui mesmo se o lead for apagado: a busca de lojas não as traz de volta e o agente nunca as aborda. É o registro que a LGPD pede.</div>
+    <div id="agcOptout" style="max-height:160px;overflow-y:auto;margin-bottom:6px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAjustesAgente')">Cancelar</button>
+      <button class="btn btn-gold" onclick="salvarAjustesAgente()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL RELATÓRIO DO AGENTE ═══════ -->
+<div class="modal-overlay" id="modalRelatorioAgente">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-title">📈 Relatório da semana</div>
+    <div id="relConteudo"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalRelatorioAgente')">Fechar</button>
     </div>
   </div>
 </div>
@@ -7754,6 +7850,8 @@ function encontrarDuplicadoLead(nome, whatsapp) {
   const ld = LEADS.find(l =>
     l.nome.trim().toLowerCase() === n || (w && (l.whatsapp||'').replace(/\D/g,'') === w));
   if (ld) return ld.nome + ' (já está nos leads)';
+  const oo = registroOptout({ nome, whatsapp });
+  if (oo) return (oo.loja || nome) + ' (pediu para não ser contatado)';
   return null;
 }
 
@@ -7987,6 +8085,8 @@ function congelarLead(id, congelar, emLote) {
 function renderProspeccao() {
   renderKpiLeads();
   renderFunilTrilha();
+  renderAvisoVenda();
+  renderCardAgente();
   renderHoje();
   popularFiltrosLead();
   popularBuscaAuxiliares();
@@ -9301,8 +9401,11 @@ Responda com este JSON:
   "estagio_sugerido": um destes valores: ${estagios} — NÃO retroceda o estágio sem motivo; use "bloqueado" SOMENTE se a pessoa pediu para não ser mais contatada,
   "motivo_perdido": se o estágio sugerido for "perdido", um destes: sem_interesse, preco, ja_tem_fornecedor, sem_resposta, fechou, fora_perfil — senão string vazia,
   "proximo_passo": "uma frase com a próxima ação concreta para o Petare",
-  "data_volta": "AAAA-MM-DD com a data sugerida para o próximo contato, considerando o que o lead disse (ex.: 'no ano que vem', 'semana que vem'), ou string vazia"
-}`;
+  "data_volta": "AAAA-MM-DD com a data sugerida para o próximo contato, considerando o que o lead disse (ex.: 'no ano que vem', 'semana que vem'), ou string vazia",
+  "sinais": lista com os sinais de compra que aparecem na NOVA mensagem, usando SOMENTE estes códigos: "preco" (pergunta preço, preço de atacado ou pedido mínimo), "quantidade" (fala em quantidade, prazo de entrega ou frete), "proposta" (pede proposta, orçamento ou condições de pagamento), "amostra" (pede amostra ou quer visitar o estúdio), "interesse" (elogia os produtos, pergunta de personalização ou quer o catálogo completo), "adiar" (diz que vai ver depois ou pede para chamar outro dia), "fechou" (confirma a compra, pede dados para pagamento como o pix, ou combina a retirada de um pedido fechado), "parar" (pede para não receber mais mensagens). Lista vazia se não houver nenhum.
+}
+
+ATENÇÃO: se a NOVA mensagem confirma uma compra (ex.: "fechado", "qual o pix?", "pode mandar"), o interesse é "alto" e o sinal "fechou" tem de aparecer — não confunda com adiamento.`;
 }
 
 function extrairJSON(txt) {
@@ -9315,6 +9418,8 @@ function extrairJSON(txt) {
 async function lerRetornoComIA(l, inters, novoTexto, tipo) {
   const resp = await chamarIA(montarPromptLeitura(l, inters, novoTexto, tipo), 700);
   const j = extrairJSON(resp);
+  j._texto = String(novoTexto || '');
+  if (!Array.isArray(j.sinais)) j.sinais = [];
   if (j.estagio_sugerido && !ESTAGIOS_LEAD[j.estagio_sugerido]) j.estagio_sugerido = '';
   if (j.data_volta && !/^\d{4}-\d{2}-\d{2}$/.test(j.data_volta)) j.data_volta = '';
   return j;
@@ -9329,8 +9434,18 @@ function aplicarLeituraNoLead(l, j) {
   l.ultimaLeitura = {
     e_robo: !!j.e_robo, estagio_sugerido: j.estagio_sugerido || '', motivo_perdido: j.motivo_perdido || '',
     data_volta: j.data_volta || '', objecao: j.objecao || '', interesse: j.interesse || '',
+    sinais: (j.sinais || []).filter(k => SINAIS_VENDA[k]),
     em: new Date().toISOString()
   };
+  // Agente de vendas: soma os sinais de compra e dispara o alerta
+  if (!j.e_robo) {
+    const alerta = avaliarSinaisVenda(l, j);
+    if (alerta) {
+      l.ultimaLeitura.alerta = true;
+      if (alerta.fechou) l.ultimaLeitura.estagio_sugerido = '';   // conversão é pelo botão do alerta
+      showToast(`🔥 Sinal de venda em ${l.nome}: ${alerta.sinais.map(k => SINAIS_VENDA[k].label).join(', ')}`, 'warning');
+    }
+  }
 }
 
 function renderLeituraIA(l, j) {
@@ -9339,12 +9454,17 @@ function renderLeituraIA(l, j) {
   const mudaEstagio = est && j.estagio_sugerido !== l.estagio;
   const mudaData = j.data_volta && j.data_volta !== l.proximoContato;
   const nivel = { alto: '🟢 alto', medio: '🟡 médio', baixo: '🟠 baixo', nenhum: '⚪ nenhum' }[j.interesse] || '';
-  if (!mudaEstagio && !mudaData && !j.e_robo && !j.objecao && !nivel) { el.style.display = 'none'; return; }
+  const sinais = (j.sinais || []).filter(k => SINAIS_VENDA[k]);
+  if (!mudaEstagio && !mudaData && !j.e_robo && !j.objecao && !nivel && !sinais.length) { el.style.display = 'none'; return; }
   el.style.display = 'block';
   el.innerHTML = `
     <div style="font-size:10.5px;font-weight:700;color:#2B5F87;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Leitura da IA</div>
     ${j.e_robo ? '<div style="margin-bottom:4px">🤖 A mensagem era uma <b>resposta automática</b> — o estágio não muda por causa dela.</div>' : ''}
     ${nivel ? `<div style="margin-bottom:4px">Interesse: <b>${nivel}</b>${j.objecao ? ` · Objeção: <b>${escaparHtml(j.objecao)}</b>` : ''}</div>` : ''}
+    ${sinais.length ? `<div style="margin-bottom:4px">Sinais de compra: <b>${sinais.map(k => SINAIS_VENDA[k].label).join(', ')}</b>${l.intencao ? ` · ${l.intencao} ponto(s) acumulado(s)` : ''}</div>` : ''}
+    ${j.alerta && l.alertaVenda ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0;background:#FDF0EE;border-radius:6px;padding:7px 9px;color:#8a2020">
+        <span>🔥 <b>Alerta de venda.</b> ${l.alertaVenda.fechou ? 'Parece que fechou: converta em cliente e lance o pedido.' : 'O lead passou para Proposta e saiu do agente — a negociação é sua.'}</span>
+        ${l.alertaVenda.fechou && !l.convertido ? `<button class="btn btn-sm btn-gold" onclick="closeModal('modalConversa');converterDoAlerta(${l.id})">🤝 Virou cliente</button>` : ''}</div>` : ''}
     ${mudaEstagio ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px">
         <span>Mudar estágio para <span class="badge" style="background:${est.cor};color:#fff">${est.label}</span>${j.motivo_perdido ? ` (${MOTIVOS_PERDIDO[j.motivo_perdido] || j.motivo_perdido})` : ''}</span>
         <button class="btn btn-sm btn-gold" onclick="aplicarSugestaoEstagio()">Aplicar</button></div>` : ''}
@@ -9395,6 +9515,7 @@ function aplicarSugestaoData() {
 
 // "Não perturbar": apaga a conversa e o resumo, fica só o registro do pedido
 async function bloquearLead(l) {
+  registrarOptout(l, 'marcado como Não perturbar');
   delete l.resumoIA; delete l.proximoPasso; delete l.ultimaLeitura; delete l.interesse;
   l.proximoContato = '';
   await apagarConversaDoLead(l.id);
@@ -9447,6 +9568,8 @@ ${conversaParaPrompt(inters, 8)}`;
   ctx += blocoRegrasGerais();
   ctx += blocoPlaybook(playbookDoLead(l));
   ctx += blocoJanelas(l);
+  const pbCat = playbookDoLead(l);
+  if (pbCat && pbCat.catalogoUrl) ctx += `\n\nLINK DO CATÁLOGO DESTE SEGMENTO (mande quando o lead aceitar ver os produtos): ${pbCat.catalogoUrl}`;
   if (produtos && produtos.length) {
     ctx += `\n\nPRODUTOS QUE PODEM SER CITADOS (nenhum outro):\n- ${produtos.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`;
   }
@@ -9706,6 +9829,7 @@ function garantirPlaybooks() {
       if (!pb.versao) { pb.versao = 1; mudou = true; }
       if (!Array.isArray(pb.revisoes)) { pb.revisoes = []; mudou = true; }
     });
+    garantirCamposAgente();
     if (mudou) saveDB();
     return;
   }
@@ -9713,6 +9837,7 @@ function garantirPlaybooks() {
     regras: REGRAS_GERAIS_PADRAO.slice(),
     itens: PLAYBOOKS_SEMENTE.map(p => ({ ...p, versao: 1, revisoes: [], atualizadoEm: new Date().toISOString() }))
   };
+  garantirCamposAgente();
   saveDB();
 }
 
@@ -9800,7 +9925,10 @@ function renderListaPlaybooks() {
     return `<div style="border:1px solid var(--gray-200);border-left:4px solid ${t.cor || '#999'};border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff">
       <div class="flex-between">
         <div><strong style="color:var(--navy)">${escaparHtml(pb.segmento)} × ${t.label || pb.tipoComprador}</strong> ${status}
-          <div class="text-muted" style="font-size:11.5px;margin-top:2px">${usos[pb.id] || 0} lead(s) usando · pergunta: "${escaparHtml(pb.perguntaAbertura)}"</div></div>
+          <div class="text-muted" style="font-size:11.5px;margin-top:2px">${usos[pb.id] || 0} lead(s) usando · pergunta: "${escaparHtml(pb.perguntaAbertura)}"</div>
+          <div style="font-size:11.5px;margin-top:2px;color:${pb.agente && modelosAprovados(pb).length ? '#2E7D52' : '#8A6508'}">🤖 ${pb.agente
+            ? `no agente · ${modelosAprovados(pb).length} de ${(pb.modelos || []).length} modelo(s) aprovado(s) · lembrete ${lembreteAprovado(pb) ? 'aprovado' : 'não aprovado'}${pb.catalogoUrl ? ' · catálogo ✓' : ' · sem link de catálogo'}`
+            : 'fora do agente'}</div></div>
         <button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;margin-left:10px" onclick="editarPlaybook('${pb.id}')">✏️ Abrir</button>
       </div></div>`;
   }).join('') || '<div class="text-muted">Nenhum playbook ainda.</div>';
@@ -9818,7 +9946,7 @@ function restaurarRegrasPadrao() {
   salvarRegrasGerais();
 }
 
-const CAMPOS_PB = ['segmento','tipoComprador','status','termos','porQueCompram','linguagem','perguntaAbertura','objecoes','calendario','proximoPasso','produtosFoco','origem'];
+const CAMPOS_PB = ['segmento','tipoComprador','status','termos','porQueCompram','linguagem','perguntaAbertura','objecoes','calendario','proximoPasso','produtosFoco','origem','catalogoUrl'];
 
 // Campos que mudam o QUE a IA escreve. Alterar qualquer um deles gera uma
 // versão nova do playbook (fase 4); 'status' e 'origem' são só rótulos.
@@ -9832,6 +9960,7 @@ function novoPlaybook() {
   document.getElementById('pbeTitulo').textContent = 'Novo playbook';
   document.getElementById('pbeExcluir').style.display = 'none';
   document.getElementById('pbeStatusIA').textContent = '';
+  carregarAgenteNoEditor(null);
   openModal('modalPlaybookEdit');
 }
 
@@ -9843,6 +9972,7 @@ function editarPlaybook(id) {
   document.getElementById('pbeTitulo').textContent = `${pb.segmento} × ${TIPOS_COMPRADOR[pb.tipoComprador]?.label || ''}`;
   document.getElementById('pbeExcluir').style.display = 'inline-block';
   document.getElementById('pbeStatusIA').textContent = '';
+  carregarAgenteNoEditor(pb);
   openModal('modalPlaybookEdit');
 }
 
@@ -9860,10 +9990,14 @@ function salvarPlaybook() {
     // depois se o ajuste melhorou a taxa de resposta. Mudar só a situação
     // (rascunho/validado) não é mudança de conteúdo.
     const mudados = CAMPOS_PB_CONTEUDO.filter(c => String(pb[c] || '') !== String(dados[c] || ''));
-    Object.assign(pb, dados);
+    const ag = lerAgenteDoEditor();
+    // Modelos de mensagem também mudam o que sai: texto novo = versão nova
+    const textos = x => JSON.stringify({ m: (x.modelos || []).map(m => m.id + ':' + m.texto), l: (x.lembrete || {}).texto || '' });
+    if (textos(pb) !== textos(ag)) mudados.push('modelos de mensagem');
+    Object.assign(pb, dados, ag);
     if (mudados.length) novaVersaoPlaybook(pb, 'manual', 'Editado por você: ' + mudados.join(', '));
   } else {
-    DB.playbooks.itens.push({ id: 'pb_' + Date.now().toString(36), versao: 1, revisoes: [], ...dados });
+    DB.playbooks.itens.push({ id: 'pb_' + Date.now().toString(36), versao: 1, revisoes: [], ...dados, ...lerAgenteDoEditor() });
   }
   saveDB();
   closeModal('modalPlaybookEdit');
@@ -10132,6 +10266,15 @@ function gerarTarefas() {
     // 2. Amostra entregue e sem retorno
     if (dAmostra !== null && dAmostra >= c.amostra && !(l.ultimaEntradaEm && l.ultimaEntradaEm > l.ultimaAmostraEm)) {
       add('amostra', `Amostra entregue há ${dAmostra} dias, sem retorno desde então.`, dAmostra);
+      return;
+    }
+    // 2b. Lead que está com o agente e não respondeu: a cadência é a do agente
+    //     (primeiro contato + um lembrete). Depois do lembrete, congelar.
+    if (l.agente && l.estagio === 'contatado' && !l.entradas) {
+      const dl = diasDesde(l.agente.lembreteEm);
+      if (dl !== null && dl >= cfgAgente().lembreteDias) {
+        add('congelar', `Primeiro contato e lembrete do agente, sem resposta há ${dl} dia(s).`, dl);
+      }
       return;
     }
     // 3. Data combinada chegou
@@ -10512,7 +10655,7 @@ function enviosMedidos(eventos) {
       if (saida) {
         if (pend) envios.push(pend);
         const pr = partesOrigem(e.o);
-        pend = { leadId: id, data: e.d, versao: pr.versao, variante: pr.variante, respondida: false, dias: null };
+        pend = { leadId: id, data: e.d, base: pr.base, versao: pr.versao, variante: pr.variante, respondida: false, dias: null };
       } else if (resposta && pend) {
         const dd = (new Date(e.d) - new Date(pend.data)) / 86400000;
         pend.respondida = true;
@@ -11230,6 +11373,933 @@ function iniciarFase4() {
   if (!Array.isArray(DB.prospeccao.diagnosticos)) DB.prospeccao.diagnosticos = [];
   verificarDiagnosticoMensal();
   renderHoje();
+}
+
+// ════════════════════════════════════════════════════
+// AGENTE DE VENDAS — FASES 0 E 1 DO PLANO DE OUTUBRO/2026
+// Via semiautomática: o agente escolhe os leads do dia, escreve a mensagem
+// a partir de um MODELO APROVADO por você e monta a fila; o envio é sempre
+// um toque seu no WhatsApp. Quando uma resposta mostra sinal de compra, o
+// agente avisa e sai de cena — a negociação é sua.
+// ════════════════════════════════════════════════════
+
+const AGENTE_CFG_PADRAO = {
+  nome: 'Agente Vangardis',
+  limiteDia: 20,              // leads por dia
+  intervaloMin: 4,            // nunca repetir contato em menos de X dias
+  lembreteDias: 5,            // lembrete único, X dias depois do 1º contato
+  cidadesPrioritarias: 'Curitiba',
+  incluirDescobertos: false,  // o plano fala em leads QUALIFICADOS
+  personalizarIA: true,
+  tetoDiaUSD: 0.5,            // gasto máximo do agente com IA por dia
+  limiarAlerta: 5             // pontos de intenção para avisar
+};
+
+// Uma por linha. "rótulo = /expressão/" para padrões; o resto é texto simples.
+const NUNCA_DIZER_PADRAO = [
+  'preço em reais = /R\\$\\s?\\d/',
+  'porcentagem = /\\d+\\s?%/',
+  'desconto', 'promoção', 'grátis', 'gratuito', 'frete',
+  'prazo de entrega', 'entregamos em', 'pedido mínimo',
+  'garantimos', 'garantia', 'melhor preço', 'mais barato',
+  'última chance', 'só hoje', 'imperdível'
+];
+
+// Frase que dá ao lojista a saída (exigência do plano e da LGPD)
+const RE_OPTOUT = /(n[aã]o (quiser|queira|for d|fizer|tiver interesse|[ée] do seu|fizer sentido)|me avis|s[oó] (me )?(diz|avis|fal|respond)|prefer(ir|e) n[aã]o|n[aã]o (volto|vou voltar) a)/i;
+
+// Modelos semeados para os playbooks de fotografia. Todos nascem NÃO
+// aprovados: o agente só usa o que você aprovar (critério da Fase 0).
+const MODELOS_SEMENTE = {
+  pb_foto_uso: {
+    modelos: [
+      { id: 'A', aprovado: false, texto: '{ola}! Sou o Petare, da Vangardis Expertise, aqui de Curitiba. Encontrei o estúdio pesquisando fotógrafos da região. Fabricamos porta-retratos e polaroids personalizados que muitos estúdios entregam como lembrança depois do ensaio. Posso te mandar algumas fotos dos modelos? Se preferir não receber mensagens, é só me avisar.' },
+      { id: 'B', aprovado: false, texto: '{ola}, tudo bem? Aqui é o Petare, da Vangardis Expertise, de Curitiba. Conheci o trabalho de vocês pesquisando estúdios de fotografia da região e fiquei com uma dúvida: vocês costumam dar alguma lembrança às clientes depois do ensaio? Se não for do seu interesse, me avisa que eu não volto a escrever.' },
+      { id: 'C', aprovado: false, texto: '{ola}! Petare, da Vangardis Expertise, de Curitiba. Fazemos porta-retratos e polaroids personalizados em impressão 3D para estúdios darem às clientes. Achei vocês pesquisando estúdios da região. Posso te mandar o catálogo por aqui? Se não quiser receber, é só me dizer.' }
+    ],
+    lembrete: { aprovado: false, texto: '{ola}, passando só para saber se posso te mandar as fotos dos porta-retratos que comentei. Se não fizer sentido para o estúdio agora, sem problema, é só me avisar.' }
+  },
+  pb_foto_revenda: {
+    modelos: [
+      { id: 'A', aprovado: false, texto: '{ola}! Sou o Petare, da Vangardis Expertise, fabricante aqui de Curitiba. Encontrei a loja pesquisando o ramo na região. Fabricamos porta-retratos e polaroids em impressão 3D para lojas revenderem. Posso te mandar nosso catálogo de atacado? Se preferir não receber mensagens, é só me avisar.' },
+      { id: 'B', aprovado: false, texto: '{ola}, tudo bem? Aqui é o Petare, da Vangardis Expertise, fabricante de Curitiba. Achei a loja pesquisando o ramo na região. Quem cuida das compras de porta-retratos aí? Queria mostrar uns modelos em 3D que não existem no mercado comum. Se não for do seu interesse, me avisa que eu não volto a escrever.' }
+    ],
+    lembrete: { aprovado: false, texto: '{ola}, só retomando: posso te mandar o catálogo de atacado dos porta-retratos? Se não fizer sentido para a loja agora, é só me avisar.' }
+  },
+  pb_foto_eventos: {
+    modelos: [
+      { id: 'A', aprovado: false, texto: '{ola}! Sou o Petare, da Vangardis Expertise, de Curitiba. Encontrei vocês pesquisando cabines de fotos da região. Fazemos molduras e porta-polaroids personalizados com o nome do evento, para os convidados levarem a foto. Posso te mandar alguns modelos? Se preferir não receber mensagens, é só me avisar.' }
+    ],
+    lembrete: { aprovado: false, texto: '{ola}, passando para saber se posso te mandar os modelos de moldura para os convidados. Se não fizer sentido agora, é só me avisar.' }
+  }
+};
+
+// Sinais de compra e pesos, conforme a tabela do plano
+const SINAIS_VENDA = {
+  preco:      { peso: 3,  label: 'perguntou preço ou pedido mínimo' },
+  quantidade: { peso: 3,  label: 'falou em quantidade, prazo ou frete' },
+  proposta:   { peso: 5,  label: 'pediu proposta ou condições de pagamento', imediato: true },
+  amostra:    { peso: 3,  label: 'pediu amostra ou visita' },
+  interesse:  { peso: 1,  label: 'elogiou ou quer o catálogo completo' },
+  adiar:      { peso: -1, label: 'pediu para ver depois' },
+  fechou:     { peso: 6,  label: 'confirmou a compra', imediato: true },
+  parar:      { peso: 0,  label: 'pediu para não receber mais mensagens' }
+};
+
+// ── Estado do agente (mora no banco principal, DB.agente) ──
+function agente() {
+  if (!DB.agente) DB.agente = {};
+  const a = DB.agente;
+  if (!a.config) a.config = {};
+  if (!Array.isArray(a.nuncaDizer)) a.nuncaDizer = NUNCA_DIZER_PADRAO.slice();
+  if (!Array.isArray(a.optout)) a.optout = [];
+  if (!a.filas) a.filas = {};
+  if (!a.custoDia) a.custoDia = {};
+  if (!a.usoModelos) a.usoModelos = {};
+  return a;
+}
+function cfgAgente() { return Object.assign({}, AGENTE_CFG_PADRAO, agente().config); }
+
+function hojeChave() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Playbooks antigos ganham os campos do agente sem mudar de versão
+function garantirCamposAgente() {
+  ((DB.playbooks && DB.playbooks.itens) || []).forEach(pb => {
+    const s = MODELOS_SEMENTE[pb.id];
+    if (!Array.isArray(pb.modelos)) pb.modelos = s ? s.modelos.map(m => ({ ...m })) : [];
+    if (!pb.lembrete) pb.lembrete = s ? { ...s.lembrete } : { aprovado: false, texto: '' };
+    if (pb.agente === undefined) pb.agente = pb.status === 'validado';
+    if (pb.catalogoUrl === undefined) pb.catalogoUrl = '';
+  });
+}
+
+// ── A) Nunca dizer + verificação de cada mensagem ──
+function listaNuncaDizer() {
+  return agente().nuncaDizer.map(linha => {
+    const m = String(linha).match(/^(.*?)\s*=\s*\/(.+)\/([gimsuy]*)\s*$/);
+    if (m) { try { return { rotulo: m[1].trim() || m[2], re: new RegExp(m[2], 'i') }; } catch (e) { return null; } }
+    const t = String(linha).trim();
+    return t ? { rotulo: t, termo: normalizarTxt(t) } : null;
+  }).filter(Boolean);
+}
+
+// tipo 'lembrete': segue a primeira mensagem, que já identificou a Vangardis
+function verificarMensagemAgente(texto, tipo) {
+  const avisos = [];
+  const t = String(texto || '');
+  const norm = ' ' + normalizarTxt(t) + ' ';
+  listaNuncaDizer().forEach(x => {
+    const achou = x.re ? x.re.test(t) : (x.termo && norm.indexOf(' ' + x.termo + ' ') !== -1);
+    if (achou) avisos.push(`fala de "${x.rotulo}"`);
+  });
+  if (tipo !== 'lembrete' && !/vangardis/i.test(t)) avisos.push('não diz que é da Vangardis');
+  if (!RE_OPTOUT.test(t)) avisos.push('sem a frase que dá a opção de não receber mais mensagens');
+  if (t.length > 650) avisos.push('longa demais para o WhatsApp');
+  return avisos;
+}
+
+// ── B) Modelos ──
+function saudacaoHora() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+}
+
+function primeiroNome(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+
+function preencherModelo(texto, l) {
+  const ola = l.contato ? `${saudacaoHora()}, ${primeiroNome(l.contato)}` : saudacaoHora();
+  return String(texto || '')
+    .replace(/\{ola\}/g, ola)
+    .replace(/\{loja\}/g, l.nome || '')
+    .replace(/\{cidade\}/g, l.cidade || '')
+    .replace(/\{bairro\}/g, l.bairro || '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([,.!?])/g, '$1')
+    .trim();
+}
+
+function modelosAprovados(pb) {
+  return ((pb && pb.modelos) || []).filter(m => m.aprovado && String(m.texto || '').trim());
+}
+function lembreteAprovado(pb) {
+  return !!(pb && pb.lembrete && pb.lembrete.aprovado && String(pb.lembrete.texto || '').trim());
+}
+
+// Alterna entre os aprovados: usa o que tem menos envios (teste A/B)
+function escolherModelo(pb, planejados) {
+  const uso = agente().usoModelos[pb.id] || {};
+  const lista = modelosAprovados(pb);
+  return lista.slice().sort((a, b) =>
+    ((uso[a.id] || 0) + (planejados[pb.id + a.id] || 0)) - ((uso[b.id] || 0) + (planejados[pb.id + b.id] || 0)) ||
+    a.id.localeCompare(b.id))[0];
+}
+
+// ── C) Registro de opt-out (permanente, por telefone) ──
+function telNorm(t) {
+  let n = String(t || '').replace(/\D/g, '');
+  if (n.length > 11 && n.indexOf('55') === 0) n = n.slice(2);
+  return n;
+}
+
+function registroOptout(l) {
+  const tel = telNorm(l.whatsapp);
+  const nome = normalizarTxt(l.nome);
+  return agente().optout.find(o => (tel && o.tel === tel) || (!o.tel && o.nome && o.nome === nome)) || null;
+}
+
+function registrarOptout(l, motivo) {
+  if (!l || registroOptout(l)) return;
+  agente().optout.push({ tel: telNorm(l.whatsapp), nome: normalizarTxt(l.nome), loja: l.nome, em: new Date().toISOString(), motivo: motivo || '' });
+  saveDB();
+}
+
+function removerOptout(i) {
+  const o = agente().optout[i];
+  if (!o || !confirm(`Tirar "${o.loja}" da lista de quem pediu para não ser contatado? Só faça isso se o registro foi um engano.`)) return;
+  agente().optout.splice(i, 1);
+  saveDB();
+  renderAjustesAgente();
+}
+
+// ── D) Pausa manual e automática ──
+function agentePausado() {
+  const a = agente();
+  if (!a.pausa) return null;
+  if (a.pausa.ate && a.pausa.ate < hojeChave()) { a.pausa = null; return null; }   // pausa "só hoje" venceu
+  return a.pausa;
+}
+function pausarAgente(motivo, soHoje) {
+  agente().pausa = { motivo, em: new Date().toISOString(), ate: soHoje ? hojeChave() : '' };
+  saveDB();
+}
+function alternarPausaAgente() {
+  if (agentePausado()) { agente().pausa = null; saveDB(); showToast('▶ Agente retomado.'); }
+  else pausarAgente('pausado por você');
+  renderCardAgente();
+  if (document.getElementById('modalAgente').classList.contains('open')) renderFilaAgente();
+}
+
+function custoAgenteHoje() { return agente().custoDia[hojeChave()] || 0; }
+
+// Muitos pedidos de "não me mande mais" na última semana = sinal de texto errado
+function verificarPausaOptout() {
+  if (agentePausado()) return;
+  const semana = Date.now() - 7 * 86400000;
+  const optouts = agente().optout.filter(o => new Date(o.em).getTime() >= semana).length;
+  const enviados = LEADS.filter(l => l.agente && [l.agente.primeiroEm, l.agente.lembreteEm]
+    .some(d => d && new Date(d).getTime() >= semana)).length;
+  if (optouts >= 3 && optouts > enviados * 0.1) {
+    pausarAgente(`${optouts} pedidos para não receber mensagens nos últimos 7 dias — revise os modelos antes de continuar`);
+  }
+}
+
+// A chamada à IA do agente soma o próprio gasto do dia
+async function chamarIAAgente(prompt, maxTokens) {
+  const antes = custoIAMes;
+  const r = await chamarIA(prompt, maxTokens);
+  let delta = custoIAMes - antes;
+  // Uma mensagem custa cerca de 1 centavo de dólar. Um salto maior quer dizer
+  // que o medidor local ainda não tinha sincronizado com o servidor — aí o
+  // salto não é deste envio, e vale a estimativa.
+  if (!(delta > 0 && delta < 0.08)) delta = 0.012;
+  const a = agente();
+  a.custoDia[hojeChave()] = (a.custoDia[hojeChave()] || 0) + delta;
+  return r;
+}
+
+// ── E) Seleção diária ──
+function selecionarLeadsAgente() {
+  const cfg = cfgAgente();
+  const cidades = String(cfg.cidadesPrioritarias || '').split(',').map(normalizarTxt).filter(Boolean);
+  const fora = { semPlaybook: 0, playbookFora: 0, semModelo: 0, fixo: 0, semZap: 0, optout: 0, semRegistro: 0, paraCongelar: [] };
+  const cands = [];
+
+  leadsAtivosNaoCongelados().forEach(l => {
+    const est = l.estagio;
+    const podePrimeiro = est === 'qualificado' || (cfg.incluirDescobertos && est === 'descoberto');
+    if (!podePrimeiro && est !== 'contatado') return;
+    if ((l.entradas || 0) > 0 || l.alertaVenda) return;           // respondeu: o lead é seu
+    if (!l.whatsapp) { fora.semZap++; return; }
+    if (registroOptout(l)) { fora.optout++; return; }
+    if (pareceFixo(l.whatsapp)) { fora.fixo++; return; }
+
+    const saidas = l.saidas || 0;
+    const dSaida = diasDesde(l.ultimaSaidaEm);
+    let tipo = null;
+    if (podePrimeiro && !saidas && !l.ultimaSaidaEm) tipo = 'primeiro';
+    else if (est === 'contatado') {
+      if (!l.ultimaSaidaEm) { fora.semRegistro++; return; }
+      if (dSaida < cfg.lembreteDias) return;
+      if (saidas <= 1 && !(l.agente && l.agente.lembreteEm)) tipo = 'lembrete';
+      else { fora.paraCongelar.push(l); return; }   // 1º contato + lembrete sem resposta: encerra
+    }
+    if (!tipo) return;
+    if (dSaida !== null && dSaida < cfg.intervaloMin) return;
+
+    const pb = playbookDoLead(l);
+    if (!pb) { fora.semPlaybook++; return; }
+    if (!pb.agente) { fora.playbookFora++; return; }
+    if (tipo === 'primeiro' ? !modelosAprovados(pb).length : !lembreteAprovado(pb)) { fora.semModelo++; return; }
+
+    let p = 0;
+    if (tipo === 'lembrete') p += 100;                       // vencido: vai primeiro
+    if (janelasDoLead(l).length) p += 40;                    // a época de abordar é agora
+    if (cidades.length && cidades.some(c => normalizarTxt(l.cidade).indexOf(c) !== -1)) p += 20;
+    if (est === 'qualificado') p += 10;
+    cands.push({ l, pb, tipo, p, dDesc: diasDesde(l.dataDescoberta) || 0 });
+  });
+
+  cands.sort((a, b) => b.p - a.p || b.dDesc - a.dDesc || a.l.nome.localeCompare(b.l.nome, 'pt-BR'));
+  return { escolhidos: cands.slice(0, cfg.limiteDia), total: cands.length, fora };
+}
+
+// ── F) Redação ──
+function promptAgente(c, modeloTexto, inters) {
+  const l = c.l, pb = c.pb;
+  const ultimaMinha = (inters || []).filter(x => x.direcao === 'saida').slice(-1)[0];
+  const nunca = listaNuncaDizer().map(x => x.rotulo).join('; ');
+  return `Você escreve mensagens de WhatsApp em nome do Petare, da Vangardis Expertise, fabricante de Curitiba de produtos personalizados em impressão 3D, corte a laser e NFC.
+
+${c.tipo === 'primeiro'
+    ? 'Abaixo está um MODELO DE PRIMEIRO CONTATO aprovado pelo Petare. Personalize-o para esta loja.'
+    : 'Abaixo está o MODELO DE LEMBRETE aprovado pelo Petare. A loja recebeu o primeiro contato e não respondeu. Personalize o lembrete.'}
+
+REGRAS:
+1. Mantenha a estrutura, o tom e o tamanho do modelo (no máximo uma frase a mais).
+2. Mantenha a pergunta do final e a frase que oferece a opção de não receber mais mensagens.
+3. Personalize no máximo UM detalhe concreto da loja, usando SOMENTE os dados abaixo. Se não houver dado útil, devolva o modelo praticamente igual. Nunca invente fatos nem elogios genéricos.
+4. Nunca fale de preço, prazo, desconto, frete ou condição de pagamento. Nunca use: ${nunca}.
+5. Sem emojis. Português do Brasil, tom de conversa entre empresas.
+${c.tipo === 'lembrete' && ultimaMinha ? `6. Não repita o que já foi dito na mensagem anterior:\n"${String(ultimaMinha.texto).slice(0, 600)}"` : ''}
+
+DADOS DA LOJA:
+- Nome: ${l.nome}
+- Pessoa de contato: ${l.contato || 'não se sabe'}
+- Cidade/bairro: ${[l.cidade, l.bairro].filter(Boolean).join(' / ') || 'não informado'}
+- Ramo: ${l.segmento || 'não informado'}${l.site ? '\n- Site: ' + l.site : ''}${l.ficha ? '\n- Anotações do Petare: ' + String(l.ficha).slice(0, 400) : ''}
+- Linguagem para este tipo de loja: ${pb.linguagem || ''}${blocoJanelas(l)}
+
+MODELO:
+${modeloTexto}
+
+Responda APENAS com o texto final da mensagem, sem aspas e sem explicações.`;
+}
+
+let agentePreparando = false;
+
+async function prepararFilaHoje(forcar) {
+  if (agentePreparando) return;
+  if (agentePausado()) { showToast('⏸ O agente está pausado. Retome antes de preparar a fila.', 'warning'); return; }
+  const a = agente(), chave = hojeChave();
+  if (a.filas[chave] && !forcar) { abrirFilaAgente(); return; }
+  if (a.filas[chave] && forcar && a.filas[chave].itens.some(x => x.status === 'pendente') &&
+      !confirm('Montar a fila de novo? As mensagens ainda não enviadas serão descartadas e reescritas.')) return;
+
+  const cfg = cfgAgente();
+  const sel = selecionarLeadsAgente();
+  // Em uma fila refeita no mesmo dia, quem já recebeu hoje não entra de novo
+  const jaHoje = new Set(((a.filas[chave] || {}).itens || []).filter(x => x.status === 'enviado').map(x => x.leadId));
+  const escolhidos = sel.escolhidos.filter(c => !jaHoje.has(c.l.id));
+  if (!escolhidos.length) {
+    showToast('Nenhum lead pronto para o agente hoje. Veja no cartão quem ficou de fora e por quê.', 'warning');
+    renderCardAgente();
+    return;
+  }
+  const usarIA = cfg.personalizarIA;
+  if (usarIA && !iaPermitida(escolhidos.length)) return;
+
+  agentePreparando = true;
+  openModal('modalAgente');
+  const corpo = document.getElementById('agCorpo');
+  corpo.innerHTML = `<div style="padding:26px 6px;text-align:center">
+    <div id="agProgTxt" style="font-size:13px;color:var(--navy);margin-bottom:10px">Preparando…</div>
+    <div style="height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden"><div id="agProgBar" style="height:100%;width:0;background:var(--gold);transition:width .3s"></div></div></div>`;
+
+  const idsLembrete = escolhidos.filter(c => c.tipo === 'lembrete').map(c => c.l.id);
+  let conversas = {};
+  if (usarIA && idsLembrete.length) { try { conversas = await carregarInteracoes(idsLembrete); } catch (e) {} }
+
+  const anteriores = (a.filas[chave] && a.filas[chave].itens.filter(x => x.status !== 'pendente')) || [];
+  const itens = [];
+  const planejados = {};
+  let falhas = 0, parouPor = '';
+
+  for (let i = 0; i < escolhidos.length; i++) {
+    const c = escolhidos[i];
+    document.getElementById('agProgTxt').textContent = `${usarIA ? 'Escrevendo' : 'Montando'} ${i + 1} de ${escolhidos.length} — ${c.l.nome}`;
+    document.getElementById('agProgBar').style.width = (i / escolhidos.length * 100) + '%';
+
+    const modelo = c.tipo === 'primeiro' ? escolherModelo(c.pb, planejados) : { id: 'lembrete', texto: c.pb.lembrete.texto };
+    if (c.tipo === 'primeiro') planejados[c.pb.id + modelo.id] = (planejados[c.pb.id + modelo.id] || 0) + 1;
+    const base = preencherModelo(modelo.texto, c.l);
+    let msg = base, viaIA = false, erro = '';
+    if (usarIA) {
+      try {
+        msg = removerEmojis(String(await chamarIAAgente(promptAgente(c, base, conversas[String(c.l.id)] || []), 500)).trim()) || base;
+        viaIA = true; falhas = 0;
+      } catch (e) { erro = e.message || 'falha'; falhas++; msg = base; }
+    }
+    itens.push({ leadId: c.l.id, tipo: c.tipo, pb: c.pb.id, modelo: modelo.id, base, mensagem: msg, viaIA, erro, status: 'pendente' });
+
+    if (falhas >= 3) { parouPor = '3 erros seguidos ao escrever as mensagens com a IA'; break; }
+    if (usarIA && custoAgenteHoje() >= cfg.tetoDiaUSD) { parouPor = `o gasto do agente hoje chegou a US$ ${cfg.tetoDiaUSD.toFixed(2)}`; break; }
+    if (usarIA) await new Promise(r => setTimeout(r, 200));
+  }
+
+  a.filas[chave] = { criadaEm: new Date().toISOString(), itens: anteriores.concat(itens),
+    fora: { ...sel.fora, paraCongelar: sel.fora.paraCongelar.length }, total: sel.total };
+  // Guarda só as filas dos últimos 14 dias
+  Object.keys(a.filas).sort().slice(0, -14).forEach(k => { delete a.filas[k]; });
+  if (parouPor) pausarAgente(parouPor, true);
+  saveDB();
+  agentePreparando = false;
+  agenteIndice = Math.max(0, a.filas[chave].itens.findIndex(x => x.status === 'pendente'));
+  renderFilaAgente();
+  renderCardAgente();
+  if (parouPor) showToast(`⏸ A fila ficou com ${itens.length} mensagem(ns): ${parouPor}. O agente pausou até amanhã.`, 'warning');
+}
+
+// ── G) Fila do dia ──
+let agenteIndice = 0;
+
+function filaHoje() { return agente().filas[hojeChave()] || null; }
+
+function abrirFilaAgente() {
+  const f = filaHoje();
+  if (!f) { prepararFilaHoje(); return; }
+  const p = f.itens.findIndex(x => x.status === 'pendente');
+  agenteIndice = p >= 0 ? p : 0;
+  openModal('modalAgente');
+  renderFilaAgente();
+}
+
+function situacaoHorario() {
+  const d = new Date(), dia = d.getDay(), m = d.getHours() * 60 + d.getMinutes();
+  const nomes = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+  if (dia === 0 || dia === 6) return { ok: false, txt: `Hoje é ${nomes[dia]}: o plano recomenda não enviar em fim de semana.` };
+  const faixa = (m >= 540 && m <= 690) || (m >= 840 && m <= 1020);
+  if (!faixa) return { ok: false, txt: 'Fora do horário recomendado (9h às 11h30 e 14h às 17h). Dá para enviar, mas responde menos.' };
+  return { ok: true, txt: `Dentro do horário recomendado${[2,3,4].indexOf(dia) !== -1 ? '' : ' (terça a quinta costuma ser melhor)'}.` };
+}
+
+function renderFilaAgente() {
+  const f = filaHoje();
+  const corpo = document.getElementById('agCorpo');
+  const cfg = cfgAgente();
+  document.getElementById('agTitulo').textContent = `🤖 ${cfg.nome} — fila de hoje`;
+  if (!f) { corpo.innerHTML = '<div class="text-muted" style="padding:20px;text-align:center">A fila de hoje ainda não foi preparada.</div>'; return; }
+
+  const env = f.itens.filter(x => x.status === 'enviado').length;
+  const pul = f.itens.filter(x => x.status === 'pulado').length;
+  const pend = f.itens.filter(x => x.status === 'pendente').length;
+  const h = situacaoHorario();
+  const pausa = agentePausado();
+
+  if (agenteIndice >= f.itens.length) agenteIndice = Math.max(0, f.itens.length - 1);
+  const it = f.itens[agenteIndice];
+  const l = it && LEADS.find(x => x.id === it.leadId);
+  const avisos = it ? verificarMensagemAgente(it.mensagem, it.tipo) : [];
+
+  const pontos = f.itens.map((x, i) => {
+    const cor = x.status === 'enviado' ? '#2E7D52' : x.status === 'pulado' ? '#BBB' : 'var(--gold)';
+    return `<div onclick="irItemAgente(${i})" title="${escaparHtml((LEADS.find(y => y.id === x.leadId) || {}).nome || '')}"
+      style="cursor:pointer;width:14px;height:14px;border-radius:50%;background:${cor};${i === agenteIndice ? 'outline:2px solid var(--navy);outline-offset:1px' : ''}"></div>`;
+  }).join('');
+
+  corpo.innerHTML = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;margin-bottom:8px">
+      <span><b style="color:#2E7D52">${env}</b> enviada(s)</span><span><b>${pend}</b> na fila</span>${pul ? `<span class="text-muted">${pul} pulada(s)</span>` : ''}
+      <span class="text-muted">· IA do agente hoje: US$ ${custoAgenteHoje().toFixed(2)} de ${cfg.tetoDiaUSD.toFixed(2)}</span>
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">${pontos}</div>
+    <div style="font-size:11.5px;padding:7px 10px;border-radius:6px;margin-bottom:10px;background:${h.ok ? '#E5F2EA' : '#FBF1D6'};color:${h.ok ? '#1E5A3A' : '#6B4E07'}">🕘 ${h.txt}</div>
+    ${pausa ? `<div class="alert alert-warning" style="margin-bottom:10px">⏸ Agente pausado: ${escaparHtml(pausa.motivo)}.</div>` : ''}
+    ${!it || !l ? '<div class="text-muted">Item não encontrado.</div>' : `
+    <div style="border:1px solid var(--gray-200);border-radius:8px;padding:12px 14px">
+      <div class="flex-between" style="gap:8px;margin-bottom:6px">
+        <div>
+          <strong style="color:var(--navy);font-size:14px">${escaparHtml(l.nome)}</strong>
+          <span class="badge" style="background:${it.tipo === 'lembrete' ? '#E8F1F8' : '#FBF1D6'};color:${it.tipo === 'lembrete' ? '#2B5F87' : '#8A6508'};font-size:10px;margin-left:4px">${it.tipo === 'lembrete' ? 'lembrete' : 'primeiro contato · modelo ' + it.modelo}</span>
+          ${it.status !== 'pendente' ? `<span class="badge" style="background:${it.status === 'enviado' ? '#E5F2EA' : '#EEE'};color:${it.status === 'enviado' ? '#2E7D52' : '#777'};font-size:10px;margin-left:4px">${it.status}</span>` : ''}
+          <div class="text-muted" style="font-size:11.5px;margin-top:2px">${escaparHtml([l.contato && '👤 ' + l.contato, l.cidade, l.segmento, l.whatsapp && '📱 ' + l.whatsapp].filter(Boolean).join(' · '))}</div>
+        </div>
+        <span class="text-muted" style="font-size:11.5px;white-space:nowrap">${agenteIndice + 1} de ${f.itens.length}</span>
+      </div>
+      <textarea id="agMensagem" rows="7" oninput="editarMensagemAgente(this.value)" ${it.status !== 'pendente' ? 'readonly' : ''}
+        style="width:100%;font-family:inherit;font-size:13px;line-height:1.5;padding:10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)">${escaparHtml(it.mensagem)}</textarea>
+      <div id="agAvisos" style="margin-top:6px">${htmlAvisosAgente(avisos)}</div>
+      ${it.erro ? `<div style="font-size:11.5px;color:#8A6508;margin-top:4px">A IA não respondeu (${escaparHtml(it.erro)}): este é o modelo sem personalização.</div>` : ''}
+      ${it.status === 'pendente' ? `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-gold" onclick="enviarItemAgente()" ${pausa ? 'disabled' : ''}>📱 Abrir no WhatsApp</button>
+        <button class="btn btn-ghost" onclick="pularItemAgente()">Pular</button>
+        <button class="btn btn-ghost btn-sm" onclick="reescreverItemAgente()" title="Pedir outra versão à IA">↻ Reescrever</button>
+        <button class="btn btn-ghost btn-sm" onclick="usarModeloPuroAgente()" title="Voltar ao texto do modelo, sem personalização">Usar o modelo puro</button>
+      </div>` : ''}
+    </div>`}
+    <div class="flex-between" style="margin-top:10px">
+      <button class="btn btn-ghost btn-sm" onclick="irItemAgente(${agenteIndice - 1})" ${agenteIndice <= 0 ? 'disabled' : ''}>‹ Anterior</button>
+      <button class="btn btn-ghost btn-sm" onclick="prepararFilaHoje(true)" title="Refaz a seleção e reescreve o que ainda não foi enviado">Montar de novo</button>
+      <button class="btn btn-ghost btn-sm" onclick="irItemAgente(${agenteIndice + 1})" ${agenteIndice >= f.itens.length - 1 ? 'disabled' : ''}>Próximo ›</button>
+    </div>
+    ${!pend ? `<div style="text-align:center;background:#E5F2EA;border-radius:8px;padding:12px;margin-top:12px;font-size:13px;color:#1E5A3A">✅ Fila de hoje concluída: ${env} mensagem(ns) enviada(s). As respostas que chegarem você registra na conversa do lead, e a IA avisa se houver sinal de compra.</div>` : ''}`;
+}
+
+function htmlAvisosAgente(avisos) {
+  return avisos.length
+    ? `<div style="font-size:11.5px;color:#8a2020;background:#FDF5F4;border-left:3px solid #A33B3B;border-radius:4px;padding:6px 9px">⚠️ ${avisos.map(escaparHtml).join(' · ')}</div>`
+    : '<div style="font-size:11.5px;color:#2E7D52">✓ Passou na verificação: oferece a saída e não fala de preço, prazo ou desconto.</div>';
+}
+
+function irItemAgente(i) {
+  const f = filaHoje(); if (!f) return;
+  agenteIndice = Math.max(0, Math.min(f.itens.length - 1, i));
+  renderFilaAgente();
+}
+
+function editarMensagemAgente(v) {
+  const f = filaHoje(); const it = f && f.itens[agenteIndice];
+  if (!it || it.status !== 'pendente') return;
+  it.mensagem = v;
+  const el = document.getElementById('agAvisos');
+  if (el) el.innerHTML = htmlAvisosAgente(verificarMensagemAgente(v, it.tipo));
+}
+
+let agenteAvisouHorario = '';
+
+function enviarItemAgente() {
+  const f = filaHoje(); const it = f && f.itens[agenteIndice];
+  if (!it || it.status !== 'pendente') return;
+  if (agentePausado()) { showToast('⏸ O agente está pausado.', 'warning'); return; }
+  const l = LEADS.find(x => x.id === it.leadId);
+  if (!l) return;
+  if (registroOptout(l)) { showToast('🚫 Esta loja pediu para não ser contatada.', 'warning'); it.status = 'pulado'; saveDB(); renderFilaAgente(); return; }
+  const txt = String(document.getElementById('agMensagem').value || '').trim();
+  if (!txt) return;
+  const avisos = verificarMensagemAgente(txt, it.tipo);
+  if (avisos.length && !confirm(`A mensagem tem alertas:\n\n• ${avisos.join('\n• ')}\n\nEnviar mesmo assim?`)) return;
+  const h = situacaoHorario();
+  if (!h.ok && agenteAvisouHorario !== hojeChave()) {
+    if (!confirm(h.txt + '\n\nEnviar mesmo assim? (este aviso não aparece de novo hoje)')) return;
+    agenteAvisouHorario = hojeChave();
+  }
+
+  const num = telNorm(l.whatsapp);
+  window.open(`https://wa.me/55${num}?text=${encodeURIComponent(txt)}`, '_blank');
+
+  const agora = new Date().toISOString();
+  const variante = it.tipo === 'lembrete' ? 'lembrete' : 'modelo-' + it.modelo;
+  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt,
+    origem: origemComVersao('agente', l, variante) }])
+    .then(r => { atualizarMarcadores(l, r); saveLeads(); });
+
+  if (['descoberto', 'qualificado'].indexOf(l.estagio) !== -1) l.estagio = 'contatado';
+  l.agente = l.agente || {};
+  if (it.tipo === 'primeiro') { l.agente.primeiroEm = agora; l.agente.modelo = it.modelo; }
+  else l.agente.lembreteEm = agora;
+  l.proximoContato = '';   // daqui em diante a cadência é a do agente
+  registrarHistoricoLead(l, `${cfgAgente().nome}: ${it.tipo === 'lembrete' ? 'lembrete' : 'primeiro contato (modelo ' + it.modelo + ')'} enviado pelo WhatsApp`);
+
+  it.mensagem = txt; it.status = 'enviado'; it.enviadoEm = agora;
+  if (it.tipo === 'primeiro') {
+    const u = agente().usoModelos;
+    u[it.pb] = u[it.pb] || {};
+    u[it.pb][it.modelo] = (u[it.pb][it.modelo] || 0) + 1;
+  }
+  saveLeads(); saveDB();
+  proximoPendenteAgente();
+  renderCardAgente();
+}
+
+function pularItemAgente() {
+  const f = filaHoje(); const it = f && f.itens[agenteIndice];
+  if (!it || it.status !== 'pendente') return;
+  it.status = 'pulado';
+  saveDB();
+  proximoPendenteAgente();
+  renderCardAgente();
+}
+
+function proximoPendenteAgente() {
+  const f = filaHoje();
+  const prox = f.itens.findIndex((x, i) => i > agenteIndice && x.status === 'pendente');
+  const qualquer = f.itens.findIndex(x => x.status === 'pendente');
+  agenteIndice = prox >= 0 ? prox : qualquer >= 0 ? qualquer : agenteIndice;
+  renderFilaAgente();
+}
+
+async function reescreverItemAgente() {
+  const f = filaHoje(); const it = f && f.itens[agenteIndice];
+  if (!it || it.status !== 'pendente') return;
+  const l = LEADS.find(x => x.id === it.leadId);
+  const pb = ((DB.playbooks && DB.playbooks.itens) || []).find(x => x.id === it.pb);
+  if (!l || !pb || !iaPermitida(1)) return;
+  if (custoAgenteHoje() >= cfgAgente().tetoDiaUSD) { showToast('O gasto do agente com IA hoje já chegou ao teto.', 'warning'); return; }
+  document.getElementById('agAvisos').innerHTML = '<span class="text-muted" style="font-size:11.5px">⏳ Reescrevendo…</span>';
+  try {
+    let inters = [];
+    if (it.tipo === 'lembrete') inters = (await carregarInteracoes([l.id]))[String(l.id)] || [];
+    it.mensagem = removerEmojis(String(await chamarIAAgente(promptAgente({ l, pb, tipo: it.tipo }, it.base, inters), 500)).trim()) || it.base;
+    it.viaIA = true; it.erro = '';
+    saveDB();
+  } catch (e) { showToast('⚠️ ' + (e.message || 'Não consegui reescrever.'), 'warning'); }
+  renderFilaAgente();
+}
+
+function usarModeloPuroAgente() {
+  const f = filaHoje(); const it = f && f.itens[agenteIndice];
+  if (!it || it.status !== 'pendente') return;
+  it.mensagem = it.base; it.viaIA = false;
+  saveDB();
+  renderFilaAgente();
+}
+
+function congelarParadosAgente() {
+  const sel = selecionarLeadsAgente();
+  const alvos = sel.fora.paraCongelar;
+  if (!alvos.length) return;
+  if (!confirm(`Congelar ${alvos.length} lead(s) que receberam o primeiro contato e o lembrete sem responder? Pelo plano, ninguém recebe mais que isso sem resposta.`)) return;
+  alvos.forEach(l => { l.congelado = true; registrarHistoricoLead(l, 'Congelado: primeiro contato e lembrete sem resposta'); });
+  saveLeads();
+  renderProspeccao();
+  showToast(`❄️ ${alvos.length} lead(s) congelado(s).`);
+}
+
+// ── Cartão do agente na aba Prospecção ──
+function renderCardAgente() {
+  const el = document.getElementById('cardAgente');
+  if (!el) return;
+  garantirCamposAgente();
+  verificarPausaOptout();
+  const cfg = cfgAgente();
+  const f = filaHoje();
+  const pausa = agentePausado();
+  const sel = selecionarLeadsAgente();
+  const pbsComModelo = ((DB.playbooks && DB.playbooks.itens) || []).filter(pb => pb.agente && modelosAprovados(pb).length);
+  const fo = sel.fora;
+
+  let status, botao;
+  if (pausa) {
+    status = `⏸ <b>Pausado</b>: ${escaparHtml(pausa.motivo)}${pausa.ate ? ' (volta amanhã sozinho)' : ''}.`;
+    botao = `<button class="btn btn-gold btn-sm" onclick="alternarPausaAgente()">▶ Retomar</button>`;
+  } else if (!pbsComModelo.length) {
+    status = '<b>Fase 0 pendente:</b> nenhum playbook do agente tem modelo de mensagem aprovado. Abra 📘 Playbooks, revise os modelos e marque os que podem ser usados.';
+    botao = `<button class="btn btn-gold btn-sm" onclick="abrirPlaybooks()">📘 Aprovar modelos</button>`;
+  } else if (f) {
+    const env = f.itens.filter(x => x.status === 'enviado').length;
+    const pend = f.itens.filter(x => x.status === 'pendente').length;
+    status = pend ? `Fila de hoje: <b>${env}</b> enviada(s), <b>${pend}</b> esperando você.` : `✅ Fila de hoje concluída: ${env} mensagem(ns) enviada(s).`;
+    botao = `<button class="btn btn-gold btn-sm" onclick="abrirFilaAgente()">${pend ? 'Continuar a fila' : 'Ver a fila'}</button>`;
+  } else {
+    status = sel.total
+      ? `<b>${sel.total}</b> lead(s) prontos. A fila de hoje terá ${Math.min(sel.total, cfg.limiteDia)}.`
+      : 'Nenhum lead pronto para o agente agora.';
+    botao = sel.total ? `<button class="btn btn-gold btn-sm" onclick="prepararFilaHoje()">Preparar a fila de hoje</button>` : '';
+  }
+
+  const foraTxt = [
+    fo.semPlaybook && `${fo.semPlaybook} sem playbook (defina o tipo de comprador)`,
+    fo.playbookFora && `${fo.playbookFora} de playbook fora do agente`,
+    fo.semModelo && `${fo.semModelo} sem modelo aprovado`,
+    fo.fixo && `${fo.fixo} com telefone fixo`,
+    fo.optout && `${fo.optout} pediram para não ser contatados`,
+    fo.semRegistro && `${fo.semRegistro} contatados sem mensagem registrada`
+  ].filter(Boolean);
+
+  el.innerHTML = `
+    <div class="card-header">
+      <div>
+        <div class="card-title">🤖 ${escaparHtml(cfg.nome)}</div>
+        <div class="text-muted" style="font-size:12px">Prepara a fila, você envia · ${cfg.limiteDia} por dia · 1 lembrete depois de ${cfg.lembreteDias} dias</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${botao}
+        ${pausa ? '' : `<button class="btn btn-ghost btn-sm" onclick="alternarPausaAgente()" title="Para o agente na hora">⏸ Pausar</button>`}
+        <button class="btn btn-ghost btn-sm" onclick="abrirRelatorioAgente(0)">📈 Relatório</button>
+        <button class="btn btn-ghost btn-sm" onclick="abrirAjustesAgente()">⚙️ Ajustes</button>
+      </div>
+    </div>
+    <div class="card-body" style="font-size:12.5px;line-height:1.55">
+      <div>${status}</div>
+      ${foraTxt.length ? `<div class="text-muted" style="font-size:11.5px;margin-top:4px">Ficaram de fora: ${foraTxt.join(' · ')}.</div>` : ''}
+      ${fo.paraCongelar.length ? `<div style="font-size:11.5px;margin-top:6px;color:#2B5F87">❄️ ${fo.paraCongelar.length} lead(s) já receberam o primeiro contato e o lembrete sem responder.
+        <a href="#" onclick="congelarParadosAgente();return false;" style="color:var(--gold);font-weight:700;margin-left:4px">Congelar agora</a></div>` : ''}
+    </div>`;
+}
+
+// ── H) Ajustes do agente ──
+function abrirAjustesAgente() {
+  const cfg = cfgAgente();
+  ['nome','limiteDia','intervaloMin','lembreteDias','cidadesPrioritarias','tetoDiaUSD','limiarAlerta'].forEach(k => {
+    document.getElementById('agc_' + k).value = cfg[k];
+  });
+  document.getElementById('agc_incluirDescobertos').checked = !!cfg.incluirDescobertos;
+  document.getElementById('agc_personalizarIA').checked = !!cfg.personalizarIA;
+  document.getElementById('agc_nuncaDizer').value = agente().nuncaDizer.join('\n');
+  renderAjustesAgente();
+  openModal('modalAjustesAgente');
+}
+
+function renderAjustesAgente() {
+  const lista = agente().optout;
+  document.getElementById('agcOptout').innerHTML = lista.length
+    ? lista.slice().reverse().map((o, ri) => {
+        const i = lista.length - 1 - ri;
+        return `<div class="flex-between" style="padding:5px 0;border-bottom:1px solid var(--gray-100);font-size:12px">
+          <span><b>${escaparHtml(o.loja || o.nome)}</b> <span class="text-muted">· ${o.tel ? '📱 ' + o.tel : 'sem telefone'} · ${new Date(o.em).toLocaleDateString('pt-BR')}${o.motivo ? ' · ' + escaparHtml(o.motivo) : ''}</span></span>
+          <a href="#" onclick="removerOptout(${i});return false;" style="color:#A33B3B;font-size:11px">remover</a></div>`;
+      }).join('')
+    : '<div class="text-muted" style="font-size:12px">Ninguém pediu para não ser contatado até agora.</div>';
+}
+
+function salvarAjustesAgente() {
+  const num = (id, min, max, pad) => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? pad : Math.min(max, Math.max(min, v)); };
+  const p = AGENTE_CFG_PADRAO;
+  agente().config = {
+    nome: document.getElementById('agc_nome').value.trim() || p.nome,
+    limiteDia: Math.round(num('agc_limiteDia', 1, 100, p.limiteDia)),
+    intervaloMin: Math.round(num('agc_intervaloMin', 1, 60, p.intervaloMin)),
+    lembreteDias: Math.round(num('agc_lembreteDias', 2, 30, p.lembreteDias)),
+    cidadesPrioritarias: document.getElementById('agc_cidadesPrioritarias').value.trim(),
+    tetoDiaUSD: num('agc_tetoDiaUSD', 0.05, 5, p.tetoDiaUSD),
+    limiarAlerta: Math.round(num('agc_limiarAlerta', 1, 20, p.limiarAlerta)),
+    incluirDescobertos: document.getElementById('agc_incluirDescobertos').checked,
+    personalizarIA: document.getElementById('agc_personalizarIA').checked
+  };
+  const nd = document.getElementById('agc_nuncaDizer').value.split('\n').map(x => x.trim()).filter(Boolean);
+  agente().nuncaDizer = nd.length ? nd : NUNCA_DIZER_PADRAO.slice();
+  saveDB();
+  closeModal('modalAjustesAgente');
+  renderCardAgente();
+  showToast('✅ Ajustes do agente salvos.');
+}
+
+// ── I) Modelos no editor de playbook ──
+let pbeModelos = [];
+
+function carregarAgenteNoEditor(pb) {
+  garantirCamposAgente();
+  pbeModelos = pb ? (pb.modelos || []).map(m => ({ ...m })) : [];
+  document.getElementById('pbe_agente').checked = pb ? !!pb.agente : false;
+  document.getElementById('pbe_lembrete').value = pb && pb.lembrete ? pb.lembrete.texto || '' : '';
+  document.getElementById('pbe_lembreteAprovado').checked = !!(pb && pb.lembrete && pb.lembrete.aprovado);
+  renderModelosEditor();
+  avisosLembreteEditor();
+}
+
+function renderModelosEditor() {
+  const el = document.getElementById('pbeModelos');
+  el.innerHTML = pbeModelos.map((m, i) => `
+    <div style="border:1px solid var(--gray-200);border-left:3px solid ${m.aprovado ? '#2E7D52' : 'var(--gold)'};border-radius:6px;padding:8px 10px;margin-bottom:8px">
+      <div class="flex-between" style="margin-bottom:4px">
+        <strong style="font-size:12px;color:var(--navy)">Modelo ${escaparHtml(m.id)}</strong>
+        <div style="display:flex;gap:10px;align-items:center">
+          <label style="font-size:12px;cursor:pointer;color:${m.aprovado ? '#2E7D52' : 'var(--gray-600)'}"><input type="checkbox" ${m.aprovado ? 'checked' : ''} onchange="pbeModelos[${i}].aprovado=this.checked;renderModelosEditor()"> aprovado para uso</label>
+          <a href="#" onclick="removerModeloEditor(${i});return false;" style="font-size:11px;color:#A33B3B">remover</a>
+        </div>
+      </div>
+      <textarea rows="4" oninput="pbeModelos[${i}].texto=this.value;document.getElementById('pbeAv${i}').innerHTML=htmlAvisosAgente(verificarMensagemAgente(this.value))"
+        style="width:100%;font-family:inherit;font-size:12.5px;line-height:1.5;padding:8px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)">${escaparHtml(m.texto)}</textarea>
+      <div id="pbeAv${i}" style="margin-top:4px">${htmlAvisosAgente(verificarMensagemAgente(m.texto))}</div>
+    </div>`).join('') || '<div class="text-muted" style="font-size:12px;margin-bottom:8px">Nenhum modelo ainda.</div>';
+}
+
+function addModeloEditor() {
+  const usados = new Set(pbeModelos.map(m => m.id));
+  const id = 'ABCDEFGH'.split('').find(x => !usados.has(x)) || String(pbeModelos.length + 1);
+  pbeModelos.push({ id, texto: '{ola}! Sou o Petare, da Vangardis Expertise, de Curitiba. … Posso te mandar …? Se preferir não receber mensagens, é só me avisar.', aprovado: false });
+  renderModelosEditor();
+}
+
+function removerModeloEditor(i) {
+  if (!confirm(`Remover o modelo ${pbeModelos[i].id}?`)) return;
+  pbeModelos.splice(i, 1);
+  renderModelosEditor();
+}
+
+function avisosLembreteEditor() {
+  const v = document.getElementById('pbe_lembrete').value;
+  document.getElementById('pbeLembreteAvisos').innerHTML = v.trim() ? htmlAvisosAgente(verificarMensagemAgente(v, 'lembrete')) : '';
+}
+
+function lerAgenteDoEditor() {
+  return {
+    agente: document.getElementById('pbe_agente').checked,
+    modelos: pbeModelos.map(m => ({ id: m.id, texto: String(m.texto || '').trim(), aprovado: !!m.aprovado })).filter(m => m.texto),
+    lembrete: { texto: document.getElementById('pbe_lembrete').value.trim(), aprovado: document.getElementById('pbe_lembreteAprovado').checked }
+  };
+}
+
+// ── J) Catálogo do segmento ──
+function enviarCatalogoConversa() {
+  const l = conversaLeadAtual;
+  if (!l) return;
+  const pb = playbookDoLead(l);
+  if (!pb || !pb.catalogoUrl) { showToast('Cadastre o link do catálogo no playbook deste tipo de loja (📘 Playbooks).', 'warning'); return; }
+  if (!l.whatsapp) { showToast('⚠️ Este lead não tem WhatsApp cadastrado.', 'warning'); return; }
+  const txt = `Aqui está o nosso catálogo: ${pb.catalogoUrl}\nQualquer dúvida, estou por aqui.`;
+  window.open(`https://wa.me/55${telNorm(l.whatsapp)}?text=${encodeURIComponent(txt)}`, '_blank');
+  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt, origem: 'catalogo' }])
+    .then(r => { atualizarMarcadores(l, r); saveLeads(); carregarInteracoes([l.id]).then(m => renderTimelineConversa(m[String(l.id)] || [])); });
+  registrarHistoricoLead(l, 'Catálogo do segmento enviado');
+  saveLeads();
+}
+
+// ── K) Alerta de venda iminente ──
+// A IA marca os sinais da NOVA mensagem; os pontos somam por lead. Passou do
+// limite (ou veio um sinal imediato), o lead vira seu e o agente sai.
+function avaliarSinaisVenda(l, j) {
+  const sinais = (Array.isArray(j.sinais) ? j.sinais : []).filter(s => SINAIS_VENDA[s]);
+  const marca = String(j._texto || '').slice(0, 200);
+  if (!sinais.length || (marca && l.sinaisDe === marca)) return null;   // mesma mensagem não conta duas vezes
+  l.sinaisDe = marca;
+  if (sinais.indexOf('parar') !== -1) registrarOptout(l, 'pediu para não receber mais mensagens');
+  const pontos = sinais.reduce((s, k) => s + SINAIS_VENDA[k].peso, 0);
+  l.intencao = Math.max(0, (l.intencao || 0) + pontos);
+  l.sinaisVenda = Array.from(new Set((l.sinaisVenda || []).concat(sinais))).slice(-10);
+
+  const imediato = sinais.some(k => SINAIS_VENDA[k].imediato);
+  if (!(imediato || (!l.alertaVenda && l.intencao >= cfgAgente().limiarAlerta))) return null;
+
+  const fechou = sinais.indexOf('fechou') !== -1;
+  l.alertaVenda = {
+    em: new Date().toISOString(), pontos: l.intencao, sinais, fechou, visto: false,
+    resumo: j.resumo || '', proximo: j.proximo_passo || ''
+  };
+  if (!fechou && (ESTAGIOS_LEAD[l.estagio] || {}).ordem < ESTAGIOS_LEAD.proposta.ordem) {
+    const ant = l.estagio;
+    l.estagio = 'proposta';
+    registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[ant]?.label} → Proposta (alerta de venda: ${sinais.map(k => SINAIS_VENDA[k].label).join(', ')})`);
+  } else {
+    registrarHistoricoLead(l, `Alerta de venda: ${sinais.map(k => SINAIS_VENDA[k].label).join(', ')}`);
+  }
+  return l.alertaVenda;
+}
+
+function renderAvisoVenda() {
+  const el = document.getElementById('avisoVenda');
+  if (!el) return;
+  const lista = LEADS.filter(l => l.alertaVenda && !l.alertaVenda.visto)
+    .sort((a, b) => (a.alertaVenda.em < b.alertaVenda.em ? 1 : -1));
+  if (!lista.length) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="font-size:11px;color:#A33B3B;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔥 Venda perto — ${lista.length} lead(s) para você negociar</div>
+    ${lista.map(l => {
+      const a = l.alertaVenda;
+      return `<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #F1D5D0">
+        <div style="font-size:12.5px;line-height:1.45">
+          <strong style="color:var(--navy)">${escaparHtml(l.nome)}</strong>
+          <span class="text-muted" style="font-size:11.5px">· ${a.sinais.map(k => SINAIS_VENDA[k].label).join(', ')} · ${a.pontos} ponto(s)</span>
+          ${a.proximo ? `<div style="color:#2E7D52">→ ${escaparHtml(a.proximo)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:4px;white-space:nowrap">
+          <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})" title="Abrir a conversa">💬</button>
+          ${a.fechou ? `<button class="btn btn-sm btn-gold" onclick="converterDoAlerta(${l.id})">🤝 Virou cliente</button>` : ''}
+          <button class="btn btn-sm btn-ghost" onclick="marcarAlertaVisto(${l.id})" title="Já estou cuidando">✓ Ciente</button>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+
+function marcarAlertaVisto(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l || !l.alertaVenda) return;
+  l.alertaVenda.visto = true;
+  saveLeads();
+  renderAvisoVenda();
+}
+
+function converterDoAlerta(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  if (!confirm(`Converter "${l.nome}" em cliente? O cadastro dele será criado na base de Clientes.`)) return;
+  l.alertaVenda.visto = true;
+  const cli = efetivarConversao(l);
+  renderAll();
+  showToast(`🤝 ${l.nome} agora é cliente!`);
+  oferecerPrimeiroPedido(cli);
+}
+
+// ── L) Relatório semanal ──
+let relSemana = 0;
+
+function periodoSemana(atras) {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  const desdeSegunda = (d.getDay() + 6) % 7;
+  const ini = new Date(d.getTime() - (desdeSegunda + 7 * atras) * 86400000);
+  const fim = new Date(ini.getTime() + 7 * 86400000);
+  return { ini, fim };
+}
+
+async function abrirRelatorioAgente(atras) {
+  relSemana = Math.max(0, atras || 0);
+  openModal('modalRelatorioAgente');
+  const el = document.getElementById('relConteudo');
+  el.innerHTML = '<div class="text-muted" style="padding:24px;text-align:center">⏳ Montando o relatório…</div>';
+  let evs = [];
+  let semServidor = false;
+  try { evs = await carregarEventos(true); } catch (e) { semServidor = true; }
+  el.innerHTML = htmlRelatorioAgente(eventosComPendentes(evs), relSemana, semServidor);
+}
+
+function htmlRelatorioAgente(eventos, atras, semServidor) {
+  const { ini, fim } = periodoSemana(atras);
+  const isoIni = ini.toISOString(), isoFim = fim.toISOString();
+  const dentro = d => d && d >= isoIni && d < isoFim;
+  const envios = enviosMedidos(eventos);
+  const doAgente = envios.filter(e => e.base === 'agente');
+  const naSemana = doAgente.filter(e => dentro(e.data));
+  const primeiros = naSemana.filter(e => String(e.variante).indexOf('modelo-') === 0).length;
+  const lembretes = naSemana.filter(e => e.variante === 'lembrete').length;
+  const medidos = naSemana.filter(e => !e.espera);
+  const respondidas = medidos.filter(e => e.respondida).length;
+
+  // Conversas: leads cuja PRIMEIRA resposta de pessoa caiu na semana
+  const primeiraResp = {};
+  eventos.forEach(e => {
+    if (e.dir !== 'entrada' || e.t === 'robo') return;
+    if (!primeiraResp[e.l] || e.d < primeiraResp[e.l]) primeiraResp[e.l] = e.d;
+  });
+  const conversas = Object.keys(primeiraResp).filter(k => dentro(primeiraResp[k])).length;
+  const alertas = LEADS.filter(l => l.alertaVenda && dentro(l.alertaVenda.em)).length;
+  const propostas = LEADS.filter(l => (l.historico || []).some(h => dentro(h.data) && /→ Proposta|Amostra entregue/.test(h.texto))).length;
+  const vendas = LEADS.filter(l => l.convertido && dentro(l.dataConversao)).length;
+  const optouts = agente().optout.filter(o => dentro(o.em)).length;
+  let custo = 0;
+  Object.keys(agente().custoDia).forEach(k => { const d = new Date(k + 'T12:00:00'); if (d >= ini && d < fim) custo += agente().custoDia[k]; });
+
+  const ab = agruparEnvios(doAgente.filter(e => String(e.variante).indexOf('modelo-') === 0), e => e.variante);
+  const fmt = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const kpi = (rot, v, sub, cor) => `<div class="kpi-card"><div class="kpi-label">${rot}</div><div class="kpi-value"${cor ? ` style="color:${cor}"` : ''}>${v}</div>${sub ? `<div class="text-muted" style="font-size:10.5px;margin-top:3px">${sub}</div>` : ''}</div>`;
+
+  return `
+    <div class="flex-between" style="margin-bottom:12px">
+      <button class="btn btn-ghost btn-sm" onclick="abrirRelatorioAgente(${atras + 1})">‹ Semana anterior</button>
+      <strong style="color:var(--navy);font-size:13px">${fmt(ini)} a ${fmt(new Date(fim.getTime() - 86400000))}${atras === 0 ? ' · esta semana' : ''}</strong>
+      <button class="btn btn-ghost btn-sm" onclick="abrirRelatorioAgente(${atras - 1})" ${atras === 0 ? 'disabled' : ''}>Próxima ›</button>
+    </div>
+    ${semServidor ? '<div class="alert alert-warning" style="margin-bottom:10px">Não consegui ler o histórico da planilha agora — os números de envio e resposta mostram só o que está neste navegador.</div>' : ''}
+    <div class="kpi-grid" style="margin-bottom:16px">
+      ${kpi('Enviadas pelo agente', primeiros + lembretes, `${primeiros} primeiro(s) contato(s) · ${lembretes} lembrete(s)`)}
+      ${kpi('Respostas de pessoa', respondidas, medidos.length ? `${(respondidas / medidos.length * 100).toFixed(0)}% das ${medidos.length} já com prazo vencido` : 'nenhuma com prazo vencido ainda', '#2E7D52')}
+      ${kpi('Conversas abertas', conversas, 'leads que responderam pela 1ª vez')}
+      ${kpi('Alertas de venda', alertas, `${propostas} proposta(s) ou amostra(s)`, alertas ? '#A33B3B' : '')}
+      ${kpi('Vendas fechadas', vendas, 'leads convertidos em cliente', vendas ? '#2E7D52' : '')}
+      ${kpi('Custo do agente', 'US$ ' + custo.toFixed(2), respondidas ? `US$ ${(custo / respondidas).toFixed(2)} por resposta` : (optouts ? `${optouts} pedido(s) de não contato` : ''))}
+    </div>
+    ${optouts ? `<div style="font-size:12px;color:#8a2020;margin-bottom:12px">🚫 ${optouts} loja(s) pediram para não receber mensagens nesta semana. Se esse número subir, revise os modelos — o agente pausa sozinho a partir de 3 pedidos em 7 dias.</div>` : ''}
+    ${tabelaMetrica('Teste A/B dos modelos de primeiro contato (desde o início)', ab, k => 'Modelo ' + String(k).replace('modelo-', ''),
+      'O agente alterna entre os modelos aprovados. Decida pelo que responde mais só depois de uns 10 envios de cada.') ||
+      '<div class="text-muted" style="font-size:12px">O teste A/B aparece aqui quando houver envios do agente com mais de um modelo aprovado.</div>'}
+    <div style="background:var(--gray-100);border-radius:8px;padding:10px 12px;font-size:11.5px;color:var(--gray-600);line-height:1.55;margin-top:6px">
+      Enviadas e respostas contam só mensagens do agente. Uma mensagem conta como respondida quando a próxima coisa na conversa é resposta de pessoa
+      (robô não conta); as enviadas há menos de ${JANELA_RESPOSTA_DIAS} dias e ainda sem resposta ficam fora da porcentagem. O custo soma as chamadas
+      à IA feitas pelo agente — leituras de resposta e outras telas entram no medidor geral do mês.
+    </div>`;
 }
 
 function renderAll(){
