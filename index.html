@@ -2199,6 +2199,7 @@ th.sortable:hover { background: var(--navy-mid); }
   <div class="modal" style="max-width:680px">
     <div class="modal-title" id="convTitulo">Conversa</div>
     <div class="text-muted" id="convSub" style="font-size:12px;margin:-6px 0 12px"></div>
+    <div id="convIA" style="display:none;font-size:12px;margin:-6px 0 12px;padding:6px 10px;border-radius:6px;background:#F4F8FB;color:#2B5F87"></div>
 
     <div id="convResumo" style="background:#FBF1D6;border-left:3px solid var(--gold);border-radius:6px;padding:10px 12px;font-size:12.5px;line-height:1.5;margin-bottom:12px"></div>
 
@@ -2612,12 +2613,30 @@ th.sortable:hover { background: var(--navy-mid); }
         <div class="text-muted" style="font-size:11px;margin-top:3px">em branco = Fase 2 desligada</div></div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
         <label style="cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy)"><input type="checkbox" id="agc_waLerAuto"> Ler cada resposta com a IA (resumo, interesse e sinais de compra)</label>
-        <label style="cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy)"><input type="checkbox" id="agc_waCatalogoAuto"> Mandar o catálogo sozinho quando a loja aceitar (espera 2 minutos e só envia se você não tiver respondido)</label>
+      </div>
+      <div class="form-group"><label>Quando a loja responde, a IA…</label>
+        <select id="agc_waModo" onchange="mostrarCamposModoWA()">
+          <option value="ler">só lê — quem responde é você</option>
+          <option value="catalogo">manda só o catálogo quando a loja aceitar</option>
+          <option value="conversa">conversa com a loja e passa para você na negociação</option>
+        </select></div>
+      <div id="agcWaConversa" style="display:none;background:#F4F8FB;border-radius:6px;padding:10px 12px;margin-bottom:10px">
+        <div class="text-muted" style="font-size:11.5px;line-height:1.5;margin-bottom:8px">A IA segue o playbook da loja, manda o catálogo quando fizer sentido e <b>passa para você</b> quando a loja perguntar preço, quantidade, prazo, frete ou pagamento, pedir proposta ou amostra, mandar áudio, pedir para falar com você ou quando a conversa não avança. Ela nunca fala de preço. Se você responder pelo app, ela sai da conversa sozinha.</div>
+        <div class="form-row">
+          <div class="form-group"><label>Mensagens da IA por conversa</label><input type="number" id="agc_waLimiteMsgs" min="1" max="20">
+            <div class="text-muted" style="font-size:11px;margin-top:3px">chegou no limite, passa para você</div></div>
+          <div class="form-group"><label>Responde das</label><input type="number" id="agc_waHoraIni" min="0" max="23"></div>
+          <div class="form-group"><label>até as</label><input type="number" id="agc_waHoraFim" min="1" max="24"></div>
+        </div>
+        <label style="cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy)"><input type="checkbox" id="agc_waSabado"> Responder também aos sábados (domingo nunca)</label>
+        <div class="text-muted" style="font-size:11px;margin-top:3px">Mensagem fora do horário espera a abertura. Se a janela de 24 h do WhatsApp fechar antes, ela passa para você.</div>
+        <div id="agcWaSupervisao" style="margin-top:8px;font-size:12px"></div>
       </div>
       <div class="form-row">
-        <div class="form-group" style="flex:3"><label>Mensagem do catálogo automático <span class="text-muted" style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">({contato} e {url})</span></label>
+        <div class="form-group" style="flex:3" id="agcWaTextoBox"><label>Mensagem do catálogo automático <span class="text-muted" style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">({contato} e {url})</span></label>
           <textarea id="agc_waTexto" rows="3" style="width:100%;font-family:inherit;font-size:12.5px;line-height:1.5;padding:8px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)"></textarea></div>
-        <div class="form-group"><label>Catálogos automáticos por dia</label><input type="number" id="agc_waLimite" min="1" max="200"></div>
+        <div class="form-group"><label>Respostas automáticas por dia</label><input type="number" id="agc_waLimite" min="1" max="200">
+          <div class="text-muted" style="font-size:11px;margin-top:3px">teto de gasto: passou disso, vai para você</div></div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="testarConexaoWA()">🔌 Testar a conexão</button>
       <div id="agcWaStatus" style="margin-top:8px"></div>
@@ -9204,6 +9223,7 @@ async function abrirConversa(leadId) {
   document.getElementById('convColagem').style.display = 'none';
   document.getElementById('convLeitura').style.display = 'none';
   renderResumoConversa(l);
+  renderStatusIAConversa(l);
   document.getElementById('convTimeline').innerHTML = '<div class="text-muted" style="padding:14px;text-align:center">Carregando a conversa…</div>';
   openModal('modalConversa');
   const mapa = await carregarInteracoes([l.id]);
@@ -9240,7 +9260,10 @@ function renderTimelineConversa(inters) {
     const cor = it.tipo === 'robo' ? '#F4F4F4' : it.direcao === 'saida' ? '#F0EEEA' : it.direcao === 'entrada' ? '#E5F2EA' : '#FBF4E1';
     const corTxt = it.tipo === 'robo' ? '#999' : '#1F2430';
     const ob = baseOrigem(it.origem);
-    const origem = ob === 'lote' ? ' · envio em lote' : ob === 'importado' ? ' · importada' : '';
+    const va = partesOrigem(it.origem).variante;
+    const origem = ob === 'lote' ? ' · envio em lote' : ob === 'importado' ? ' · importada'
+      : ob === 'agente' && va === 'ia-conversa' ? ' · 🤖 pela IA' : ob === 'agente' && va === 'catalogo-auto' ? ' · 🤖 catálogo automático'
+      : ob === 'agente' && va && va.indexOf('ia-') === 0 ? ' · 🤖 agente' : '';
     return `<div style="background:${cor};color:${corTxt};border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12.5px;line-height:1.45">
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:700;opacity:.8;margin-bottom:2px">
         <span>${t.icone} ${t.label}${origem}</span>
@@ -12072,7 +12095,7 @@ function renderCardAgente() {
     <div class="card-header">
       <div>
         <div class="card-title">🤖 ${escaparHtml(cfg.nome)}</div>
-        <div class="text-muted" style="font-size:12px">Prepara a fila, você envia · ${cfg.limiteDia} por dia · 1 lembrete depois de ${cfg.lembreteDias} dias</div>
+        <div class="text-muted" style="font-size:12px">Prepara a fila, você envia · ${cfg.limiteDia} por dia · 1 lembrete depois de ${cfg.lembreteDias} dias${waAtivo() && waCfg().modo === 'conversa' ? ' · nas respostas, a IA conversa até a negociação' : ''}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${botao}
@@ -12265,15 +12288,20 @@ function renderAvisoVenda() {
     <div style="font-size:11px;color:#A33B3B;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🔥 Venda perto — ${lista.length} lead(s) para você negociar</div>
     ${lista.map(l => {
       const a = l.alertaVenda;
+      const sinais = (a.sinais || []).filter(k => SINAIS_VENDA[k]).map(k => SINAIS_VENDA[k].label);
+      const pbl = playbookDoLead(l);
+      const podeDevolver = waAtivo() && waCfg().modo === 'conversa' && !a.fechou && pbl && pbl.agente;
       return `<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #F1D5D0">
         <div style="font-size:12.5px;line-height:1.45">
           <strong style="color:var(--navy)">${escaparHtml(l.nome)}</strong>
-          <span class="text-muted" style="font-size:11.5px">· ${a.sinais.map(k => SINAIS_VENDA[k].label).join(', ')} · ${a.pontos} ponto(s)</span>
+          ${sinais.length ? `<span class="text-muted" style="font-size:11.5px">· ${sinais.join(', ')} · ${a.pontos} ponto(s)</span>` : ''}
+          ${a.passadoIA ? `<div style="color:#2B5F87">🤖 A IA passou para você${a.motivo ? ': ' + escaparHtml(a.motivo) : ''}</div>` : ''}
           ${a.proximo ? `<div style="color:#2E7D52">→ ${escaparHtml(a.proximo)}</div>` : ''}
         </div>
-        <div style="display:flex;gap:4px;white-space:nowrap">
+        <div style="display:flex;gap:4px;white-space:nowrap;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})" title="Abrir a conversa">💬</button>
           ${a.fechou ? `<button class="btn btn-sm btn-gold" onclick="converterDoAlerta(${l.id})">🤝 Virou cliente</button>` : ''}
+          ${podeDevolver ? `<button class="btn btn-sm btn-ghost" onclick="devolverParaIA(${l.id})" title="Não era negociação: a IA volta a responder esta loja">🤖 Devolver</button>` : ''}
           <button class="btn btn-sm btn-ghost" onclick="marcarAlertaVisto(${l.id})" title="Já estou cuidando">✓ Ciente</button>
         </div>
       </div>`;
@@ -12330,8 +12358,12 @@ function htmlRelatorioAgente(eventos, atras, semServidor) {
   const naSemana = doAgente.filter(e => dentro(e.data));
   const primeiros = naSemana.filter(e => String(e.variante).indexOf('modelo-') === 0).length;
   const lembretes = naSemana.filter(e => e.variante === 'lembrete').length;
-  const medidos = naSemana.filter(e => !e.espera);
+  const contato = e => String(e.variante).indexOf('modelo-') === 0 || e.variante === 'lembrete';
+  const medidos = naSemana.filter(e => contato(e) && !e.espera);
   const respondidas = medidos.filter(e => e.respondida).length;
+  // Modo conversa: o que a IA fez sozinha na semana
+  const daIA = naSemana.filter(e => e.variante === 'ia-conversa');
+  const passadosIA = LEADS.filter(l => (l.historico || []).some(h => dentro(h.data) && /^A IA passou a conversa/.test(h.texto))).length;
 
   // Conversas: leads cuja PRIMEIRA resposta de pessoa caiu na semana
   const primeiraResp = {};
@@ -12366,6 +12398,7 @@ function htmlRelatorioAgente(eventos, atras, semServidor) {
       ${kpi('Vendas fechadas', vendas, 'leads convertidos em cliente', vendas ? '#2E7D52' : '')}
       ${kpi('Custo do agente', 'US$ ' + custo.toFixed(2), respondidas ? `US$ ${(custo / respondidas).toFixed(2)} por resposta` : (optouts ? `${optouts} pedido(s) de não contato` : ''))}
     </div>
+    ${daIA.length || passadosIA ? `<div style="font-size:12px;color:#2B5F87;margin-bottom:12px">🤖 Na conversa: a IA mandou <b>${daIA.length}</b> mensagem(ns)${daIA.filter(e => !e.espera).length ? ` (${daIA.filter(e => !e.espera && e.respondida).length} respondida(s))` : ''} e passou <b>${passadosIA}</b> lead(s) para você negociar.</div>` : ''}
     ${optouts ? `<div style="font-size:12px;color:#8a2020;margin-bottom:12px">🚫 ${optouts} loja(s) pediram para não receber mensagens nesta semana. Se esse número subir, revise os modelos — o agente pausa sozinho a partir de 3 pedidos em 7 dias.</div>` : ''}
     ${tabelaMetrica('Teste A/B dos modelos de primeiro contato (desde o início)', ab, k => 'Modelo ' + String(k).replace('modelo-', ''),
       'O agente alterna entre os modelos aprovados. Decida pelo que responde mais só depois de uns 10 envios de cada.') ||
@@ -12385,16 +12418,33 @@ function htmlRelatorioAgente(eventos, atras, semServidor) {
 // leitura da IA e dispara os alertas. O primeiro contato continua manual.
 // ════════════════════════════════════════════════════
 
-const WA_PADRAO = { url: '', lerAuto: true, catalogoAuto: true, textoCatalogo: '', limiteDia: 30, cursor: 0 };
+const WA_PADRAO = { url: '', lerAuto: true, catalogoAuto: true, modo: '', textoCatalogo: '', limiteDia: 30, cursor: 0,
+  limiteMsgs: 6, horaIni: 8, horaFim: 19, sabado: true, supervisaoAte: '' };
 const WA_TEXTO_PADRAO = 'Que ótimo{contato}! Aqui está o catálogo da Vangardis: {url}\nQualquer dúvida sobre os modelos, é só me chamar.';
 const WA_INTERVALO_MS = 120000;   // busca a cada 2 minutos com o dashboard aberto
+const WA_INTERVALO_RASCUNHO_MS = 40000;   // com resposta da IA esperando você, a cada 40 s
+const WA_SUPERVISAO_DIAS = 14;
 
 function waCfg() {
   const a = agente();
   if (!a.wa) a.wa = {};
-  return Object.assign({}, WA_PADRAO, a.wa);
+  const c = Object.assign({}, WA_PADRAO, a.wa);
+  if (!c.modo) c.modo = c.catalogoAuto ? 'catalogo' : 'ler';   // ajustes da primeira versão
+  return c;
 }
 function waAtivo() { return !!String(waCfg().url || '').trim(); }
+function waHorario(c) { return { ini: c.horaIni, fim: c.horaFim, dias: c.sabado ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5] }; }
+function waEmSupervisao(c) { c = c || waCfg(); return c.modo === 'conversa' && !!c.supervisaoAte && new Date().toISOString() < c.supervisaoAte; }
+
+// Está com a IA agora? (modo conversa) — a mesma regra vai para o porteiro
+function leadComIA(l, c) {
+  c = c || waCfg();
+  if (c.modo !== 'conversa' || !l.whatsapp || registroOptout(l)) return false;
+  const pb = playbookDoLead(l);
+  return !!(pb && pb.agente && !l.congelado && !leadNoNumeroAntigo(l) &&
+    ['contatado', 'conversa'].indexOf(l.estagio) !== -1 &&
+    !l.iaPassado && !l.iaAssumido && !(l.alertaVenda && !l.alertaVenda.devolvido));
+}
 
 // Mesma chave do Worker: DDD + últimos 8 números (casa com e sem o 9º dígito)
 function telChaveWA(t) {
@@ -12419,15 +12469,31 @@ async function waFetch(caminho, opts) {
 // ── Mapa: quem é lead, e quem pode receber o catálogo sozinho ──
 function montarMapaWA() {
   const c = waCfg();
+  const playbooks = {};
   const leads = LEADS
     .filter(l => l.whatsapp && ['cliente', 'bloqueado'].indexOf(l.estagio) === -1 && !registroOptout(l))
     .map(l => {
       const pb = playbookDoLead(l);
-      const auto = !!(c.catalogoAuto && pb && pb.agente && pb.catalogoUrl && !l.congelado && !l.alertaVenda && !leadNoNumeroAntigo(l) &&
-        !l.catalogoEnviadoEm && ['contatado', 'conversa'].indexOf(l.estagio) !== -1);
-      return { tel: l.whatsapp, nome: l.nome, contato: l.contato || '', url: (pb && pb.catalogoUrl) || '', auto, catalogoEnviado: l.catalogoEnviadoEm || '' };
+      let auto;
+      if (c.modo === 'conversa') {
+        auto = leadComIA(l, c);
+        if (auto && pb.id && !playbooks[pb.id]) playbooks[pb.id] = blocoPlaybook(pb).trim();
+      } else {
+        auto = !!(c.modo === 'catalogo' && pb && pb.agente && pb.catalogoUrl && !l.congelado && !l.alertaVenda && !leadNoNumeroAntigo(l) &&
+          !l.catalogoEnviadoEm && ['contatado', 'conversa'].indexOf(l.estagio) !== -1);
+      }
+      return { tel: l.whatsapp, nome: l.nome, contato: l.contato || '', segmento: l.segmento || '', cidade: l.cidade || '',
+        pbId: (pb && pb.id) || '', url: (pb && pb.catalogoUrl) || '', auto, catalogoEnviado: l.catalogoEnviadoEm || '',
+        devolvidoEm: l.iaDevolvidoEm || '' };
     });
-  return { leads, config: { pausado: !!agentePausado(), catalogoAuto: !!c.catalogoAuto, textoCatalogo: c.textoCatalogo || '', limiteDia: c.limiteDia } };
+  return { leads, config: {
+    pausado: !!agentePausado(), modo: c.modo, catalogoAuto: c.modo !== 'ler',
+    textoCatalogo: c.textoCatalogo || '', limiteDia: c.limiteDia, limiteMsgs: c.limiteMsgs,
+    supervisaoAte: c.modo === 'conversa' ? (c.supervisaoAte || '') : '',
+    horario: waHorario(c), playbooks,
+    regras: c.modo === 'conversa' ? ((DB.playbooks && DB.playbooks.regras) || []) : [],
+    nuncaDizer: agente().nuncaDizer || []
+  } };
 }
 
 let waMapaTimer = null;
@@ -12472,18 +12538,81 @@ async function buscarMensagensWA(manual) {
     const a = agente();
     a.wa.cursor = j.cursor;
     a.wa.desconhecidos = (j.desconhecidos || []).slice(0, 30);
+    const antes = new Set((a.wa.rascunhos || []).map(x => x.id));
+    a.wa.rascunhos = (j.rascunhos || []).slice(0, 30);
+    const novosRasc = a.wa.rascunhos.filter(x => !antes.has(x.id)).length;
+    Object.keys(waEdicoes).forEach(k => { if (!a.wa.rascunhos.some(x => String(x.id) === k)) delete waEdicoes[k]; });
     a.wa.ultimaBusca = new Date().toISOString();
     a.wa.erro = '';
     saveDB();
-    if (r.novas) showToast(`📡 ${r.novas} mensagem(ns) nova(s) de leads no WhatsApp${r.alertas ? ` · 🔥 ${r.alertas} alerta(s) de venda` : ''}`, r.alertas ? 'warning' : undefined);
+    if (r.novas || r.alertas) showToast(`📡 ${r.novas ? r.novas + ' mensagem(ns) nova(s) de leads no WhatsApp' : ''}${r.novas && r.alertas ? ' · ' : ''}${r.alertas ? `🔥 ${r.alertas} lead(s) para você negociar` : ''}`, r.alertas ? 'warning' : undefined);
     else if (manual) showToast('📡 Nenhuma mensagem nova de leads.');
+    if (novosRasc) showToast(`🤖 A IA escreveu ${novosRasc} resposta(s). Saem sozinhas em até 10 min — confira no cartão do agente.`, 'warning');
     if (r.catalogos) agendarMapaWA();
   } catch (e) {
     agente().wa.erro = e.message;
     if (manual) showToast('⚠️ WhatsApp: ' + e.message, 'warning');
   }
   waBuscando = false;
+  // não redesenha enquanto você edita um rascunho (o texto ficaria pela metade)
+  const foco = document.activeElement;
+  if (!(foco && foco.id && foco.id.indexOf('rasc_') === 0)) renderCardAgente();
+}
+
+// ── Supervisão: respostas da IA esperando você ──
+const waEdicoes = {};   // id do rascunho → texto que você está editando
+
+function htmlRascunhosWA() {
+  const lista = (agente().wa || {}).rascunhos || [];
+  if (!lista.length) return '';
+  const porChave = {};
+  LEADS.forEach(l => { const k = telChaveWA(l.whatsapp); if (k) porChave[k] = l; });
+  return `<div style="margin-top:10px;border:1.5px solid #E8C872;border-radius:8px;padding:10px 12px;background:#FFFBEF">
+    <div style="font-size:11px;color:#8A6508;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🤖 Respostas da IA esperando você — ${lista.length}</div>
+    <div class="text-muted" style="font-size:11.5px;margin-bottom:6px">Período de supervisão: cada resposta sai sozinha no horário indicado. Edite e envie, ou cancele e responda você pelo app.</div>
+    ${lista.map(r => {
+      const l = porChave[r.chave];
+      const min = Math.max(0, Math.ceil((new Date(r.envia_em).getTime() - Date.now()) / 60000));
+      const txt = waEdicoes[r.id] != null ? waEdicoes[r.id] : r.texto;
+      return `<div style="border-top:1px solid #F0E2B6;padding:8px 0">
+        <div class="flex-between" style="font-size:12px;margin-bottom:4px">
+          <span><b style="color:var(--navy)">${escaparHtml(l ? l.nome : r.chave)}</b>${r.motivo ? ` <span class="text-muted">· ${escaparHtml(r.motivo)}</span>` : ''}</span>
+          <span style="white-space:nowrap;color:#8A6508;font-weight:700">${min ? 'sai em ' + min + ' min' : 'saindo agora'}</span>
+        </div>
+        <textarea id="rasc_${r.id}" rows="3" oninput="waEdicoes[${r.id}]=this.value" style="width:100%;font-family:inherit;font-size:12.5px;line-height:1.5;padding:7px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)">${escaparHtml(txt)}</textarea>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap">
+          ${l ? `<button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})">💬 Conversa</button>` : ''}
+          <button class="btn btn-sm btn-ghost" onclick="agirRascunhoWA(${r.id},'cancelar')" title="A IA sai desta conversa e você responde pelo app">✋ Cancelar, eu respondo</button>
+          <button class="btn btn-sm btn-gold" onclick="agirRascunhoWA(${r.id},'enviar')">Enviar agora</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function agirRascunhoWA(id, acao) {
+  const campo = document.getElementById('rasc_' + id);
+  const texto = campo ? campo.value.trim() : '';
+  if (acao === 'enviar' && !texto) { showToast('O texto está vazio.', 'warning'); return; }
+  if (acao === 'enviar') {
+    // numa conversa em andamento só vale a lista "nunca dizer"
+    const proibido = verificarMensagemAgente(texto, 'lembrete').filter(x => x.indexOf('fala de') === 0);
+    if (proibido.length) {
+      showToast(`⚠️ O texto ${proibido.join('; ')} — o porteiro não envia isso em nome da IA. Cancele e responda você pelo app.`, 'warning');
+      return;
+    }
+  }
+  try {
+    await waFetch('/rascunho', { method: 'POST', body: JSON.stringify({ id, acao, texto }) });
+    delete waEdicoes[id];
+    showToast(acao === 'enviar' ? '✅ Resposta enviada.' : '✋ A IA saiu desta conversa. Responda você pelo app.');
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'warning');
+  }
+  const a = agente();
+  a.wa.rascunhos = (a.wa.rascunhos || []).filter(x => x.id !== id);
   renderCardAgente();
+  buscarMensagensWA(false);
 }
 
 async function importarEventosWA(eventos) {
@@ -12491,7 +12620,9 @@ async function importarEventosWA(eventos) {
   LEADS.forEach(l => { const k = telChaveWA(l.whatsapp); if (k) porChave[k] = l; });
   const grupos = {};
   eventos.forEach(e => {
-    const l = porChave[telChaveWA(e.tel)];
+    // as anotações do porteiro (a IA passou a conversa, a loja pediu para
+    // parar) não têm telefone: vêm só com a chave
+    const l = porChave[e.chave || telChaveWA(e.tel)] || porChave[telChaveWA(e.tel)];
     if (!l) return;
     (grupos[l.id] = grupos[l.id] || { l, evs: [] }).evs.push(e);
   });
@@ -12505,18 +12636,46 @@ async function importarEventosWA(eventos) {
     const { l, evs } = grupos[id];
     const existentes = conversas[String(l.id)] || [];
     const itens = [];
-    evs.sort((a, b) => (a.ts < b.ts ? -1 : 1)).forEach(e => {
+    const passagens = [];
+    // mesma conta do porteiro: só vale o que a loja escreveu desde o WhatsApp oficial
+    let lojaJaFalou = existentes.some(x => x.direcao === 'entrada' && x.origem === 'whatsapp');
+    evs.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : (a.seq || 0) - (b.seq || 0))).forEach(e => {
+      if (e.dir === 'nota') {
+        if (e.origem === 'agente-passou') {
+          itens.push({ leadId: l.id, data: e.ts, direcao: 'nota', tipo: 'nota', canal: 'whatsapp',
+            texto: '🤖 A IA passou a conversa para você: ' + e.texto, origem: origemComVersao('agente', l, 'ia-passou') });
+          passagens.push(e);
+        } else {
+          itens.push({ leadId: l.id, data: e.ts, direcao: 'nota', tipo: 'nota', canal: 'whatsapp',
+            texto: '🤖 ' + e.texto, origem: origemComVersao('agente', l, 'ia-nota') });
+          if (/não receber/i.test(e.texto)) {
+            registrarOptout(l, 'pediu para não receber mais mensagens (na conversa com a IA)');
+            registrarHistoricoLead(l, 'A loja pediu para não receber mensagens — a IA saiu da conversa');
+          }
+        }
+        return;
+      }
       if (e.dir === 'saida') {
-        const doAgente = e.origem === 'agente-catalogo';
+        const doAgente = e.origem === 'agente-catalogo' || e.origem === 'agente-ia';
         if (!doAgente && ecoDuplicado(existentes.concat(itens), e)) return;
         itens.push({ leadId: l.id, data: e.ts, direcao: 'saida', tipo: 'mensagem', canal: 'whatsapp', texto: e.texto,
-          origem: doAgente ? origemComVersao('agente', l, 'catalogo-auto') : 'whatsapp-app' });
-        if (doAgente) {
+          origem: e.origem === 'agente-ia' ? origemComVersao('agente', l, 'ia-conversa')
+            : doAgente ? origemComVersao('agente', l, 'catalogo-auto') : 'whatsapp-app' });
+        const pb = playbookDoLead(l);
+        if (e.origem === 'agente-catalogo' || (e.origem === 'agente-ia' && pb && pb.catalogoUrl && !l.catalogoEnviadoEm && String(e.texto).indexOf(pb.catalogoUrl) !== -1)) {
           l.catalogoEnviadoEm = e.ts;
-          registrarHistoricoLead(l, 'Catálogo enviado automaticamente pelo agente (a loja pediu)');
+          registrarHistoricoLead(l, e.origem === 'agente-ia' ? 'A IA enviou o catálogo na conversa' : 'Catálogo enviado automaticamente pelo agente (a loja pediu)');
           catalogos++;
         }
+        if (e.origem === 'agente-ia') l.iaUltimaEm = e.ts;
+        // Você escreveu pelo app depois que a loja já tinha respondido:
+        // a conversa é sua (o porteiro faz a mesma conta e tira a IA)
+        if (!doAgente && lojaJaFalou && waCfg().modo === 'conversa' && !l.iaAssumido && !l.iaPassado) {
+          l.iaAssumido = e.ts;
+          registrarHistoricoLead(l, 'Você respondeu pelo app — a IA saiu desta conversa');
+        }
       } else {
+        lojaJaFalou = true;
         itens.push({ leadId: l.id, data: e.ts, direcao: 'entrada', tipo: 'retorno', canal: 'whatsapp', texto: e.texto, origem: 'whatsapp' });
       }
     });
@@ -12539,14 +12698,24 @@ async function importarEventosWA(eventos) {
     novas += dePessoa.length;
     if (leitura && !leitura.e_robo) {
       aplicarLeituraNoLead(l, leitura);
-      if (l.alertaVenda && !l.alertaVenda.visto && l.ultimaLeitura && l.ultimaLeitura.alerta) alertas++;
+      if (l.alertaVenda && !l.alertaVenda.visto && l.ultimaLeitura && l.ultimaLeitura.alerta && !passagens.length) alertas++;
     }
+    // A IA chegou ao ponto de negociação (ou a um caso que não é dela):
+    // vira alerta de venda, junto com os sinais que a leitura achou
+    passagens.forEach(e => {
+      l.iaPassado = e.ts;
+      const a = l.alertaVenda && !l.alertaVenda.visto && !l.alertaVenda.devolvido ? l.alertaVenda : null;
+      l.alertaVenda = Object.assign(a || { em: e.ts, pontos: l.intencao || 0, sinais: [], fechou: false, resumo: '', proximo: '' },
+        { visto: false, passadoIA: true, motivo: e.texto });
+      registrarHistoricoLead(l, 'A IA passou a conversa para você: ' + e.texto);
+      alertas++;
+    });
     if (dePessoa.length && l.estagio === 'contatado' && !(leitura && leitura.estagio_sugerido)) {
       l.estagio = 'conversa';
       registrarHistoricoLead(l, 'Respondeu pelo WhatsApp — marcado como Em conversa');
     }
     if (conversaLeadAtual && conversaLeadAtual.id === l.id && document.getElementById('modalConversa').classList.contains('open')) {
-      carregarInteracoes([l.id]).then(m => { renderTimelineConversa(m[String(l.id)] || []); renderResumoConversa(l); if (l.ultimaLeitura) renderLeituraIA(l, l.ultimaLeitura); });
+      carregarInteracoes([l.id]).then(m => { renderTimelineConversa(m[String(l.id)] || []); renderResumoConversa(l); renderStatusIAConversa(l); if (l.ultimaLeitura) renderLeituraIA(l, l.ultimaLeitura); });
     }
   }
   saveLeads();
@@ -12562,10 +12731,52 @@ function htmlStatusWA() {
   const desc = desconhecidosVisiveis().length;
   return `<div style="font-size:11.5px;margin-top:6px;color:${c.erro ? '#8a2020' : '#2B5F87'}">
     📡 WhatsApp oficial: ${c.erro ? '⚠️ ' + escaparHtml(c.erro) : min === null ? 'ainda não buscou' : `última busca ${min < 1 ? 'agora' : 'há ' + min + ' min'}`}
-    ${waCfg().catalogoAuto ? '· catálogo automático ligado' : '· catálogo automático desligado'}
+    · ${textoModoWA()}
     <a href="#" onclick="buscarMensagensWA(true);return false;" style="color:var(--gold);font-weight:700;margin-left:4px">Buscar agora</a>
     ${desc ? `· <a href="#" onclick="abrirDesconhecidosWA();return false;" style="color:var(--gold);font-weight:700">${desc} número(s) fora dos leads escreveram</a>` : ''}
-  </div>`;
+  </div>${htmlRascunhosWA()}`;
+}
+
+function textoModoWA() {
+  const c = waCfg();
+  if (c.modo === 'ler') return 'só leitura (você responde)';
+  if (c.modo === 'catalogo') return 'catálogo automático ligado';
+  const comIA = LEADS.filter(l => leadComIA(l, c)).length;
+  const sup = waEmSupervisao(c) ? ` · supervisionada até ${new Date(c.supervisaoAte).toLocaleDateString('pt-BR')}` : '';
+  return `🤖 IA conversando até a negociação (${comIA} lead(s), ${c.horaIni}h–${c.horaFim}h, ${c.sabado ? 'seg a sáb' : 'seg a sex'})${sup}`;
+}
+
+// Status da IA dentro da conversa do lead, com o botão de devolver
+function renderStatusIAConversa(l) {
+  const el = document.getElementById('convIA');
+  if (!el) return;
+  const c = waCfg();
+  let html = '';
+  if (waAtivo() && c.modo === 'conversa' && l && !registroOptout(l) && ['cliente', 'bloqueado', 'perdido'].indexOf(l.estagio) === -1) {
+    const devolver = `<a href="#" onclick="devolverParaIA(${l.id});return false;" style="color:var(--gold);font-weight:700;margin-left:6px">🤖 Devolver para a IA</a>`;
+    if (l.iaPassado) html = `🤝 A IA passou esta conversa para você${l.alertaVenda && l.alertaVenda.motivo ? ': ' + escaparHtml(l.alertaVenda.motivo) : ''}.${devolver}`;
+    else if (l.iaAssumido) html = `✋ Você assumiu esta conversa pelo app — a IA não responde mais.${devolver}`;
+    else if (leadComIA(l, c)) html = `🤖 A IA responde esta loja (${c.horaIni}h–${c.horaFim}h) até chegar na negociação${waEmSupervisao(c) ? ' — cada resposta espera 10 min pela sua revisão' : ''}.`;
+    else if (l.alertaVenda && !l.alertaVenda.devolvido && playbookDoLead(l) && playbookDoLead(l).agente) html = `🔥 Lead em negociação com você — a IA não responde.${devolver}`;
+  }
+  el.innerHTML = html;
+  el.style.display = html ? 'block' : 'none';
+}
+
+function devolverParaIA(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  if (!confirm(`Devolver "${l.nome}" para a IA?\n\nEla volta a responder a partir da PRÓXIMA mensagem da loja (não responde o que já chegou).`)) return;
+  const agora = new Date().toISOString();
+  if (l.alertaVenda) { l.alertaVenda.visto = true; l.alertaVenda.devolvido = agora; }
+  l.iaPassado = ''; l.iaAssumido = ''; l.iaDevolvidoEm = agora;
+  // o alerta tinha levado para Proposta; se não era negociação, volta a ser conversa
+  if (l.estagio === 'proposta') l.estagio = 'conversa';
+  registrarHistoricoLead(l, 'Conversa devolvida para a IA');
+  saveLeads();
+  renderAvisoVenda();
+  if (conversaLeadAtual && conversaLeadAtual.id === l.id) renderStatusIAConversa(l);
+  showToast(leadComIA(l) ? '🤖 A IA volta a responder esta loja na próxima mensagem.' : '⚠️ Devolvido, mas este lead não está apto para a IA (playbook fora do agente, estágio ou número antigo).', leadComIA(l) ? undefined : 'warning');
 }
 
 // Quem escreveu e não é lead nem cliente (o porteiro não guarda o texto)
@@ -12604,23 +12815,70 @@ function carregarAjustesWA() {
   const c = waCfg();
   document.getElementById('agc_waUrl').value = c.url || '';
   document.getElementById('agc_waLerAuto').checked = !!c.lerAuto;
-  document.getElementById('agc_waCatalogoAuto').checked = !!c.catalogoAuto;
+  document.getElementById('agc_waModo').value = c.modo;
   document.getElementById('agc_waTexto').value = c.textoCatalogo || WA_TEXTO_PADRAO;
   document.getElementById('agc_waLimite').value = c.limiteDia;
+  document.getElementById('agc_waLimiteMsgs').value = c.limiteMsgs;
+  document.getElementById('agc_waHoraIni').value = c.horaIni;
+  document.getElementById('agc_waHoraFim').value = c.horaFim;
+  document.getElementById('agc_waSabado').checked = !!c.sabado;
   document.getElementById('agcWaStatus').innerHTML = '';
+  mostrarCamposModoWA();
+}
+
+function mostrarCamposModoWA() {
+  const modo = document.getElementById('agc_waModo').value;
+  document.getElementById('agcWaConversa').style.display = modo === 'conversa' ? 'block' : 'none';
+  document.getElementById('agcWaTextoBox').style.display = modo === 'catalogo' ? '' : 'none';
+  renderSupervisaoWA();
+}
+
+function renderSupervisaoWA() {
+  const el = document.getElementById('agcWaSupervisao');
+  if (!el) return;
+  const c = waCfg();
+  const link = (fn, txt) => `<a href="#" onclick="${fn};return false;" style="color:var(--gold);font-weight:700;margin-left:6px">${txt}</a>`;
+  if (!c.supervisaoAte) {
+    el.innerHTML = `👀 <b>Supervisão:</b> ao salvar, os primeiros ${WA_SUPERVISAO_DIAS} dias ficam supervisionados — cada resposta da IA espera 10 minutos no cartão do agente para você editar ou cancelar; sem ação, ela sai sozinha.`;
+  } else if (waEmSupervisao(c)) {
+    el.innerHTML = `👀 <b>Supervisionada até ${new Date(c.supervisaoAte).toLocaleDateString('pt-BR')}</b>: cada resposta espera 10 min por você.${link('ajustarSupervisaoWA(7)', '+7 dias')}${link('ajustarSupervisaoWA(0)', 'Encerrar agora')}`;
+  } else {
+    el.innerHTML = `✅ <b>Supervisão encerrada</b>: a IA responde direto.${link('ajustarSupervisaoWA(7)', 'Supervisionar mais 7 dias')}`;
+  }
+}
+
+function ajustarSupervisaoWA(dias) {
+  const a = agente();
+  if (!dias && !confirm('Encerrar a supervisão? A partir de agora a IA responde as lojas direto, sem esperar a sua revisão.')) return;
+  const base = Math.max(Date.now(), a.wa.supervisaoAte ? new Date(a.wa.supervisaoAte).getTime() : 0);
+  a.wa.supervisaoAte = new Date(dias ? base + dias * 86400000 : Date.now()).toISOString();
+  saveDB();
+  agendarMapaWA();
+  renderSupervisaoWA();
+  renderCardAgente();
 }
 
 function lerAjustesWA() {
   const a = agente();
   const url = document.getElementById('agc_waUrl').value.trim();
   const mudouUrl = url !== (a.wa && a.wa.url || '');
+  const modo = document.getElementById('agc_waModo').value;
+  const int = (id, min, max, pad) => { const v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? pad : Math.min(max, Math.max(min, v)); };
+  let horaIni = int('agc_waHoraIni', 0, 23, 8), horaFim = int('agc_waHoraFim', 1, 24, 19);
+  if (horaFim <= horaIni) { horaIni = 8; horaFim = 19; }
   a.wa = Object.assign({}, a.wa || {}, {
     url,
     lerAuto: document.getElementById('agc_waLerAuto').checked,
-    catalogoAuto: document.getElementById('agc_waCatalogoAuto').checked,
+    modo,
+    catalogoAuto: modo !== 'ler',
     textoCatalogo: document.getElementById('agc_waTexto').value.trim() === WA_TEXTO_PADRAO ? '' : document.getElementById('agc_waTexto').value.trim(),
-    limiteDia: Math.min(200, Math.max(1, parseInt(document.getElementById('agc_waLimite').value) || 30))
+    limiteDia: int('agc_waLimite', 1, 200, 30),
+    limiteMsgs: int('agc_waLimiteMsgs', 1, 20, 6),
+    horaIni, horaFim,
+    sabado: document.getElementById('agc_waSabado').checked
   });
+  // A primeira vez no modo conversa começa supervisionada
+  if (modo === 'conversa' && !a.wa.supervisaoAte) a.wa.supervisaoAte = new Date(Date.now() + WA_SUPERVISAO_DIAS * 86400000).toISOString();
   if (mudouUrl) { a.wa.cursor = 0; a.wa.erro = ''; a.wa.ultimaBusca = ''; }
 }
 
@@ -12638,10 +12896,11 @@ async function testarConexaoWA() {
       ${item(true, `Conectado ao porteiro (versão ${escaparHtml(s.versao)}, provedor ${escaparHtml(s.provedor)})`)}
       ${item(s.configurado.envio, s.configurado.envio ? 'Envio pelo provedor configurado' : 'Falta a chave do provedor (WA_TOKEN)')}
       ${item(s.configurado.webhook, s.configurado.webhook ? 'Webhook protegido' : 'Falta o WEBHOOK_TOKEN')}
-      ${item(s.configurado.ia, s.configurado.ia ? 'IA do catálogo automático configurada' : 'Falta a ANTHROPIC_API_KEY no porteiro')}
+      ${item(s.configurado.ia, s.configurado.ia ? 'IA do porteiro configurada' : 'Falta a ANTHROPIC_API_KEY no porteiro')}
       ${item(!!s.ultimoWebhook, `Última mensagem recebida do provedor: ${ult}`)}
-      <div class="text-muted" style="margin-top:4px">${s.leadsNoMapa} lead(s) no mapa · ${s.automaticos} com catálogo automático · ${s.catalogosHoje} catálogo(s) hoje · ${s.naFila} esperando</div>
-      ${s.decisoes && s.decisoes.length ? `<div style="margin-top:6px;font-weight:700;color:var(--navy)">Últimas decisões do catálogo automático</div>
+      ${String(s.versao) < '2' && waCfg().modo === 'conversa' ? item(false, 'O porteiro está na versão 1 e não conversa: cole o código novo no Cloudflare (guia, seção “Atualizar o porteiro”)') : ''}
+      <div class="text-muted" style="margin-top:4px">${s.leadsNoMapa} lead(s) no mapa · ${s.automaticos} com a IA ligada · ${s.iaHoje != null ? s.iaHoje + ' resposta(s) da IA hoje · ' : ''}${s.catalogosHoje} catálogo(s) hoje · ${s.naFila} esperando${s.rascunhos ? ' · ' + s.rascunhos + ' rascunho(s) para revisar' : ''}${s.agoraEmHorario === false && waCfg().modo === 'conversa' ? ' · fora do horário agora' : ''}</div>
+      ${s.decisoes && s.decisoes.length ? `<div style="margin-top:6px;font-weight:700;color:var(--navy)">Últimas decisões do porteiro</div>
         ${s.decisoes.slice(0, 8).map(d => `<div class="text-muted">${new Date(d.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${escaparHtml(d.loja || d.chave)} · <b>${escaparHtml(d.decisao)}</b>${d.motivo ? ' — ' + escaparHtml(d.motivo) : ''}</div>`).join('')}` : ''}
     </div>`;
   } catch (e) {
@@ -12654,7 +12913,13 @@ function iniciarFase5() {
   if (!waAtivo()) return;
   sincronizarMapaWA().then(() => buscarMensagensWA(false));
   clearInterval(waIntervalo);
-  waIntervalo = setInterval(() => { if (document.visibilityState !== 'hidden') buscarMensagensWA(false); }, WA_INTERVALO_MS);
+  // a cada 40 s confere: com rascunho da IA esperando, busca já; senão, a cada 2 min
+  waIntervalo = setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    const c = agente().wa || {};
+    const desde = c.ultimaBusca ? Date.now() - new Date(c.ultimaBusca).getTime() : Infinity;
+    if ((c.rascunhos || []).length || desde >= WA_INTERVALO_MS - 5000) buscarMensagensWA(false);
+  }, WA_INTERVALO_RASCUNHO_MS);
   if (!waOuvindoVisibilidade) {
     waOuvindoVisibilidade = true;
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') buscarMensagensWA(false); });
