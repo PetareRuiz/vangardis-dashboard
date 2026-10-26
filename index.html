@@ -2599,6 +2599,23 @@ th.sortable:hover { background: var(--navy-mid); }
       <label>Nunca dizer <span class="text-muted" style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">(um por linha — a IA é proibida de usar, e toda mensagem é conferida antes do envio. Para padrões: <code>rótulo = /expressão/</code>)</span></label>
       <textarea id="agc_nuncaDizer" rows="6" style="width:100%;font-family:inherit;font-size:12.5px;line-height:1.5;padding:8px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)"></textarea>
     </div>
+    <div style="border-top:1px solid var(--gray-200);margin:10px 0 12px;padding-top:12px">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📡 WhatsApp oficial (Fase 2)</div>
+      <div class="text-muted" style="font-size:11.5px;margin-bottom:8px;line-height:1.5">Com o porteiro no Cloudflare ligado ao provedor, as respostas dos leads entram sozinhas na conversa, a IA lê e o alerta de venda dispara. O primeiro contato continua sendo seu, pelo app.</div>
+      <div class="form-group"><label>Endereço do porteiro</label><input type="text" id="agc_waUrl" placeholder="https://vangardis-whatsapp.SEU-USUARIO.workers.dev">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">em branco = Fase 2 desligada</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        <label style="cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy)"><input type="checkbox" id="agc_waLerAuto"> Ler cada resposta com a IA (resumo, interesse e sinais de compra)</label>
+        <label style="cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy)"><input type="checkbox" id="agc_waCatalogoAuto"> Mandar o catálogo sozinho quando a loja aceitar (espera 2 minutos e só envia se você não tiver respondido)</label>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:3"><label>Mensagem do catálogo automático <span class="text-muted" style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">({contato} e {url})</span></label>
+          <textarea id="agc_waTexto" rows="3" style="width:100%;font-family:inherit;font-size:12.5px;line-height:1.5;padding:8px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)"></textarea></div>
+        <div class="form-group"><label>Catálogos automáticos por dia</label><input type="number" id="agc_waLimite" min="1" max="200"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="testarConexaoWA()">🔌 Testar a conexão</button>
+      <div id="agcWaStatus" style="margin-top:8px"></div>
+    </div>
     <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:6px 0">Registro de opt-out</div>
     <div class="text-muted" style="font-size:11.5px;margin-bottom:6px;line-height:1.5">Lojas que pediram para não receber mensagens. Ficam aqui mesmo se o lead for apagado: a busca de lojas não as traz de volta e o agente nunca as aborda. É o registro que a LGPD pede.</div>
     <div id="agcOptout" style="max-height:160px;overflow-y:auto;margin-bottom:6px"></div>
@@ -2617,6 +2634,16 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalRelatorioAgente')">Fechar</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL NÚMEROS FORA DOS LEADS (FASE 2) ═══════ -->
+<div class="modal-overlay" id="modalWaDesconhecidos">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-title">📡 Escreveram, mas não são leads</div>
+    <div class="text-muted" style="font-size:12px;line-height:1.5;margin-bottom:10px">Números que mandaram mensagem e não estão nos leads nem nos clientes. O porteiro guarda só o nome e o número, não o texto. Se for uma loja nova, crie o lead: as próximas mensagens entram na conversa dela.</div>
+    <div id="waDescLista" style="max-height:340px;overflow-y:auto"></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modalWaDesconhecidos')">Fechar</button></div>
   </div>
 </div>
 
@@ -2935,6 +2962,7 @@ async function entrarNoDashboard() {
     iniciarFase2();
     iniciarFase3();
     iniciarFase4();
+    iniciarFase5();
   } else {
     // Voltou depois de a sessão expirar: envia o que ficou pendente nesse meio-tempo
     if (localStorage.getItem('vangardis_db_dirty') === '1') syncToCloud();
@@ -7670,6 +7698,7 @@ function saveLeads() {
   localStorage.setItem('vangardis_leads_dirty', '1');
   clearTimeout(leadsSyncTimer);
   leadsSyncTimer = setTimeout(() => syncLeadsToCloud(), 2000);
+  if (typeof agendarMapaWA === 'function') agendarMapaWA();   // fase 2: o porteiro sabe quem é lead
 }
 
 async function syncLeadsToCloud() {
@@ -10000,6 +10029,7 @@ function salvarPlaybook() {
     DB.playbooks.itens.push({ id: 'pb_' + Date.now().toString(36), versao: 1, revisoes: [], ...dados, ...lerAgenteDoEditor() });
   }
   saveDB();
+  agendarMapaWA();
   closeModal('modalPlaybookEdit');
   renderListaPlaybooks();
   renderProspeccao();
@@ -11578,6 +11608,7 @@ function pausarAgente(motivo, soHoje) {
 function alternarPausaAgente() {
   if (agentePausado()) { agente().pausa = null; saveDB(); showToast('▶ Agente retomado.'); }
   else pausarAgente('pausado por você');
+  agendarMapaWA();
   renderCardAgente();
   if (document.getElementById('modalAgente').classList.contains('open')) renderFilaAgente();
 }
@@ -12025,6 +12056,7 @@ function renderCardAgente() {
     <div class="card-body" style="font-size:12.5px;line-height:1.55">
       <div>${status}</div>
       ${foraTxt.length ? `<div class="text-muted" style="font-size:11.5px;margin-top:4px">Ficaram de fora: ${foraTxt.join(' · ')}.</div>` : ''}
+      ${htmlStatusWA()}
       ${fo.paraCongelar.length ? `<div style="font-size:11.5px;margin-top:6px;color:#2B5F87">❄️ ${fo.paraCongelar.length} lead(s) já receberam o primeiro contato e o lembrete sem responder.
         <a href="#" onclick="congelarParadosAgente();return false;" style="color:var(--gold);font-weight:700;margin-left:4px">Congelar agora</a></div>` : ''}
     </div>`;
@@ -12039,6 +12071,7 @@ function abrirAjustesAgente() {
   document.getElementById('agc_incluirDescobertos').checked = !!cfg.incluirDescobertos;
   document.getElementById('agc_personalizarIA').checked = !!cfg.personalizarIA;
   document.getElementById('agc_nuncaDizer').value = agente().nuncaDizer.join('\n');
+  carregarAjustesWA();
   renderAjustesAgente();
   openModal('modalAjustesAgente');
 }
@@ -12071,7 +12104,9 @@ function salvarAjustesAgente() {
   };
   const nd = document.getElementById('agc_nuncaDizer').value.split('\n').map(x => x.trim()).filter(Boolean);
   agente().nuncaDizer = nd.length ? nd : NUNCA_DIZER_PADRAO.slice();
+  lerAjustesWA();
   saveDB();
+  if (waAtivo()) iniciarFase5();
   closeModal('modalAjustesAgente');
   renderCardAgente();
   showToast('✅ Ajustes do agente salvos.');
@@ -12301,6 +12336,291 @@ function htmlRelatorioAgente(eventos, atras, semServidor) {
       à IA feitas pelo agente — leituras de resposta e outras telas entram no medidor geral do mês.
     </div>`;
 }
+
+// ════════════════════════════════════════════════════
+// AGENTE DE VENDAS — FASE 2: WHATSAPP OFICIAL (coexistência)
+// O seu número continua no app. O provedor manda as mensagens para o
+// porteiro no Cloudflare, que guarda só as conversas de leads; aqui o
+// dashboard busca o que chegou, registra na conversa do lead, roda a
+// leitura da IA e dispara os alertas. O primeiro contato continua manual.
+// ════════════════════════════════════════════════════
+
+const WA_PADRAO = { url: '', lerAuto: true, catalogoAuto: true, textoCatalogo: '', limiteDia: 30, cursor: 0 };
+const WA_TEXTO_PADRAO = 'Que ótimo{contato}! Aqui está o catálogo da Vangardis: {url}\nQualquer dúvida sobre os modelos, é só me chamar.';
+const WA_INTERVALO_MS = 120000;   // busca a cada 2 minutos com o dashboard aberto
+
+function waCfg() {
+  const a = agente();
+  if (!a.wa) a.wa = {};
+  return Object.assign({}, WA_PADRAO, a.wa);
+}
+function waAtivo() { return !!String(waCfg().url || '').trim(); }
+
+// Mesma chave do Worker: DDD + últimos 8 números (casa com e sem o 9º dígito)
+function telChaveWA(t) {
+  let n = String(t || '').replace(/\D/g, '');
+  if (n.length >= 12 && n.indexOf('55') === 0) n = n.slice(2);
+  if (n.length < 10) return n;
+  return n.slice(0, 2) + n.slice(-8);
+}
+
+async function waFetch(caminho, opts) {
+  const base = String(waCfg().url || '').trim().replace(/\/+$/, '');
+  const r = await fetch(base + caminho, Object.assign({}, opts || {}, {
+    headers: { 'Authorization': 'Bearer ' + authToken(), 'Content-Type': 'application/json' }
+  }));
+  let j;
+  try { j = await r.json(); } catch (e) { throw new Error('o porteiro respondeu algo inesperado (HTTP ' + r.status + ')'); }
+  if (j.authError) throw new Error('login recusado pelo porteiro: ' + (j.error || ''));
+  if (!j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+// ── Mapa: quem é lead, e quem pode receber o catálogo sozinho ──
+function montarMapaWA() {
+  const c = waCfg();
+  const leads = LEADS
+    .filter(l => l.whatsapp && ['cliente', 'bloqueado'].indexOf(l.estagio) === -1 && !registroOptout(l))
+    .map(l => {
+      const pb = playbookDoLead(l);
+      const auto = !!(c.catalogoAuto && pb && pb.agente && pb.catalogoUrl && !l.congelado && !l.alertaVenda &&
+        !l.catalogoEnviadoEm && ['contatado', 'conversa'].indexOf(l.estagio) !== -1);
+      return { tel: l.whatsapp, nome: l.nome, contato: l.contato || '', url: (pb && pb.catalogoUrl) || '', auto, catalogoEnviado: l.catalogoEnviadoEm || '' };
+    });
+  return { leads, config: { pausado: !!agentePausado(), catalogoAuto: !!c.catalogoAuto, textoCatalogo: c.textoCatalogo || '', limiteDia: c.limiteDia } };
+}
+
+let waMapaTimer = null;
+function agendarMapaWA() {
+  if (!waAtivo()) return;
+  clearTimeout(waMapaTimer);
+  waMapaTimer = setTimeout(() => { sincronizarMapaWA().catch(() => {}); }, 3000);
+}
+async function sincronizarMapaWA() {
+  if (!waAtivo() || !authToken()) return;
+  try {
+    await waFetch('/mapa', { method: 'POST', body: JSON.stringify(montarMapaWA()) });
+    agente().wa.mapaEm = new Date().toISOString();
+  } catch (e) { agente().wa.erro = e.message; }
+}
+
+// ── Eco do app que já foi registrado pelo dashboard ──
+// O agente registra a mensagem quando você toca em "Abrir no WhatsApp";
+// depois o mesmo texto volta como eco do app. Não pode entrar duas vezes.
+function textosParecidos(a, b) {
+  const x = normalizarTxt(a), y = normalizarTxt(b);
+  if (!x || !y) return false;
+  if (x === y || x.slice(0, 50) === y.slice(0, 50)) return true;
+  const A = new Set(x.split(' ')), B = new Set(y.split(' '));
+  let comum = 0;
+  A.forEach(w => { if (B.has(w)) comum++; });
+  return comum / Math.max(1, new Set([...A, ...B]).size) >= 0.6;
+}
+function ecoDuplicado(lista, e) {
+  const t = new Date(e.ts).getTime();
+  return lista.some(x => x.direcao === 'saida' && Math.abs(new Date(x.data).getTime() - t) < 6 * 3600000 && textosParecidos(x.texto, e.texto));
+}
+
+let waBuscando = false;
+
+async function buscarMensagensWA(manual) {
+  if (!waAtivo() || waBuscando || !authToken()) return;
+  waBuscando = true;
+  try {
+    const j = await waFetch('/eventos?desde=' + (waCfg().cursor || 0));
+    const r = await importarEventosWA(j.eventos || []);
+    const a = agente();
+    a.wa.cursor = j.cursor;
+    a.wa.desconhecidos = (j.desconhecidos || []).slice(0, 30);
+    a.wa.ultimaBusca = new Date().toISOString();
+    a.wa.erro = '';
+    saveDB();
+    if (r.novas) showToast(`📡 ${r.novas} mensagem(ns) nova(s) de leads no WhatsApp${r.alertas ? ` · 🔥 ${r.alertas} alerta(s) de venda` : ''}`, r.alertas ? 'warning' : undefined);
+    else if (manual) showToast('📡 Nenhuma mensagem nova de leads.');
+    if (r.catalogos) agendarMapaWA();
+  } catch (e) {
+    agente().wa.erro = e.message;
+    if (manual) showToast('⚠️ WhatsApp: ' + e.message, 'warning');
+  }
+  waBuscando = false;
+  renderCardAgente();
+}
+
+async function importarEventosWA(eventos) {
+  const porChave = {};
+  LEADS.forEach(l => { const k = telChaveWA(l.whatsapp); if (k) porChave[k] = l; });
+  const grupos = {};
+  eventos.forEach(e => {
+    const l = porChave[telChaveWA(e.tel)];
+    if (!l) return;
+    (grupos[l.id] = grupos[l.id] || { l, evs: [] }).evs.push(e);
+  });
+  const ids = Object.keys(grupos);
+  if (!ids.length) return { novas: 0, alertas: 0, catalogos: 0 };
+
+  const conversas = await carregarInteracoes(ids.map(Number));
+  let novas = 0, alertas = 0, catalogos = 0;
+
+  for (const id of ids) {
+    const { l, evs } = grupos[id];
+    const existentes = conversas[String(l.id)] || [];
+    const itens = [];
+    evs.sort((a, b) => (a.ts < b.ts ? -1 : 1)).forEach(e => {
+      if (e.dir === 'saida') {
+        const doAgente = e.origem === 'agente-catalogo';
+        if (!doAgente && ecoDuplicado(existentes.concat(itens), e)) return;
+        itens.push({ leadId: l.id, data: e.ts, direcao: 'saida', tipo: 'mensagem', canal: 'whatsapp', texto: e.texto,
+          origem: doAgente ? origemComVersao('agente', l, 'catalogo-auto') : 'whatsapp-app' });
+        if (doAgente) {
+          l.catalogoEnviadoEm = e.ts;
+          registrarHistoricoLead(l, 'Catálogo enviado automaticamente pelo agente (a loja pediu)');
+          catalogos++;
+        }
+      } else {
+        itens.push({ leadId: l.id, data: e.ts, direcao: 'entrada', tipo: 'retorno', canal: 'whatsapp', texto: e.texto, origem: 'whatsapp' });
+      }
+    });
+    if (!itens.length) continue;
+
+    // A IA lê junto tudo o que a loja mandou nesta leva
+    const entradas = itens.filter(x => x.direcao === 'entrada');
+    const textoLoja = entradas.filter(x => x.texto.charAt(0) !== '[').map(x => x.texto).join('\n');
+    let leitura = null;
+    if (textoLoja && waCfg().lerAuto && custoIAMes < TETO_IA_MENSAL) {
+      try {
+        const antes = existentes.concat(itens.filter(x => x.data < entradas[0].data)).sort((a, b) => (a.data < b.data ? -1 : 1));
+        leitura = await lerRetornoComIA(l, antes, textoLoja, 'retorno');
+        if (leitura.e_robo) entradas.forEach(x => { x.tipo = 'robo'; });
+      } catch (e) { /* sem leitura: as mensagens entram mesmo assim */ }
+    }
+
+    atualizarMarcadores(l, await registrarInteracoes(itens));
+    const dePessoa = entradas.filter(x => x.tipo !== 'robo');
+    novas += dePessoa.length;
+    if (leitura && !leitura.e_robo) {
+      aplicarLeituraNoLead(l, leitura);
+      if (l.alertaVenda && !l.alertaVenda.visto && l.ultimaLeitura && l.ultimaLeitura.alerta) alertas++;
+    }
+    if (dePessoa.length && l.estagio === 'contatado' && !(leitura && leitura.estagio_sugerido)) {
+      l.estagio = 'conversa';
+      registrarHistoricoLead(l, 'Respondeu pelo WhatsApp — marcado como Em conversa');
+    }
+    if (conversaLeadAtual && conversaLeadAtual.id === l.id && document.getElementById('modalConversa').classList.contains('open')) {
+      carregarInteracoes([l.id]).then(m => { renderTimelineConversa(m[String(l.id)] || []); renderResumoConversa(l); if (l.ultimaLeitura) renderLeituraIA(l, l.ultimaLeitura); });
+    }
+  }
+  saveLeads();
+  renderProspeccao();
+  return { novas, alertas, catalogos };
+}
+
+// ── Linha de status no cartão do agente ──
+function htmlStatusWA() {
+  if (!waAtivo()) return '';
+  const c = agente().wa || {};
+  const min = c.ultimaBusca ? Math.round((Date.now() - new Date(c.ultimaBusca).getTime()) / 60000) : null;
+  const desc = desconhecidosVisiveis().length;
+  return `<div style="font-size:11.5px;margin-top:6px;color:${c.erro ? '#8a2020' : '#2B5F87'}">
+    📡 WhatsApp oficial: ${c.erro ? '⚠️ ' + escaparHtml(c.erro) : min === null ? 'ainda não buscou' : `última busca ${min < 1 ? 'agora' : 'há ' + min + ' min'}`}
+    ${waCfg().catalogoAuto ? '· catálogo automático ligado' : '· catálogo automático desligado'}
+    <a href="#" onclick="buscarMensagensWA(true);return false;" style="color:var(--gold);font-weight:700;margin-left:4px">Buscar agora</a>
+    ${desc ? `· <a href="#" onclick="abrirDesconhecidosWA();return false;" style="color:var(--gold);font-weight:700">${desc} número(s) fora dos leads escreveram</a>` : ''}
+  </div>`;
+}
+
+// Quem escreveu e não é lead nem cliente (o porteiro não guarda o texto)
+// Esconde clientes, quem já é lead (em qualquer estágio, inclusive "não
+// perturbar") e quem está no registro de opt-out — esses nunca viram lead novo.
+function desconhecidosVisiveis() {
+  const conhecidos = new Set((DB.clientes || []).map(c => telChaveWA(c.whatsapp || c.telefone))
+    .concat(LEADS.map(l => telChaveWA(l.whatsapp)))
+    .concat(agente().optout.map(o => telChaveWA(o.tel)))
+    .filter(Boolean));
+  return ((agente().wa || {}).desconhecidos || []).filter(d => !conhecidos.has(d.chave));
+}
+
+function abrirDesconhecidosWA() {
+  const lista = desconhecidosVisiveis();
+  document.getElementById('waDescLista').innerHTML = lista.length ? lista.map(d => `
+    <div class="flex-between" style="padding:7px 0;border-bottom:1px solid var(--gray-100);font-size:12.5px">
+      <span><b>${escaparHtml(d.nome || 'sem nome')}</b> <span class="text-muted">· ${escaparHtml(d.tel)} · ${d.qtd} mensagem(ns) · última em ${new Date(d.ultimo).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></span>
+      <button class="btn btn-sm btn-ghost" onclick="criarLeadDeDesconhecido('${escaparHtml(d.chave)}')">+ Lead</button>
+    </div>`).join('') : '<div class="text-muted" style="font-size:12.5px">Ninguém de fora dos leads escreveu.</div>';
+  openModal('modalWaDesconhecidos');
+}
+
+function criarLeadDeDesconhecido(chave) {
+  const d = desconhecidosVisiveis().find(x => x.chave === chave);
+  if (!d) return;
+  closeModal('modalWaDesconhecidos');
+  abrirNovoLead();
+  document.getElementById('leadNome').value = d.nome || '';
+  document.getElementById('leadWhatsapp').value = String(d.tel || '').replace(/^55/, '');
+  showToast('Complete a ficha e salve: as próximas mensagens desse número entram na conversa do lead.');
+}
+
+// ── Ajustes da Fase 2 ──
+function carregarAjustesWA() {
+  const c = waCfg();
+  document.getElementById('agc_waUrl').value = c.url || '';
+  document.getElementById('agc_waLerAuto').checked = !!c.lerAuto;
+  document.getElementById('agc_waCatalogoAuto').checked = !!c.catalogoAuto;
+  document.getElementById('agc_waTexto').value = c.textoCatalogo || WA_TEXTO_PADRAO;
+  document.getElementById('agc_waLimite').value = c.limiteDia;
+  document.getElementById('agcWaStatus').innerHTML = '';
+}
+
+function lerAjustesWA() {
+  const a = agente();
+  const url = document.getElementById('agc_waUrl').value.trim();
+  const mudouUrl = url !== (a.wa && a.wa.url || '');
+  a.wa = Object.assign({}, a.wa || {}, {
+    url,
+    lerAuto: document.getElementById('agc_waLerAuto').checked,
+    catalogoAuto: document.getElementById('agc_waCatalogoAuto').checked,
+    textoCatalogo: document.getElementById('agc_waTexto').value.trim() === WA_TEXTO_PADRAO ? '' : document.getElementById('agc_waTexto').value.trim(),
+    limiteDia: Math.min(200, Math.max(1, parseInt(document.getElementById('agc_waLimite').value) || 30))
+  });
+  if (mudouUrl) { a.wa.cursor = 0; a.wa.erro = ''; a.wa.ultimaBusca = ''; }
+}
+
+async function testarConexaoWA() {
+  lerAjustesWA();
+  const el = document.getElementById('agcWaStatus');
+  if (!waAtivo()) { el.innerHTML = '<span class="text-muted">Cole o endereço do porteiro primeiro.</span>'; return; }
+  el.innerHTML = '<span class="text-muted">⏳ Conversando com o porteiro…</span>';
+  try {
+    await sincronizarMapaWA();
+    const s = await waFetch('/status');
+    const item = (okv, txt) => `<div>${okv ? '✅' : '⚠️'} ${txt}</div>`;
+    const ult = s.ultimoWebhook ? new Date(s.ultimoWebhook).toLocaleString('pt-BR') : 'nunca';
+    el.innerHTML = `<div style="background:var(--gray-100);border-radius:6px;padding:9px 11px;font-size:12px;line-height:1.6">
+      ${item(true, `Conectado ao porteiro (versão ${escaparHtml(s.versao)}, provedor ${escaparHtml(s.provedor)})`)}
+      ${item(s.configurado.envio, s.configurado.envio ? 'Envio pelo provedor configurado' : 'Falta a chave do provedor (WA_TOKEN)')}
+      ${item(s.configurado.webhook, s.configurado.webhook ? 'Webhook protegido' : 'Falta o WEBHOOK_TOKEN')}
+      ${item(s.configurado.ia, s.configurado.ia ? 'IA do catálogo automático configurada' : 'Falta a ANTHROPIC_API_KEY no porteiro')}
+      ${item(!!s.ultimoWebhook, `Última mensagem recebida do provedor: ${ult}`)}
+      <div class="text-muted" style="margin-top:4px">${s.leadsNoMapa} lead(s) no mapa · ${s.automaticos} com catálogo automático · ${s.catalogosHoje} catálogo(s) hoje · ${s.naFila} esperando</div>
+      ${s.decisoes && s.decisoes.length ? `<div style="margin-top:6px;font-weight:700;color:var(--navy)">Últimas decisões do catálogo automático</div>
+        ${s.decisoes.slice(0, 8).map(d => `<div class="text-muted">${new Date(d.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${escaparHtml(d.loja || d.chave)} · <b>${escaparHtml(d.decisao)}</b>${d.motivo ? ' — ' + escaparHtml(d.motivo) : ''}</div>`).join('')}` : ''}
+    </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-warning">⚠️ ${escaparHtml(e.message)}</div>`;
+  }
+}
+
+let waIntervalo = null, waOuvindoVisibilidade = false;
+function iniciarFase5() {
+  if (!waAtivo()) return;
+  sincronizarMapaWA().then(() => buscarMensagensWA(false));
+  clearInterval(waIntervalo);
+  waIntervalo = setInterval(() => { if (document.visibilityState !== 'hidden') buscarMensagensWA(false); }, WA_INTERVALO_MS);
+  if (!waOuvindoVisibilidade) {
+    waOuvindoVisibilidade = true;
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') buscarMensagensWA(false); });
+  }
+}
+
 
 function renderAll(){
   renderOverview();renderFilamentos();renderProdutos();renderCatalogo();
