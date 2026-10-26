@@ -2576,6 +2576,12 @@ th.sortable:hover { background: var(--navy-mid); }
       <div class="form-group"><label>Leads por dia</label><input type="number" id="agc_limiteDia" min="1" max="100"></div>
     </div>
     <div class="form-row">
+      <div class="form-group"><label>Número de prospecção</label><input type="text" id="agc_numeroAtual" placeholder="(41) 3308-9288">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">de onde saem os contatos novos — o do app Business</div></div>
+      <div class="form-group"><label>Número anterior</label><input type="text" id="agc_numeroAnterior" placeholder="(41) 99613-9000">
+        <div class="text-muted" style="font-size:11px;margin-top:3px">quem foi contatado por ele continua nele até a conversa acabar</div></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label>Lembrete depois de</label><input type="number" id="agc_lembreteDias" min="2" max="30">
         <div class="text-muted" style="font-size:11px;margin-top:3px">dias sem resposta (o plano sugere 4 a 7)</div></div>
       <div class="form-group"><label>Intervalo mínimo</label><input type="number" id="agc_intervaloMin" min="1" max="60">
@@ -9190,7 +9196,8 @@ async function abrirConversa(leadId) {
   document.getElementById('convTitulo').innerHTML =
     `${l.nome} <span class="badge" style="background:${est.cor};color:#fff;font-size:11px;vertical-align:middle">${est.label || l.estagio}</span>`;
   document.getElementById('convSub').textContent =
-    [l.segmento, l.cidade, l.contato ? 'contato: ' + l.contato : ''].filter(Boolean).join(' · ');
+    [l.segmento, l.cidade, l.contato ? 'contato: ' + l.contato : '',
+     cfgAgente().numeroAnterior && numeroDoLead(l) ? 'conversa pelo ' + numeroDoLead(l) : ''].filter(Boolean).join(' · ');
   document.getElementById('convTexto').value = '';
   document.getElementById('convTipo').value = 'retorno';
   conversaColagem = null;
@@ -11422,8 +11429,25 @@ const AGENTE_CFG_PADRAO = {
   incluirDescobertos: false,  // o plano fala em leads QUALIFICADOS
   personalizarIA: true,
   tetoDiaUSD: 0.5,            // gasto máximo do agente com IA por dia
-  limiarAlerta: 5             // pontos de intenção para avisar
+  limiarAlerta: 5,            // pontos de intenção para avisar
+  numeroAtual: '',            // de onde saem os contatos novos
+  numeroAnterior: '',         // número usado antes da troca
+  trocaEm: ''                 // quando a troca aconteceu
 };
+
+// De qual número este lead foi contatado. O que ficou gravado no envio
+// vale; sem registro, decide pela data do primeiro contato contra a troca.
+function numeroDoLead(l) {
+  const cfg = cfgAgente();
+  if (l && l.agente && l.agente.numero) return l.agente.numero;
+  const ref = (l && l.agente && l.agente.primeiroEm) || (l && l.ultimaSaidaEm) || '';
+  if (ref && cfg.trocaEm && ref < cfg.trocaEm) return cfg.numeroAnterior || '';
+  return cfg.numeroAtual || '';
+}
+function leadNoNumeroAntigo(l) {
+  const cfg = cfgAgente();
+  return !!(cfg.numeroAnterior && cfg.numeroAtual && numeroDoLead(l) === cfg.numeroAnterior);
+}
 
 // Uma por linha. "rótulo = /expressão/" para padrões; o resto é texto simples.
 const NUNCA_DIZER_PADRAO = [
@@ -11856,6 +11880,10 @@ function renderFilaAgente() {
           <span class="badge" style="background:${it.tipo === 'lembrete' ? '#E8F1F8' : '#FBF1D6'};color:${it.tipo === 'lembrete' ? '#2B5F87' : '#8A6508'};font-size:10px;margin-left:4px">${it.tipo === 'lembrete' ? 'lembrete' : 'primeiro contato · modelo ' + it.modelo}</span>
           ${it.status !== 'pendente' ? `<span class="badge" style="background:${it.status === 'enviado' ? '#E5F2EA' : '#EEE'};color:${it.status === 'enviado' ? '#2E7D52' : '#777'};font-size:10px;margin-left:4px">${it.status}</span>` : ''}
           <div class="text-muted" style="font-size:11.5px;margin-top:2px">${escaparHtml([l.contato && '👤 ' + l.contato, l.cidade, l.segmento, l.whatsapp && '📱 ' + l.whatsapp].filter(Boolean).join(' · '))}</div>
+          ${(() => { const n = it.tipo === 'primeiro' ? cfgAgente().numeroAtual : numeroDoLead(l); if (!n) return '';
+            return leadNoNumeroAntigo(l) && it.tipo !== 'primeiro'
+              ? `<div style="font-size:11.5px;margin-top:4px;background:#FBF1D6;color:#6B4E07;border-radius:4px;padding:4px 8px">⚠️ Esta loja conhece o número antigo: envie pelo <b>${escaparHtml(n)}</b>. A resposta não entra sozinha no dashboard — cole na conversa, como antes.</div>`
+              : `<div style="font-size:11.5px;margin-top:4px;color:#2B5F87">📱 Enviar pelo <b>${escaparHtml(n)}</b></div>`; })()}
         </div>
         <span class="text-muted" style="font-size:11.5px;white-space:nowrap">${agenteIndice + 1} de ${f.itens.length}</span>
       </div>
@@ -11929,8 +11957,8 @@ function enviarItemAgente() {
 
   if (['descoberto', 'qualificado'].indexOf(l.estagio) !== -1) l.estagio = 'contatado';
   l.agente = l.agente || {};
-  if (it.tipo === 'primeiro') { l.agente.primeiroEm = agora; l.agente.modelo = it.modelo; }
-  else l.agente.lembreteEm = agora;
+  if (it.tipo === 'primeiro') { l.agente.primeiroEm = agora; l.agente.modelo = it.modelo; l.agente.numero = cfgAgente().numeroAtual || ''; }
+  else { l.agente.numero = numeroDoLead(l); l.agente.lembreteEm = agora; }
   l.proximoContato = '';   // daqui em diante a cadência é a do agente
   registrarHistoricoLead(l, `${cfgAgente().nome}: ${it.tipo === 'lembrete' ? 'lembrete' : 'primeiro contato (modelo ' + it.modelo + ')'} enviado pelo WhatsApp`);
 
@@ -12065,7 +12093,7 @@ function renderCardAgente() {
 // ── H) Ajustes do agente ──
 function abrirAjustesAgente() {
   const cfg = cfgAgente();
-  ['nome','limiteDia','intervaloMin','lembreteDias','cidadesPrioritarias','tetoDiaUSD','limiarAlerta'].forEach(k => {
+  ['nome','limiteDia','intervaloMin','lembreteDias','cidadesPrioritarias','tetoDiaUSD','limiarAlerta','numeroAtual','numeroAnterior'].forEach(k => {
     document.getElementById('agc_' + k).value = cfg[k];
   });
   document.getElementById('agc_incluirDescobertos').checked = !!cfg.incluirDescobertos;
@@ -12097,6 +12125,18 @@ function salvarAjustesAgente() {
     intervaloMin: Math.round(num('agc_intervaloMin', 1, 60, p.intervaloMin)),
     lembreteDias: Math.round(num('agc_lembreteDias', 2, 30, p.lembreteDias)),
     cidadesPrioritarias: document.getElementById('agc_cidadesPrioritarias').value.trim(),
+    ...(() => {
+      // Trocar o número de prospecção marca a data: quem foi contatado antes
+      // continua no número anterior até a conversa acabar.
+      const ant = cfgAgente();
+      const atual = document.getElementById('agc_numeroAtual').value.trim();
+      let anterior = document.getElementById('agc_numeroAnterior').value.trim();
+      let trocaEm = ant.trocaEm || '';
+      if (ant.numeroAtual && atual && atual !== ant.numeroAtual) { anterior = ant.numeroAtual; trocaEm = new Date().toISOString(); }
+      else if (atual && anterior && !trocaEm) trocaEm = new Date().toISOString();
+      if (!anterior) trocaEm = '';
+      return { numeroAtual: atual, numeroAnterior: anterior, trocaEm };
+    })(),
     tetoDiaUSD: num('agc_tetoDiaUSD', 0.05, 5, p.tetoDiaUSD),
     limiarAlerta: Math.round(num('agc_limiarAlerta', 1, 20, p.limiarAlerta)),
     incluirDescobertos: document.getElementById('agc_incluirDescobertos').checked,
@@ -12383,7 +12423,7 @@ function montarMapaWA() {
     .filter(l => l.whatsapp && ['cliente', 'bloqueado'].indexOf(l.estagio) === -1 && !registroOptout(l))
     .map(l => {
       const pb = playbookDoLead(l);
-      const auto = !!(c.catalogoAuto && pb && pb.agente && pb.catalogoUrl && !l.congelado && !l.alertaVenda &&
+      const auto = !!(c.catalogoAuto && pb && pb.agente && pb.catalogoUrl && !l.congelado && !l.alertaVenda && !leadNoNumeroAntigo(l) &&
         !l.catalogoEnviadoEm && ['contatado', 'conversa'].indexOf(l.estagio) !== -1);
       return { tel: l.whatsapp, nome: l.nome, contato: l.contato || '', url: (pb && pb.catalogoUrl) || '', auto, catalogoEnviado: l.catalogoEnviadoEm || '' };
     });
