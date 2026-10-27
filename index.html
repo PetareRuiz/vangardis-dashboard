@@ -11917,7 +11917,10 @@ function selecionarLeadsAgente(opts) {
   leadsAtivosNaoCongelados().forEach(l => {
     const est = l.estagio;
     const podePrimeiro = est === 'qualificado' || (cfg.incluirDescobertos && est === 'descoberto');
-    if (!podePrimeiro && est !== 'contatado') return;
+    if (!podePrimeiro && est !== 'contatado') {
+      if (est === 'descoberto' && l.whatsapp) fora.descobertos = (fora.descobertos || 0) + 1;
+      return;
+    }
     if ((l.entradas || 0) > 0 || l.alertaVenda) return;           // respondeu: o lead é seu
     if (!l.whatsapp) { fora.semZap++; return; }
     if (registroOptout(l)) { fora.optout++; return; }
@@ -12351,7 +12354,8 @@ function renderCardAgente() {
     fo.optout && `${fo.optout} pediram para não ser contatados`,
     fo.semRegistro && `${fo.semRegistro} contatados sem mensagem registrada`,
     fo.pelaOrdem && `${fo.pelaOrdem} pela ordem escolhida`,
-    fo.outroSegmento && `${fo.outroSegmento} de outros segmentos (filtro da fila)`
+    fo.outroSegmento && `${fo.outroSegmento} de outros segmentos (filtro da fila)`,
+    fo.descobertos && `${fo.descobertos} ainda em Descoberto <a href="#" onclick="abrirAjustesAgente();return false;" style="color:var(--gold);font-weight:700">(incluir nos Ajustes ou qualificar)</a>`
   ].filter(Boolean);
 
   el.innerHTML = `
