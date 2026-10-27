@@ -94,6 +94,16 @@ body {
   display: flex; flex-direction: column;
 }
 
+.secao-fechada { display: none !important; }
+.prosp-menu { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; padding:10px 12px; background:var(--white); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.prosp-menu .pm-rot { font-size:11px; color:var(--gray-600); font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-right:2px; }
+.prosp-chip { cursor:pointer; user-select:none; padding:6px 12px; border-radius:20px; font-size:12.5px; font-weight:600; border:1.5px solid var(--gray-200); background:var(--gray-100); color:var(--navy); display:inline-flex; align-items:center; gap:6px; }
+.prosp-chip:hover { border-color:var(--gold); }
+.prosp-chip.aberta { background:var(--navy); border-color:var(--navy); color:#fff; }
+.prosp-chip .pm-n { font-size:11px; font-weight:700; background:rgba(201,148,10,.18); color:#8A6508; border-radius:10px; padding:0 6px; }
+.prosp-chip.aberta .pm-n { background:var(--gold); color:var(--navy); }
+.prosp-menu .pm-links { margin-left:auto; font-size:11.5px; }
+.prosp-menu .pm-links a { color:var(--gold); font-weight:700; text-decoration:none; margin-left:10px; }
 .topbar {
   background: var(--white);
   padding: 16px 32px;
@@ -721,6 +731,10 @@ th.sortable:hover { background: var(--navy-mid); }
 
     <!-- ═══════════════ PROSPECÇÃO ═══════════════ -->
     <div class="tab" id="tab-prospeccao">
+      <!-- Menu das seções: o agente e os alertas ficam sempre à vista; o resto
+           abre e fecha, e o dashboard lembra como você deixou -->
+      <div class="prosp-menu" id="prospMenu"></div>
+
       <div id="kpiLeads" class="kpi-grid" style="margin-bottom:20px"></div>
 
       <!-- Aviso do diagnóstico mensal (fase 4) -->
@@ -752,7 +766,7 @@ th.sortable:hover { background: var(--navy-mid); }
       </div>
 
       <!-- Busca de novos leads por região -->
-      <div class="card" style="margin-bottom:20px">
+      <div class="card" id="cardBusca" style="margin-bottom:20px">
         <div class="card-header">
           <div class="card-title">🔍 Buscar lojas por região</div>
         </div>
@@ -798,7 +812,7 @@ th.sortable:hover { background: var(--navy-mid); }
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="cardLeads">
         <div class="card-header">
           <div class="card-title">Leads</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -8206,7 +8220,61 @@ function congelarLead(id, congelar, emLote) {
   }
 }
 
+// ── Menu das seções da Prospecção ──
+const SECOES_PROSP = [
+  { id: 'kpiLeads',  rotulo: '📈 Números' },
+  { id: 'cardHoje',  rotulo: '☀️ Hoje' },
+  { id: 'cardBusca', rotulo: '🔍 Buscar lojas' },
+  { id: 'cardLeads', rotulo: '📋 Leads' }
+];
+const SECOES_PADRAO = { kpiLeads: true, cardHoje: true, cardBusca: false, cardLeads: false };
+
+function secoesAbertas() {
+  let salvo = null;
+  try { salvo = JSON.parse(localStorage.getItem('vg_prosp_secoes') || 'null'); } catch (e) {}
+  return Object.assign({}, SECOES_PADRAO, salvo || {});
+}
+function guardarSecoes(est) {
+  try { localStorage.setItem('vg_prosp_secoes', JSON.stringify(est)); } catch (e) {}
+}
+
+function renderMenuProspeccao() {
+  const el = document.getElementById('prospMenu');
+  if (!el) return;
+  const est = secoesAbertas();
+  const contagem = {
+    cardHoje: (() => { try { return gerarTarefas().length; } catch (e) { return 0; } })(),
+    cardLeads: (LEADS || []).filter(l => !l.congelado).length
+  };
+  SECOES_PROSP.forEach(sx => {
+    const c = document.getElementById(sx.id);
+    if (c && c.classList && c.classList.toggle) c.classList.toggle('secao-fechada', !est[sx.id]);
+  });
+  el.innerHTML = `<span class="pm-rot">Mostrar</span>` +
+    SECOES_PROSP.map(sx => `<span class="prosp-chip${est[sx.id] ? ' aberta' : ''}" onclick="alternarSecao('${sx.id}')" title="${est[sx.id] ? 'Clique para esconder' : 'Clique para mostrar'}">${sx.rotulo}${contagem[sx.id] ? ` <span class="pm-n">${contagem[sx.id]}</span>` : ''}</span>`).join('') +
+    `<span class="pm-links"><a href="#" onclick="todasSecoes(true);return false;">Abrir tudo</a><a href="#" onclick="todasSecoes(false);return false;">Fechar tudo</a></span>`;
+}
+
+function alternarSecao(id, abrir) {
+  const est = secoesAbertas();
+  est[id] = abrir === undefined ? !est[id] : !!abrir;
+  guardarSecoes(est);
+  renderMenuProspeccao();
+  if (est[id] && abrir === undefined) {
+    const c = document.getElementById(id);
+    if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function todasSecoes(abrir) {
+  const est = {};
+  SECOES_PROSP.forEach(sx => { est[sx.id] = abrir; });
+  guardarSecoes(est);
+  renderMenuProspeccao();
+}
+
 function renderProspeccao() {
+  renderMenuProspeccao();
   renderKpiLeads();
   renderFunilTrilha();
   renderAvisoVenda();
@@ -8523,6 +8591,7 @@ function importarResultados() {
 
   if (!importados) { showToast('Nada novo para importar.', 'warning'); return; }
   saveLeads();
+  alternarSecao('cardLeads', true);   // os importados aparecem na lista
   renderProspeccao();
   document.getElementById('buscaStatus').innerHTML =
     `✅ ${importados} lead(s) importado(s). Eles entraram como <strong>Descoberto</strong> — o próximo passo é qualificar.`;
@@ -11072,6 +11141,7 @@ function selecionarLeadsDaJanela(id) {
   closeModal('modalJanelas');
   renderProspeccao();
   atualizarBarraLote();
+  alternarSecao('cardLeads', true);
   const bar = document.getElementById('leadLoteBar');
   if (bar) bar.scrollIntoView({ behavior: 'smooth', block: 'center' });
   showToast(`📅 ${leads.length} lead(s) da janela "${j.nome}" selecionado(s). Use "Abordar em lote".`);
