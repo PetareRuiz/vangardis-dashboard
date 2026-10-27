@@ -2595,8 +2595,9 @@ th.sortable:hover { background: var(--navy-mid); }
       <div class="form-group"><label>Número de prospecção</label><input type="text" id="agc_numeroAtual" placeholder="(41) 3308-9288">
         <div class="text-muted" style="font-size:11px;margin-top:3px">de onde saem os contatos novos — o do app Business</div></div>
       <div class="form-group"><label>Número anterior</label><input type="text" id="agc_numeroAnterior" placeholder="(41) 99613-9000">
-        <div class="text-muted" style="font-size:11px;margin-top:3px">quem foi contatado por ele continua nele até a conversa acabar</div></div>
+        <div class="text-muted" style="font-size:11px;margin-top:3px">quem já conversou por ele continua nele</div></div>
     </div>
+    <label style="display:block;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy);margin:-4px 0 12px"><input type="checkbox" id="agc_recomecar"> Quem recebeu o 1º contato pelo número anterior e não respondeu <b>recomeça pelo número de prospecção</b> (no lugar do lembrete) — assim a resposta já cai na IA</label>
     <div class="form-row">
       <div class="form-group"><label>Lembrete depois de</label><input type="number" id="agc_lembreteDias" min="2" max="30">
         <div class="text-muted" style="font-size:11px;margin-top:3px">dias sem resposta (o plano sugere 4 a 7)</div></div>
@@ -11594,7 +11595,20 @@ const AGENTE_CFG_PADRAO = {
   limiarAlerta: 5,            // pontos de intenção para avisar
   numeroAtual: '',            // de onde saem os contatos novos
   numeroAnterior: '',         // número usado antes da troca
-  trocaEm: ''                 // quando a troca aconteceu
+  trocaEm: '',                // quando a troca aconteceu
+  ordemFila: 'primeiros',     // primeiros | lembretes | soPrimeiros | soLembretes
+  recomecarNoNovo: true       // quem só conhece o número antigo recomeça pelo novo
+};
+const ORDENS_FILA = {
+  primeiros:   'Primeiros contatos primeiro',
+  lembretes:   'Lembretes e recomeços primeiro',
+  soPrimeiros: 'Só primeiros contatos',
+  soLembretes: 'Só lembretes e recomeços'
+};
+const TIPOS_FILA = {
+  primeiro: { rotulo: 'primeiro contato', fundo: '#FBF1D6', cor: '#8A6508' },
+  lembrete: { rotulo: 'lembrete', fundo: '#E8F1F8', cor: '#2B5F87' },
+  recomeco: { rotulo: 'recomeço pelo número novo', fundo: '#EDE7F6', cor: '#5B3F8F' }
 };
 
 // De qual número este lead foi contatado. O que ficou gravado no envio
@@ -11850,19 +11864,23 @@ function selecionarLeadsAgente() {
     else if (est === 'contatado') {
       if (!l.ultimaSaidaEm) { fora.semRegistro++; return; }
       if (dSaida < cfg.lembreteDias) return;
-      if (saidas <= 1 && !(l.agente && l.agente.lembreteEm)) tipo = 'lembrete';
+      if (saidas <= 1 && !(l.agente && l.agente.lembreteEm)) tipo = (cfg.recomecarNoNovo !== false && leadNoNumeroAntigo(l)) ? 'recomeco' : 'lembrete';
       else { fora.paraCongelar.push(l); return; }   // 1º contato + lembrete sem resposta: encerra
     }
     if (!tipo) return;
     if (dSaida !== null && dSaida < cfg.intervaloMin) return;
+    const ordem = cfg.ordemFila || 'primeiros';
+    if (ordem === 'soPrimeiros' && tipo !== 'primeiro') { fora.pelaOrdem = (fora.pelaOrdem || 0) + 1; return; }
+    if (ordem === 'soLembretes' && tipo === 'primeiro') { fora.pelaOrdem = (fora.pelaOrdem || 0) + 1; return; }
 
     const pb = playbookDoLead(l);
     if (!pb) { fora.semPlaybook++; return; }
     if (!pb.agente) { fora.playbookFora++; return; }
-    if (tipo === 'primeiro' ? !modelosAprovados(pb).length : !lembreteAprovado(pb)) { fora.semModelo++; return; }
+    if (tipo === 'lembrete' ? !lembreteAprovado(pb) : !modelosAprovados(pb).length) { fora.semModelo++; return; }
 
     let p = 0;
-    if (tipo === 'lembrete') p += 100;                       // vencido: vai primeiro
+    // Ordem escolhida no cartão do agente: quem vai na frente
+    if ((cfg.ordemFila || 'primeiros') === 'lembretes' ? tipo !== 'primeiro' : tipo === 'primeiro') p += 100;
     if (janelasDoLead(l).length) p += 40;                    // a época de abordar é agora
     if (cidades.length && cidades.some(c => normalizarTxt(l.cidade).indexOf(c) !== -1)) p += 20;
     if (est === 'qualificado') p += 10;
@@ -11870,7 +11888,9 @@ function selecionarLeadsAgente() {
   });
 
   cands.sort((a, b) => b.p - a.p || b.dDesc - a.dDesc || a.l.nome.localeCompare(b.l.nome, 'pt-BR'));
-  return { escolhidos: cands.slice(0, cfg.limiteDia), total: cands.length, fora };
+  const porTipo = { primeiro: 0, lembrete: 0, recomeco: 0 };
+  cands.forEach(c => { porTipo[c.tipo]++; });
+  return { escolhidos: cands.slice(0, cfg.limiteDia), total: cands.length, fora, porTipo };
 }
 
 // ── F) Redação ──
@@ -11882,6 +11902,8 @@ function promptAgente(c, modeloTexto, inters) {
 
 ${c.tipo === 'primeiro'
     ? 'Abaixo está um MODELO DE PRIMEIRO CONTATO aprovado pelo Petare. Personalize-o para esta loja.'
+    : c.tipo === 'recomeco'
+    ? 'Abaixo está um MODELO DE PRIMEIRO CONTATO aprovado pelo Petare. A loja recebeu, há alguns dias, uma mensagem dele por OUTRO número de WhatsApp e não respondeu. Esta mensagem sai do número comercial novo da Vangardis: personalize o modelo e diga, em meia frase e sem cobrar resposta, que este é o WhatsApp comercial da Vangardis (por exemplo, "te escrevi há uns dias de outro número").'
     : 'Abaixo está o MODELO DE LEMBRETE aprovado pelo Petare. A loja recebeu o primeiro contato e não respondeu. Personalize o lembrete.'}
 
 REGRAS:
@@ -11890,7 +11912,7 @@ REGRAS:
 3. Personalize no máximo UM detalhe concreto da loja, usando SOMENTE os dados abaixo. Se não houver dado útil, devolva o modelo praticamente igual. Nunca invente fatos nem elogios genéricos.
 4. Nunca fale de preço, prazo, desconto, frete ou condição de pagamento. Nunca use: ${nunca}.
 5. Sem emojis. Português do Brasil, tom de conversa entre empresas.
-${c.tipo === 'lembrete' && ultimaMinha ? `6. Não repita o que já foi dito na mensagem anterior:\n"${String(ultimaMinha.texto).slice(0, 600)}"` : ''}
+${c.tipo !== 'primeiro' && ultimaMinha ? `6. Não repita o que já foi dito na mensagem anterior:\n"${String(ultimaMinha.texto).slice(0, 600)}"` : ''}
 
 DADOS DA LOJA:
 - Nome: ${l.nome}
@@ -11935,7 +11957,7 @@ async function prepararFilaHoje(forcar) {
     <div id="agProgTxt" style="font-size:13px;color:var(--navy);margin-bottom:10px">Preparando…</div>
     <div style="height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden"><div id="agProgBar" style="height:100%;width:0;background:var(--gold);transition:width .3s"></div></div></div>`;
 
-  const idsLembrete = escolhidos.filter(c => c.tipo === 'lembrete').map(c => c.l.id);
+  const idsLembrete = escolhidos.filter(c => c.tipo !== 'primeiro').map(c => c.l.id);
   let conversas = {};
   if (usarIA && idsLembrete.length) { try { conversas = await carregarInteracoes(idsLembrete); } catch (e) {} }
 
@@ -11949,9 +11971,11 @@ async function prepararFilaHoje(forcar) {
     document.getElementById('agProgTxt').textContent = `${usarIA ? 'Escrevendo' : 'Montando'} ${i + 1} de ${escolhidos.length} — ${c.l.nome}`;
     document.getElementById('agProgBar').style.width = (i / escolhidos.length * 100) + '%';
 
-    const modelo = c.tipo === 'primeiro' ? escolherModelo(c.pb, planejados) : { id: 'lembrete', texto: c.pb.lembrete.texto };
-    if (c.tipo === 'primeiro') planejados[c.pb.id + modelo.id] = (planejados[c.pb.id + modelo.id] || 0) + 1;
-    const base = preencherModelo(modelo.texto, c.l);
+    const modelo = c.tipo === 'lembrete' ? { id: 'lembrete', texto: c.pb.lembrete.texto } : escolherModelo(c.pb, planejados);
+    if (c.tipo !== 'lembrete') planejados[c.pb.id + modelo.id] = (planejados[c.pb.id + modelo.id] || 0) + 1;
+    let base = preencherModelo(modelo.texto, c.l);
+    // Recomeço: a loja já recebeu este mesmo modelo pelo outro número
+    if (c.tipo === 'recomeco') base += '\n\nPS: te escrevi há uns dias de outro número; este agora é o WhatsApp comercial da Vangardis.';
     let msg = base, viaIA = false, erro = '';
     if (usarIA) {
       try {
@@ -12039,16 +12063,22 @@ function renderFilaAgente() {
       <div class="flex-between" style="gap:8px;margin-bottom:6px">
         <div>
           <strong style="color:var(--navy);font-size:14px">${escaparHtml(l.nome)}</strong>
-          <span class="badge" style="background:${it.tipo === 'lembrete' ? '#E8F1F8' : '#FBF1D6'};color:${it.tipo === 'lembrete' ? '#2B5F87' : '#8A6508'};font-size:10px;margin-left:4px">${it.tipo === 'lembrete' ? 'lembrete' : 'primeiro contato · modelo ' + it.modelo}</span>
+          <span class="badge" style="background:${(TIPOS_FILA[it.tipo] || TIPOS_FILA.primeiro).fundo};color:${(TIPOS_FILA[it.tipo] || TIPOS_FILA.primeiro).cor};font-size:10px;margin-left:4px">${(TIPOS_FILA[it.tipo] || TIPOS_FILA.primeiro).rotulo}${it.tipo !== 'lembrete' ? ' · modelo ' + it.modelo : ''}</span>
           ${it.status !== 'pendente' ? `<span class="badge" style="background:${it.status === 'enviado' ? '#E5F2EA' : '#EEE'};color:${it.status === 'enviado' ? '#2E7D52' : '#777'};font-size:10px;margin-left:4px">${it.status}</span>` : ''}
           <div class="text-muted" style="font-size:11.5px;margin-top:2px">${escaparHtml([l.contato && '👤 ' + l.contato, l.cidade, l.segmento, l.whatsapp && '📱 ' + l.whatsapp].filter(Boolean).join(' · '))}</div>
-          ${(() => { const n = it.tipo === 'primeiro' ? cfgAgente().numeroAtual : numeroDoLead(l); if (!n) return '';
+          ${(() => { const cf = cfgAgente();
+            if (it.tipo === 'recomeco') return `<div style="font-size:11.5px;margin-top:4px;background:#EDE7F6;color:#4A3373;border-radius:4px;padding:4px 8px">📱 Enviar pelo <b>${escaparHtml(cf.numeroAtual)}</b>. A loja recebeu o 1º contato pelo ${escaparHtml(cf.numeroAnterior)} e não respondeu: esta mensagem recomeça pelo número novo, e a resposta já cai na IA.</div>`;
+            const n = it.tipo === 'primeiro' ? cf.numeroAtual : numeroDoLead(l); if (!n) return '';
             return leadNoNumeroAntigo(l) && it.tipo !== 'primeiro'
               ? `<div style="font-size:11.5px;margin-top:4px;background:#FBF1D6;color:#6B4E07;border-radius:4px;padding:4px 8px">⚠️ Esta loja conhece o número antigo: envie pelo <b>${escaparHtml(n)}</b>. A resposta não entra sozinha no dashboard — cole na conversa, como antes.</div>`
               : `<div style="font-size:11.5px;margin-top:4px;color:#2B5F87">📱 Enviar pelo <b>${escaparHtml(n)}</b></div>`; })()}
         </div>
         <span class="text-muted" style="font-size:11.5px;white-space:nowrap">${agenteIndice + 1} de ${f.itens.length}</span>
       </div>
+      ${it.tipo === 'primeiro'
+        ? `<div style="font-size:11.5px;color:#2E7D52;margin:2px 0 8px">✨ Nunca conversaram: esta é a primeira mensagem para a loja.</div>`
+        : `<div id="agHistorico" style="background:var(--gray-100);border-radius:6px;padding:8px 10px;margin:4px 0 8px;font-size:12px;max-height:170px;overflow-y:auto"><span class="text-muted">⏳ Carregando o que já foi dito…</span></div>`}
+      <label style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Mensagem de hoje</label>
       <textarea id="agMensagem" rows="7" oninput="editarMensagemAgente(this.value)" ${it.status !== 'pendente' ? 'readonly' : ''}
         style="width:100%;font-family:inherit;font-size:13px;line-height:1.5;padding:10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)">${escaparHtml(it.mensagem)}</textarea>
       <div id="agAvisos" style="margin-top:6px">${htmlAvisosAgente(avisos)}</div>
@@ -12066,7 +12096,26 @@ function renderFilaAgente() {
       <button class="btn btn-ghost btn-sm" onclick="prepararFilaHoje(true)" title="Refaz a seleção e reescreve o que ainda não foi enviado">Montar de novo</button>
       <button class="btn btn-ghost btn-sm" onclick="irItemAgente(${agenteIndice + 1})" ${agenteIndice >= f.itens.length - 1 ? 'disabled' : ''}>Próximo ›</button>
     </div>
-    ${!pend ? `<div style="text-align:center;background:#E5F2EA;border-radius:8px;padding:12px;margin-top:12px;font-size:13px;color:#1E5A3A">✅ Fila de hoje concluída: ${env} mensagem(ns) enviada(s). As respostas que chegarem você registra na conversa do lead, e a IA avisa se houver sinal de compra.</div>` : ''}`;
+    ${!pend ? `<div style="text-align:center;background:#E5F2EA;border-radius:8px;padding:12px;margin-top:12px;font-size:13px;color:#1E5A3A">✅ Fila de hoje concluída: ${env} mensagem(ns) enviada(s). ${waAtivo() && waCfg().modo === 'conversa' ? 'As respostas pelo número novo entram sozinhas e a IA conversa até a negociação.' : 'As respostas que chegarem você registra na conversa do lead, e a IA avisa se houver sinal de compra.'}</div>` : ''}`;
+  if (it && l && it.tipo !== 'primeiro') mostrarHistoricoFila(l);
+}
+
+// O que já foi dito para a loja, dentro da própria fila (sem sair da janela)
+async function mostrarHistoricoFila(l) {
+  let inters = [];
+  try { inters = (await carregarInteracoes([l.id]))[String(l.id)] || []; } catch (e) {}
+  const el = document.getElementById('agHistorico');
+  const f = filaHoje(); const atual = f && f.itens[agenteIndice];
+  if (!el || !atual || atual.leadId !== l.id) return;   // a fila já mudou de item
+  const fmt = d => { const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + x.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+  const ult = inters.slice().sort((a, b) => (a.data < b.data ? -1 : 1)).slice(-6);
+  const dias = diasDesde(l.ultimaSaidaEm);
+  el.innerHTML = `<div style="font-size:10.5px;color:var(--gray-600);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">📜 O que já foi dito${dias !== null ? ` · último contato há ${dias} dia(s)` : ''}${numeroDoLead(l) ? ' pelo ' + escaparHtml(numeroDoLead(l)) : ''}</div>` +
+    (ult.length ? ult.map(it => {
+      const quem = it.direcao === 'saida' ? '📤 Você' : it.direcao === 'entrada' ? '💬 Loja' : '📝 Nota';
+      return `<div style="padding:4px 0;border-top:1px solid var(--gray-200)"><b style="font-size:11px">${quem}</b> <span class="text-muted" style="font-size:10.5px">${fmt(it.data)}</span><div style="white-space:pre-wrap;line-height:1.4">${escaparHtml(String(it.texto || '').slice(0, 500))}</div></div>`;
+    }).join('') : '<div class="text-muted">Nenhuma mensagem registrada com esta loja.</div>') +
+    `<a href="#" onclick="abrirConversa(${l.id});return false;" style="font-size:11px;color:var(--gold);font-weight:700">Abrir a conversa completa</a>`;
 }
 
 function htmlAvisosAgente(avisos) {
@@ -12112,7 +12161,7 @@ function enviarItemAgente() {
   window.open(`https://wa.me/55${num}?text=${encodeURIComponent(txt)}`, '_blank');
 
   const agora = new Date().toISOString();
-  const variante = it.tipo === 'lembrete' ? 'lembrete' : 'modelo-' + it.modelo;
+  const variante = it.tipo === 'lembrete' ? 'lembrete' : it.tipo === 'recomeco' ? 'recomeco' : 'modelo-' + it.modelo;
   registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt,
     origem: origemComVersao('agente', l, variante) }])
     .then(r => { atualizarMarcadores(l, r); saveLeads(); });
@@ -12120,9 +12169,14 @@ function enviarItemAgente() {
   if (['descoberto', 'qualificado'].indexOf(l.estagio) !== -1) l.estagio = 'contatado';
   l.agente = l.agente || {};
   if (it.tipo === 'primeiro') { l.agente.primeiroEm = agora; l.agente.modelo = it.modelo; l.agente.numero = cfgAgente().numeroAtual || ''; }
+  else if (it.tipo === 'recomeco') {
+    // Passa a conversar pelo número novo; conta como a 2ª mensagem sem resposta
+    l.agente.numero = cfgAgente().numeroAtual || ''; l.agente.recomecoEm = agora; l.agente.lembreteEm = agora;
+    if (!l.agente.primeiroEm) l.agente.primeiroEm = l.ultimaSaidaEm || agora;
+  }
   else { l.agente.numero = numeroDoLead(l); l.agente.lembreteEm = agora; }
   l.proximoContato = '';   // daqui em diante a cadência é a do agente
-  registrarHistoricoLead(l, `${cfgAgente().nome}: ${it.tipo === 'lembrete' ? 'lembrete' : 'primeiro contato (modelo ' + it.modelo + ')'} enviado pelo WhatsApp`);
+  registrarHistoricoLead(l, `${cfgAgente().nome}: ${it.tipo === 'lembrete' ? 'lembrete' : it.tipo === 'recomeco' ? 'recomeço pelo número novo (modelo ' + it.modelo + ')' : 'primeiro contato (modelo ' + it.modelo + ')'} enviado pelo WhatsApp`);
 
   it.mensagem = txt; it.status = 'enviado'; it.enviadoEm = agora;
   if (it.tipo === 'primeiro') {
@@ -12162,7 +12216,7 @@ async function reescreverItemAgente() {
   document.getElementById('agAvisos').innerHTML = '<span class="text-muted" style="font-size:11.5px">⏳ Reescrevendo…</span>';
   try {
     let inters = [];
-    if (it.tipo === 'lembrete') inters = (await carregarInteracoes([l.id]))[String(l.id)] || [];
+    if (it.tipo !== 'primeiro') inters = (await carregarInteracoes([l.id]))[String(l.id)] || [];
     it.mensagem = removerEmojis(String(await chamarIAAgente(promptAgente({ l, pb, tipo: it.tipo }, it.base, inters), 500)).trim()) || it.base;
     it.viaIA = true; it.erro = '';
     saveDB();
@@ -12215,8 +12269,9 @@ function renderCardAgente() {
     status = pend ? `Fila de hoje: <b>${env}</b> enviada(s), <b>${pend}</b> esperando você.` : `✅ Fila de hoje concluída: ${env} mensagem(ns) enviada(s).`;
     botao = `<button class="btn btn-gold btn-sm" onclick="abrirFilaAgente()">${pend ? 'Continuar a fila' : 'Ver a fila'}</button>`;
   } else {
+    const pt = sel.porTipo || {};
     status = sel.total
-      ? `<b>${sel.total}</b> lead(s) prontos. A fila de hoje terá ${Math.min(sel.total, cfg.limiteDia)}.`
+      ? `<b>${sel.total}</b> lead(s) prontos: ${[pt.primeiro && `<b>${pt.primeiro}</b> primeiro(s) contato(s)`, pt.recomeco && `<b>${pt.recomeco}</b> recomeço(s) pelo número novo`, pt.lembrete && `<b>${pt.lembrete}</b> lembrete(s)`].filter(Boolean).join(' · ')}. A fila de hoje terá ${Math.min(sel.total, cfg.limiteDia)}.`
       : 'Nenhum lead pronto para o agente agora.';
     botao = sel.total ? `<button class="btn btn-gold btn-sm" onclick="prepararFilaHoje()">Preparar a fila de hoje</button>` : '';
   }
@@ -12227,7 +12282,8 @@ function renderCardAgente() {
     fo.semModelo && `${fo.semModelo} sem modelo aprovado`,
     fo.fixo && `${fo.fixo} com telefone fixo`,
     fo.optout && `${fo.optout} pediram para não ser contatados`,
-    fo.semRegistro && `${fo.semRegistro} contatados sem mensagem registrada`
+    fo.semRegistro && `${fo.semRegistro} contatados sem mensagem registrada`,
+    fo.pelaOrdem && `${fo.pelaOrdem} pela ordem escolhida`
   ].filter(Boolean);
 
   el.innerHTML = `
@@ -12245,11 +12301,23 @@ function renderCardAgente() {
     </div>
     <div class="card-body" style="font-size:12.5px;line-height:1.55">
       <div>${status}</div>
+      ${pbsComModelo.length && !pausa ? `<div style="font-size:12px;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">Ordem da fila:
+        <select onchange="mudarOrdemFila(this.value)" style="padding:3px 6px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+          ${Object.entries(ORDENS_FILA).map(([k, v]) => `<option value="${k}" ${(cfg.ordemFila || 'primeiros') === k ? 'selected' : ''}>${v}</option>`).join('')}
+        </select>${f && f.itens.some(x => x.status === 'pendente') ? '<span class="text-muted" style="font-size:11.5px">— para aplicar na fila de hoje, abra a fila e clique em “Montar de novo”</span>' : ''}</div>` : ''}
       ${foraTxt.length ? `<div class="text-muted" style="font-size:11.5px;margin-top:4px">Ficaram de fora: ${foraTxt.join(' · ')}.</div>` : ''}
       ${htmlStatusWA()}
       ${fo.paraCongelar.length ? `<div style="font-size:11.5px;margin-top:6px;color:#2B5F87">❄️ ${fo.paraCongelar.length} lead(s) já receberam o primeiro contato e o lembrete sem responder.
         <a href="#" onclick="congelarParadosAgente();return false;" style="color:var(--gold);font-weight:700;margin-left:4px">Congelar agora</a></div>` : ''}
     </div>`;
+}
+
+function mudarOrdemFila(v) {
+  const a = agente();
+  a.config = Object.assign({}, a.config || {}, { ordemFila: ORDENS_FILA[v] ? v : 'primeiros' });
+  saveDB();
+  renderCardAgente();
+  showToast('Ordem da fila: ' + ORDENS_FILA[a.config.ordemFila]);
 }
 
 // ── H) Ajustes do agente ──
@@ -12260,6 +12328,7 @@ function abrirAjustesAgente() {
   });
   document.getElementById('agc_incluirDescobertos').checked = !!cfg.incluirDescobertos;
   document.getElementById('agc_personalizarIA').checked = !!cfg.personalizarIA;
+  document.getElementById('agc_recomecar').checked = cfg.recomecarNoNovo !== false;
   document.getElementById('agc_nuncaDizer').value = agente().nuncaDizer.join('\n');
   carregarAjustesWA();
   renderAjustesAgente();
@@ -12302,7 +12371,9 @@ function salvarAjustesAgente() {
     tetoDiaUSD: num('agc_tetoDiaUSD', 0.05, 5, p.tetoDiaUSD),
     limiarAlerta: Math.round(num('agc_limiarAlerta', 1, 20, p.limiarAlerta)),
     incluirDescobertos: document.getElementById('agc_incluirDescobertos').checked,
-    personalizarIA: document.getElementById('agc_personalizarIA').checked
+    personalizarIA: document.getElementById('agc_personalizarIA').checked,
+    recomecarNoNovo: document.getElementById('agc_recomecar').checked,
+    ordemFila: cfgAgente().ordemFila || p.ordemFila
   };
   const nd = document.getElementById('agc_nuncaDizer').value.split('\n').map(x => x.trim()).filter(Boolean);
   agente().nuncaDizer = nd.length ? nd : NUNCA_DIZER_PADRAO.slice();
@@ -12568,8 +12639,8 @@ function htmlRelatorioAgente(eventos, atras, semServidor) {
   const doAgente = envios.filter(e => e.base === 'agente');
   const naSemana = doAgente.filter(e => dentro(e.data));
   const primeiros = naSemana.filter(e => String(e.variante).indexOf('modelo-') === 0).length;
-  const lembretes = naSemana.filter(e => e.variante === 'lembrete').length;
-  const contato = e => String(e.variante).indexOf('modelo-') === 0 || e.variante === 'lembrete';
+  const lembretes = naSemana.filter(e => e.variante === 'lembrete' || e.variante === 'recomeco').length;
+  const contato = e => String(e.variante).indexOf('modelo-') === 0 || e.variante === 'lembrete' || e.variante === 'recomeco';
   const medidos = naSemana.filter(e => contato(e) && !e.espera);
   const respondidas = medidos.filter(e => e.respondida).length;
   // Modo conversa: o que a IA fez sozinha na semana
