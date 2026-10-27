@@ -1863,13 +1863,14 @@ th.sortable:hover { background: var(--navy-mid); }
         <button class="btn btn-ghost btn-sm" onclick="copiarMensagemReativ()">📋 Copiar</button>
       </div>
 
-      <!-- Panfleto de produtos em PDF -->
+      <!-- Catálogo de produtos em PDF -->
       <div id="reativPanfletoSection" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--gray-300)">
-        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📄 Panfleto de produtos para o cliente</div>
+        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📄 Catálogo de produtos para o cliente</div>
         <div style="font-size:11px;color:var(--gray-600);margin-bottom:8px">Produtos do catálogo identificados na mensagem já vêm marcados. Ajuste a seleção se quiser.</div>
         <div id="reativPanfletoFiltro"></div>
         <div id="reativPanfletoProdutos" style="max-height:220px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
-        <button class="btn btn-gold btn-sm" style="margin-top:10px" id="reativPanfletoBtn" onclick="gerarPanfletoReativacao()">📄 Gerar Panfleto PDF</button>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--navy);cursor:pointer;margin:10px 10px 0 0" title="Com valores, o PDF avisa que são valores base e que mudam conforme a quantidade"><input type="checkbox" id="reativCatValores"> Mostrar valores (base)</label>
+        <button class="btn btn-gold btn-sm" style="margin-top:10px" id="reativPanfletoBtn" onclick="gerarPanfletoReativacao()">📄 Gerar catálogo em PDF</button>
         <div id="reativPanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
       </div>
     </div>
@@ -2074,11 +2075,12 @@ th.sortable:hover { background: var(--navy-mid); }
       </div>
 
       <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--gray-300)">
-        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📄 Panfleto para enviar junto</div>
+        <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📄 Catálogo para enviar junto</div>
         <div style="font-size:11px;color:var(--gray-600);margin-bottom:8px">Produtos citados na mensagem já vêm marcados. Ajuste se quiser.</div>
         <div id="abordPanfletoFiltro"></div>
         <div id="abordPanfletoProdutos" style="max-height:220px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
-        <button class="btn btn-gold btn-sm" style="margin-top:10px" id="abordPanfletoBtn" onclick="gerarPanfletoLead()">📄 Gerar Panfleto PDF</button>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--navy);cursor:pointer;margin:10px 10px 0 0" title="Com valores, o PDF avisa que são valores base e que mudam conforme a quantidade"><input type="checkbox" id="abordCatValores"> Mostrar valores (base)</label>
+        <button class="btn btn-gold btn-sm" style="margin-top:10px" id="abordPanfletoBtn" onclick="gerarPanfletoLead()">📄 Gerar catálogo em PDF</button>
         <div id="abordPanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
       </div>
     </div>
@@ -2132,14 +2134,15 @@ th.sortable:hover { background: var(--navy-mid); }
         </div>
       </div>
 
-      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:6px 0 6px">📄 Panfleto do lote (opcional)</div>
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:6px 0 6px">📄 Catálogo do lote (opcional)</div>
       <div style="font-size:11.5px;color:var(--gray-600);margin-bottom:8px">
-        Escolha os produtos e gere <strong>um único panfleto</strong> para anexar em todas as conversas.
+        Escolha os produtos e gere <strong>um único catálogo</strong> para anexar em todas as conversas.
         Se você selecionar produtos aqui, as mensagens vão falar exatamente sobre eles — texto e anexo combinando.
       </div>
       <div id="lotePanfletoFiltro"></div>
       <div id="lotePanfletoProdutos" style="max-height:180px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px" id="lotePanfletoBtn" onclick="gerarPanfletoDoLote()">📄 Gerar panfleto do lote</button>
+      <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--navy);cursor:pointer;margin:10px 10px 0 0" title="Com valores, o PDF avisa que são valores base e que mudam conforme a quantidade"><input type="checkbox" id="loteCatValores"> Mostrar valores (base)</label>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" id="lotePanfletoBtn" onclick="gerarPanfletoDoLote()">📄 Gerar catálogo do lote</button>
       <div id="lotePanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
 
       <div style="background:#FFFDF7;border-left:3px solid var(--gold);padding:10px 14px;font-size:11.5px;color:var(--gray-600);margin:12px 0 6px">
@@ -2175,12 +2178,12 @@ th.sortable:hover { background: var(--navy-mid); }
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-gold" onclick="enviarItemFila()">📱 Abrir WhatsApp e marcar contatado</button>
         <button class="btn btn-ghost" onclick="pularItemFila()">⏭️ Pular esta loja</button>
-        <button class="btn btn-ghost" id="loteFilaPanfletoBtn" style="display:none" onclick="gerarPanfletoDaLojaDaFila()" title="Gera um panfleto endereçado só para esta loja">📄 Panfleto desta loja</button>
+        <button class="btn btn-ghost" id="loteFilaPanfletoBtn" style="display:none" onclick="gerarPanfletoDaLojaDaFila()" title="Gera um catálogo endereçado só para esta loja (valores conforme a caixa do lote)">📄 Catálogo desta loja</button>
         <button class="btn btn-ghost btn-sm" style="margin-left:auto;color:var(--warning)" onclick="encerrarLote()">Encerrar fila</button>
       </div>
       <div id="loteFilaPanfletoStatus" style="font-size:11px;color:var(--gray-600);margin-top:6px"></div>
       <div id="loteLembretePanfleto" style="display:none;font-size:11.5px;color:#2B5F87;background:#E8F1F8;border-radius:6px;padding:8px 10px;margin-top:8px">
-        📎 Lembre de anexar o panfleto na conversa — o link do WhatsApp leva só o texto.
+        📎 Lembre de anexar o catálogo na conversa — o link do WhatsApp leva só o texto.
       </div>
     </div>
 
@@ -2233,7 +2236,7 @@ th.sortable:hover { background: var(--navy-mid); }
 
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalConversa')">Fechar</button>
-      <button class="btn btn-ghost" onclick="enviarCatalogoConversa()" title="Envia o link do catálogo do segmento pelo WhatsApp">📎 Catálogo</button>
+      <button class="btn btn-ghost" onclick="enviarCatalogoConversa()" title="Monta o catálogo especial desta loja em PDF">📄 Catálogo</button>
       <button class="btn btn-ghost" onclick="abrirAmostra(conversaLeadAtual && conversaLeadAtual.id)">📦 Amostra entregue</button>
       <button class="btn btn-gold" onclick="gerarMensagemDaConversa()">✨ Escrever a próxima mensagem</button>
     </div>
@@ -2393,10 +2396,8 @@ th.sortable:hover { background: var(--navy-mid); }
         <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px">🤖 Agente de vendas</div>
         <label style="font-size:12.5px;cursor:pointer"><input type="checkbox" id="pbe_agente"> Usar este playbook no agente</label>
       </div>
-      <div class="form-group">
-        <label>Link do catálogo deste segmento <span class="text-muted" style="font-weight:400;font-size:11px">(PDF ou página no R2 — vai quando o lead aceitar)</span></label>
-        <input type="text" id="pbe_catalogoUrl" placeholder="https://img.vangardisexpertise.com.br/catalogos/fotografia.pdf">
-      </div>
+      <div class="text-muted" style="font-size:11.5px;margin-bottom:10px;line-height:1.5">📄 Catálogo: quando a loja aceita ver os produtos, a IA oferece um <b>catálogo especial</b> (você monta em PDF, só com os produtos certos) ou o <b>site</b> com todos os produtos (link nos ⚙️ Ajustes do agente). Os <b>Produtos em foco</b> acima já vêm marcados quando você monta o catálogo.</div>
+      <input type="hidden" id="pbe_catalogoUrl">
       <label style="font-size:12.5px;font-weight:600;color:var(--navy)">Modelos de primeiro contato</label>
       <div class="text-muted" style="font-size:11.5px;margin:2px 0 8px;line-height:1.5">
         O agente só usa os modelos <b>aprovados</b> e alterna entre eles para medir qual responde mais (teste A/B).
@@ -2614,14 +2615,15 @@ th.sortable:hover { background: var(--navy-mid); }
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
         <label style="cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy)"><input type="checkbox" id="agc_waLerAuto"> Ler cada resposta com a IA (resumo, interesse e sinais de compra)</label>
       </div>
+      <div class="form-group"><label>Site com todos os produtos <span class="text-muted" style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">(a IA oferece este link ou o catálogo especial que você monta)</span></label><input type="text" id="agc_waSite" placeholder="https://vangardisexpertise.com.br"></div>
       <div class="form-group"><label>Quando a loja responde, a IA…</label>
         <select id="agc_waModo" onchange="mostrarCamposModoWA()">
           <option value="ler">só lê — quem responde é você</option>
-          <option value="catalogo">manda só o catálogo quando a loja aceitar</option>
+          <option value="catalogo">manda só o link do site quando a loja aceitar</option>
           <option value="conversa">conversa com a loja e passa para você na negociação</option>
         </select></div>
       <div id="agcWaConversa" style="display:none;background:#F4F8FB;border-radius:6px;padding:10px 12px;margin-bottom:10px">
-        <div class="text-muted" style="font-size:11.5px;line-height:1.5;margin-bottom:8px">A IA segue o playbook da loja, manda o catálogo quando fizer sentido e <b>passa para você</b> quando a loja perguntar preço, quantidade, prazo, frete ou pagamento, pedir proposta ou amostra, mandar áudio, pedir para falar com você ou quando a conversa não avança. Ela nunca fala de preço. Se você responder pelo app, ela sai da conversa sozinha.</div>
+        <div class="text-muted" style="font-size:11.5px;line-height:1.5;margin-bottom:8px">A IA segue o playbook da loja. Quando a loja aceita ver os produtos, ela oferece o <b>catálogo especial</b> (passa para você montar e anexar) ou o <b>site</b> (manda o link). Ela também <b>passa para você</b> quando a loja perguntar preço, quantidade, prazo, frete ou pagamento, pedir proposta ou amostra, mandar áudio, pedir para falar com você ou quando a conversa não avança. Ela nunca fala de preço. Se você responder pelo app, ela sai da conversa sozinha.</div>
         <div class="form-row">
           <div class="form-group"><label>Mensagens da IA por conversa</label><input type="number" id="agc_waLimiteMsgs" min="1" max="20">
             <div class="text-muted" style="font-size:11px;margin-top:3px">chegou no limite, passa para você</div></div>
@@ -2633,7 +2635,7 @@ th.sortable:hover { background: var(--navy-mid); }
         <div id="agcWaSupervisao" style="margin-top:8px;font-size:12px"></div>
       </div>
       <div class="form-row">
-        <div class="form-group" style="flex:3" id="agcWaTextoBox"><label>Mensagem do catálogo automático <span class="text-muted" style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">({contato} e {url})</span></label>
+        <div class="form-group" style="flex:3" id="agcWaTextoBox"><label>Mensagem com o link do site <span class="text-muted" style="font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">({contato} e {url})</span></label>
           <textarea id="agc_waTexto" rows="3" style="width:100%;font-family:inherit;font-size:12.5px;line-height:1.5;padding:8px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm)"></textarea></div>
         <div class="form-group"><label>Respostas automáticas por dia</label><input type="number" id="agc_waLimite" min="1" max="200">
           <div class="text-muted" style="font-size:11px;margin-top:3px">teto de gasto: passou disso, vai para você</div></div>
@@ -2663,6 +2665,24 @@ th.sortable:hover { background: var(--navy-mid); }
 </div>
 
 <!-- ═══════ MODAL NÚMEROS FORA DOS LEADS (FASE 2) ═══════ -->
+<div class="modal-overlay" id="modalCatalogoLead">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">📄 Catálogo especial — <span id="catlNome"></span></div>
+    <div id="catlPedido" style="display:none;background:#FFFBEF;border-left:3px solid var(--gold);border-radius:6px;padding:8px 11px;font-size:12.5px;line-height:1.5;margin-bottom:10px"></div>
+    <div class="text-muted" style="font-size:11.5px;margin-bottom:8px;line-height:1.5">Escolha os produtos certos para esta loja. Os do foco do playbook e os citados na conversa já vêm marcados. O PDF é baixado no seu computador — nada fica guardado na nuvem.</div>
+    <div id="catlPanfletoFiltro"></div>
+    <div id="catlPanfletoProdutos" style="max-height:260px;overflow-y:auto;background:var(--gray-100);border-radius:8px;padding:10px;font-size:12px"></div>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--navy);cursor:pointer;margin:10px 10px 0 0" title="Com valores, o PDF avisa que são valores base e que mudam conforme a quantidade"><input type="checkbox" id="catlCatValores"> Mostrar valores (base)</label>
+    <button class="btn btn-gold btn-sm" style="margin-top:10px" id="catlBtn" onclick="gerarCatalogoDoLead()">📄 Gerar catálogo em PDF</button>
+    <div id="catlStatus" style="font-size:11.5px;color:var(--gray-600);margin-top:6px;line-height:1.5"></div>
+    <div id="catlPassos" style="display:none;background:#E8F1F8;border-radius:6px;padding:10px 12px;margin-top:10px;font-size:12.5px;line-height:1.6"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="copiarSiteCatalogo()" title="Para mandar o site com todos os produtos em vez do catálogo">🌐 Copiar o link do site</button>
+      <button class="btn btn-ghost" onclick="closeModal('modalCatalogoLead')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalWaDesconhecidos">
   <div class="modal" style="max-width:620px">
     <div class="modal-title">📡 Escreveram, mas não são leads</div>
@@ -2717,7 +2737,7 @@ th.sortable:hover { background: var(--navy-mid); }
       </div>
     </div>
     <div id="prodCatExclusivoAviso" style="display:none;background:#FDEAEA;border:1px dashed #D98E8E;border-radius:8px;padding:8px 12px;font-size:11px;color:#8a2020;margin:-4px 0 12px">
-      🔒 Produtos exclusivos não são sugeridos pela IA (reativação/panfleto) para outros clientes e ficam sinalizados no catálogo.
+      🔒 Produtos exclusivos não são sugeridos pela IA (reativação/catálogo) para outros clientes e ficam sinalizados no catálogo.
     </div>
 
     <!-- Categorias (múltiplas) -->
@@ -4185,7 +4205,7 @@ function prazo15Badge(pz) {
 // GERAR RECIBO DE ENTREGA — PDF (venda a prazo)
 // ════════════════════════════════════════════════════
 // Nome do arquivo da logo no bucket R2 (mesmo local das fotos de produto).
-// Suba um arquivo com esse nome exato para que apareça no Recibo e no Panfleto.
+// Suba um arquivo com esse nome exato para que apareça no Recibo e no Catálogo.
 const LOGO_FILENAME = 'logo-vangardis.png';
 let logoInfoCache = null;
 async function carregarLogoInfo() {
@@ -5611,20 +5631,43 @@ function carregarImagemInfo(url) {
   });
 }
 
-// Gera o panfleto PDF. Serve tanto para reativação de cliente quanto para
-// abordagem de lead — por isso recebe o destinatário e os produtos por parâmetro.
-async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
-  // nomeDestinatario vazio = panfleto genérico do lote, sem loja no cabeçalho
+// Gera o catálogo em PDF (antes chamado de panfleto). Serve para reativação de
+// cliente, abordagem de lead, envio em lote e o catálogo especial de um lead.
+// opts.comValores: mostra o preço de cada produto, marcado como valor base, com o
+// aviso de que muda conforme a quantidade. Sem ele, nenhum valor aparece.
+// opts.whatsapp: número que vai no rodapé (leads: o número de prospecção).
+const AVISO_VALORES_BASE = 'Valores base por unidade. Os valores podem mudar de acordo com a quantidade do pedido.';
+
+function formatarValorCatalogo(v) {
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Lê a caixinha "Mostrar valores" de cada tela (prefixo: reativ, abord, lote, catl)
+function catalogoComValores(prefixo) {
+  const el = document.getElementById(prefixo + 'CatValores');
+  return !!(el && el.checked);
+}
+
+// Número do rodapé: lead recebe o número de prospecção; cliente, o de sempre
+function whatsappDoCatalogo(paraLead) {
+  const cfg = typeof cfgAgente === 'function' ? cfgAgente() : {};
+  return (paraLead && cfg.numeroAtual) ? cfg.numeroAtual : '(41) 99613-9000';
+}
+
+async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId, opts) {
+  // nomeDestinatario vazio = catálogo genérico do lote, sem loja no cabeçalho
+  opts = opts || {};
+  const comValores = !!opts.comValores && (produtos || []).some(p => Number(p.valor) > 0);
   if (!window.jspdf) { showToast('⚠️ Biblioteca PDF não carregada. Recarregue a página.', 'warning'); return; }
   if (!produtos || !produtos.length) {
-    showToast('⚠️ Selecione ao menos um produto para o panfleto.', 'warning');
+    showToast('⚠️ Selecione ao menos um produto para o catálogo.', 'warning');
     return;
   }
 
   const statusEl = document.getElementById(statusElId);
   const btn = document.getElementById(btnId);
   if (btn) btn.disabled = true;
-  if (statusEl) statusEl.textContent = '⏳ Buscando fotos e montando o panfleto...';
+  if (statusEl) statusEl.textContent = '⏳ Buscando fotos e montando o catálogo...';
 
   // Carrega a logo (do bucket) e a primeira imagem de cada produto (com fallback silencioso)
   const [logoInfo, ...imagensInfo] = await Promise.all([
@@ -5670,17 +5713,28 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
     doc.setFont('times', 'bold');
     doc.setTextColor(navy[0], navy[1], navy[2]);
     doc.setFontSize(continuacao ? 14 : 18);
-    doc.text('SELEÇÃO ESPECIAL PARA VOCÊ', W - margin, continuacao ? 12 : 18, { align: 'right' });
+    doc.text(nomeDestinatario ? 'CATÁLOGO ESPECIAL' : 'CATÁLOGO VANGARDIS', W - margin, continuacao ? 12 : 18, { align: 'right' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(90, 90, 90);
-    if (nomeDestinatario) doc.text(nomeDestinatario, W - margin, continuacao ? 19 : 26, { align: 'right' });
+    if (nomeDestinatario) doc.text('Selecionado para ' + nomeDestinatario, W - margin, continuacao ? 19 : 26, { align: 'right', maxWidth: W - margin * 2 - 40 });
     if (!continuacao) {
       doc.setFontSize(8.5);
       doc.setTextColor(150, 150, 150);
       doc.text('Vangardis Expertise', W - margin, 34, { align: 'right' });
     }
-    return alturaHeader + 14;
+    let yIni = alturaHeader + 14;
+    // Com valores: o aviso aparece em destaque logo abaixo do cabeçalho
+    if (comValores && !continuacao) {
+      doc.setFillColor(gold[0], gold[1], gold[2]);
+      doc.roundedRect(margin, alturaHeader + 7, W - margin * 2, 10, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(navy[0], navy[1], navy[2]);
+      doc.text('* ' + AVISO_VALORES_BASE, W / 2, alturaHeader + 13.4, { align: 'center', maxWidth: W - margin * 2 - 6 });
+      yIni = alturaHeader + 22;
+    }
+    return yIni;
   }
 
   function desenharRodape() {
@@ -5695,10 +5749,17 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(215, 215, 215);
-    doc.text('WhatsApp (41) 99613-9000  ·  petare@vangardisexpertise.com.br  ·  www.vangardisexpertise.com.br', W / 2, footerY + 12, { align: 'center' });
+    doc.text('WhatsApp ' + (opts.whatsapp || '(41) 99613-9000') + '  ·  petare@vangardisexpertise.com.br  ·  www.vangardisexpertise.com.br', W / 2, footerY + 12, { align: 'center' });
     doc.text('Rua Alfredo Bufren, 51 — Centro, Curitiba/PR  ·  @vangardisexpertise', W / 2, footerY + 16.5, { align: 'center' });
     doc.setFillColor(gold[0], gold[1], gold[2]);
     doc.rect(0, H - 3, W, 3, 'F');
+    // Com valores: o aviso se repete em toda página, logo acima do rodapé
+    if (comValores) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.5);
+      doc.setTextColor(215, 215, 215);
+      doc.text('* ' + AVISO_VALORES_BASE, W / 2, footerY - 2.5, { align: 'center' });
+    }
   }
 
   let y = desenharCabecalho(false);
@@ -5771,11 +5832,15 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
       doc.text(linhas, textX, ty);
     }
 
-    if (p.valor) {
+    if (comValores && Number(p.valor) > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(150, 150, 150);
+      doc.text('valor base', (W - margin) - 4, y + cardH - 11.5, { align: 'right' });
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
       doc.setTextColor(gold[0], gold[1], gold[2]);
-      doc.text('R$ ' + Number(p.valor).toFixed(2), (W - margin) - 4, y + cardH - 6, { align: 'right' });
+      doc.text(formatarValorCatalogo(p.valor) + '*', (W - margin) - 4, y + cardH - 6, { align: 'right' });
     }
 
     y += cardH + 4;
@@ -5783,9 +5848,10 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
 
   desenharRodape();
 
-  const nomeArq = nomeDestinatario
-    ? 'Panfleto_' + nomeDestinatario.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf'
-    : 'Panfleto_Vangardis.pdf';
+  const base = nomeDestinatario
+    ? 'Catalogo_' + nomeDestinatario.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+    : 'Catalogo_Vangardis';
+  const nomeArq = base + (comValores ? '_com_valores' : '') + '.pdf';
   doc.save(nomeArq);
 
   if (btn) btn.disabled = false;
@@ -5793,14 +5859,16 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId) {
   // diferente de ter imagem cadastrada que não pôde ser baixada.
   const semCadastro = produtos.filter(p => !(p.imagens && p.imagens.length)).map(p => p.nome);
   const falhaDownload = produtos.filter((p, i) => (p.imagens && p.imagens.length) && !imagensInfo[i]).map(p => p.nome);
-  let aviso = '✅ Panfleto gerado com sucesso!';
+  let aviso = `✅ Catálogo gerado ${comValores ? 'com valores base' : 'sem valores'}: <b>${nomeArq}</b>`;
+  if (opts.comValores && !comValores) aviso += ' (nenhum produto selecionado tem valor cadastrado)';
   if (semCadastro.length || falhaDownload.length) {
-    aviso = '✅ Panfleto gerado, mas alguns produtos saíram sem foto:';
+    aviso += '<br>Alguns produtos saíram sem foto:';
     if (semCadastro.length) aviso += `<br>• <strong>Sem imagem cadastrada no Catálogo:</strong> ${semCadastro.join(', ')}`;
     if (falhaDownload.length) aviso += `<br>• <strong>Imagem cadastrada, mas não baixou:</strong> ${falhaDownload.join(', ')} — confira se o nome do arquivo no Catálogo bate exatamente com o do bucket (maiúsculas, acentos e extensão contam).`;
   }
   if (statusEl) statusEl.innerHTML = aviso;
-  showToast('📄 Panfleto gerado! Verifique seus downloads.');
+  showToast('📄 Catálogo gerado! Verifique seus downloads.');
+  return { nomeArq, comValores, qtd: produtos.length };
 }
 
 // Wrapper: panfleto a partir da tela de Reativação de Cliente
@@ -5810,7 +5878,7 @@ function gerarPanfletoReativacao() {
   const ids = Array.from(document.querySelectorAll('#reativPanfletoProdutos input[type=checkbox]:checked'))
     .map(el => parseInt(el.value));
   const produtos = (DB.catalogo || []).filter(p => ids.includes(p.id));
-  return gerarPanfletoPDF(c.nome, produtos, 'reativPanfletoStatus', 'reativPanfletoBtn');
+  return gerarPanfletoPDF(c.nome, produtos, 'reativPanfletoStatus', 'reativPanfletoBtn', { comValores: catalogoComValores('reativ') });
 }
 
 // Wrapper: panfleto a partir da tela de Abordagem de Lead
@@ -5820,7 +5888,7 @@ function gerarPanfletoLead() {
   const ids = Array.from(document.querySelectorAll('#abordPanfletoProdutos input[type=checkbox]:checked'))
     .map(el => parseInt(el.value));
   const produtos = (DB.catalogo || []).filter(p => ids.includes(p.id));
-  return gerarPanfletoPDF(l.nome, produtos, 'abordPanfletoStatus', 'abordPanfletoBtn');
+  return gerarPanfletoPDF(l.nome, produtos, 'abordPanfletoStatus', 'abordPanfletoBtn', { comValores: catalogoComValores('abord'), whatsapp: whatsappDoCatalogo(true) });
 }
 
 function desenharPlaceholderFoto(doc, x, y, size, grayLight) {
@@ -7701,7 +7769,7 @@ const ESTAGIOS_LEAD = {
   qualificado: { label:'Qualificado',  cor:'#3D6E9C', ordem:2, desc:'perfil combina' },
   contatado:   { label:'Contatado',    cor:'#C9940A', ordem:3, desc:'1ª mensagem enviada' },
   conversa:    { label:'Em conversa',  cor:'#A8651A', ordem:4, desc:'respondeu' },
-  proposta:    { label:'Proposta',     cor:'#7A5B12', ordem:5, desc:'panfleto, preço ou amostra' },
+  proposta:    { label:'Proposta',     cor:'#7A5B12', ordem:5, desc:'catálogo, preço ou amostra' },
   cliente:     { label:'Virou cliente',cor:'#2E7D52', ordem:6, desc:'fechou o 1º pedido' },
   perdido:     { label:'Perdido',      cor:'#A33B3B', ordem:7, desc:'com motivo, reciclável' },
   bloqueado:   { label:'Não perturbar',cor:'#5C2020', ordem:8, desc:'pediu para não receber' }
@@ -8584,7 +8652,7 @@ ESTRUTURA OBRIGATÓRIA:
 4. Em meia frase, com transparência: você encontrou a loja pesquisando estabelecimentos do ramo dela na região. É exigência da LGPD — não omita, mas não faça disso o assunto.
 5. Termine com UMA pergunta fácil, que se responde em segundos — de preferência a pergunta de abertura do playbook. Nunca peça visita nem reunião no primeiro contato.
 6. ${comPanfleto
-    ? 'Um panfleto com os produtos listados abaixo vai ANEXADO a esta mensagem: mencione-o em meia frase e cite no máximo 1 produto da lista.'
+    ? 'Um catálogo em PDF com os produtos listados abaixo vai ANEXADO a esta mensagem: mencione-o em meia frase (chame de catálogo, nunca de panfleto) e cite no máximo 1 produto da lista.'
     : 'Não mande nem ofereça o catálogo completo de saída. Se citar produto, no máximo 1, e somente da lista abaixo.'} Nunca invente produtos.
 7. Sem emojis, em nenhuma parte. Não prometa preço, prazo ou condição que não esteja aqui.
 8. ${ehEmail
@@ -8603,7 +8671,7 @@ ${l.contato ? '- Pessoa de contato (dirija-se a ela pelo nome): ' + l.contato : 
   ctx += blocoJanelas(l);
 
   const rotuloLista = comPanfleto
-    ? 'PRODUTOS DESTE ENVIO (são os do panfleto anexado — cite apenas estes)'
+    ? 'PRODUTOS DESTE ENVIO (são os do catálogo anexado — cite apenas estes)'
     : 'PRODUTOS DISPONÍVEIS (únicos que podem ser citados)';
   ctx += cat.length
     ? `\n\n${rotuloLista}:\n- ${cat.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`
@@ -8933,7 +9001,7 @@ function produtosDoLote() {
 function gerarPanfletoDoLote() {
   const produtos = produtosDoLote();
   if (!produtos.length) { showToast('⚠️ Selecione ao menos um produto.', 'warning'); return; }
-  return gerarPanfletoPDF('', produtos, 'lotePanfletoStatus', 'lotePanfletoBtn');
+  return gerarPanfletoPDF('', produtos, 'lotePanfletoStatus', 'lotePanfletoBtn', { comValores: catalogoComValores('lote'), whatsapp: whatsappDoCatalogo(true) });
 }
 
 // Panfleto endereçado a uma loja específica, direto da fila
@@ -8941,7 +9009,7 @@ function gerarPanfletoDaLojaDaFila() {
   const item = loteFila[loteIndice];
   const produtos = produtosDoLote();
   if (!item || !produtos.length) return;
-  return gerarPanfletoPDF(item.lead.nome, produtos, 'loteFilaPanfletoStatus', 'loteFilaPanfletoBtn');
+  return gerarPanfletoPDF(item.lead.nome, produtos, 'loteFilaPanfletoStatus', 'loteFilaPanfletoBtn', { comValores: catalogoComValores('lote'), whatsapp: whatsappDoCatalogo(true) });
 }
 
 function enviarItemFila() {
@@ -9627,8 +9695,7 @@ ${conversaParaPrompt(inters, 8)}`;
   ctx += blocoRegrasGerais();
   ctx += blocoPlaybook(playbookDoLead(l));
   ctx += blocoJanelas(l);
-  const pbCat = playbookDoLead(l);
-  if (pbCat && pbCat.catalogoUrl) ctx += `\n\nLINK DO CATÁLOGO DESTE SEGMENTO (mande quando o lead aceitar ver os produtos): ${pbCat.catalogoUrl}`;
+  ctx += `\n\nCATÁLOGO: quando o lead aceitar ver os produtos, ofereça as duas opções — um catálogo especial montado para a loja (o Petare manda em PDF aqui na conversa) ou o site com todos os produtos: ${siteVangardis()}. Nunca chame de panfleto.`;
   if (produtos && produtos.length) {
     ctx += `\n\nPRODUTOS QUE PODEM SER CITADOS (nenhum outro):\n- ${produtos.map(p => p.nome + (p.desc ? ` (${p.desc})` : '')).join('\n- ')}`;
   }
@@ -9986,7 +10053,7 @@ function renderListaPlaybooks() {
         <div><strong style="color:var(--navy)">${escaparHtml(pb.segmento)} × ${t.label || pb.tipoComprador}</strong> ${status}
           <div class="text-muted" style="font-size:11.5px;margin-top:2px">${usos[pb.id] || 0} lead(s) usando · pergunta: "${escaparHtml(pb.perguntaAbertura)}"</div>
           <div style="font-size:11.5px;margin-top:2px;color:${pb.agente && modelosAprovados(pb).length ? '#2E7D52' : '#8A6508'}">🤖 ${pb.agente
-            ? `no agente · ${modelosAprovados(pb).length} de ${(pb.modelos || []).length} modelo(s) aprovado(s) · lembrete ${lembreteAprovado(pb) ? 'aprovado' : 'não aprovado'}${pb.catalogoUrl ? ' · catálogo ✓' : ' · sem link de catálogo'}`
+            ? `no agente · ${modelosAprovados(pb).length} de ${(pb.modelos || []).length} modelo(s) aprovado(s) · lembrete ${lembreteAprovado(pb) ? 'aprovado' : 'não aprovado'}`
             : 'fora do agente'}</div></div>
         <button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;margin-left:10px" onclick="editarPlaybook('${pb.id}')">✏️ Abrir</button>
       </div></div>`;
@@ -12233,17 +12300,87 @@ function lerAgenteDoEditor() {
 
 // ── J) Catálogo do segmento ──
 function enviarCatalogoConversa() {
-  const l = conversaLeadAtual;
+  if (conversaLeadAtual) abrirCatalogoLead(conversaLeadAtual.id);
+}
+
+// ── Catálogo especial de um lead ──
+// Você escolhe os produtos certos para a loja e se vão com valores; o PDF é
+// baixado, você anexa na conversa pelo app e devolve a conversa para a IA.
+let catalogoLeadAtual = null;
+
+function abrirCatalogoLead(id) {
+  const l = LEADS.find(x => x.id === id);
   if (!l) return;
+  catalogoLeadAtual = l;
   const pb = playbookDoLead(l);
-  if (!pb || !pb.catalogoUrl) { showToast('Cadastre o link do catálogo no playbook deste tipo de loja (📘 Playbooks).', 'warning'); return; }
-  if (!l.whatsapp) { showToast('⚠️ Este lead não tem WhatsApp cadastrado.', 'warning'); return; }
-  const txt = `Aqui está o nosso catálogo: ${pb.catalogoUrl}\nQualquer dúvida, estou por aqui.`;
-  window.open(`https://wa.me/55${telNorm(l.whatsapp)}?text=${encodeURIComponent(txt)}`, '_blank');
-  registrarInteracoes([{ leadId: l.id, tipo: 'mensagem', direcao: 'saida', canal: 'whatsapp', texto: txt, origem: 'catalogo' }])
-    .then(r => { atualizarMarcadores(l, r); saveLeads(); carregarInteracoes([l.id]).then(m => renderTimelineConversa(m[String(l.id)] || [])); });
-  registrarHistoricoLead(l, 'Catálogo do segmento enviado');
+  document.getElementById('catlNome').textContent = l.nome;
+  const a = l.alertaVenda;
+  const pedido = a && !a.devolvido && a.motivo ? a.motivo : '';
+  const elPed = document.getElementById('catlPedido');
+  elPed.style.display = pedido ? 'block' : 'none';
+  elPed.innerHTML = pedido ? '🤖 <b>O que a loja pediu:</b> ' + escaparHtml(pedido) : '';
+
+  // Pré-marca o que combina com o foco do playbook e com a conversa
+  const pista = ' ' + normalizarTxt([pedido, l.resumoIA, l.proximoPasso, pb && pb.produtosFoco].filter(Boolean).join(' ')) + ' ';
+  const singular = t => normalizarTxt(t).replace(/s\b/g, '');
+  const pistaSing = ' ' + pista.replace(/s\b/g, '') + ' ';
+  const cita = t => { const n = normalizarTxt(t); return n.length > 2 && (pista.indexOf(' ' + n) !== -1 || pistaSing.indexOf(' ' + singular(t)) !== -1); };
+  const cat = catalogoParaLead().slice().sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
+  const marcados = new Set(cat.filter(p => cita(p.nome) ||
+    getCategoriasProduto(p).some(c => { const s = singular(c); return s.length > 2 && pistaSing.indexOf(' ' + s) !== -1; })).map(p => p.id));
+  const wrap = document.getElementById('catlPanfletoProdutos');
+  wrap.innerHTML = cat.length ? cat.map(p => `
+    <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+      <input type="checkbox" value="${p.id}" ${marcados.has(p.id) ? 'checked' : ''} style="cursor:pointer" onchange="atualizarContadorPanfleto('catl')">
+      <span>${escaparHtml(p.nome)}${p.valor ? ' — ' + formatarValorCatalogo(p.valor) : ''}</span>
+    </label>`).join('') : '<span style="color:var(--gray-400)">Nenhum produto disponível no catálogo.</span>';
+  renderFiltroPanfleto('catl', cat);
+  document.getElementById('catlCatValores').checked = false;
+  document.getElementById('catlStatus').innerHTML = '';
+  document.getElementById('catlPassos').style.display = 'none';
+  openModal('modalCatalogoLead');
+}
+
+async function gerarCatalogoDoLead() {
+  const l = catalogoLeadAtual;
+  if (!l) return;
+  const ids = Array.from(document.querySelectorAll('#catlPanfletoProdutos input[type=checkbox]:checked')).map(el => parseInt(el.value));
+  const produtos = (DB.catalogo || []).filter(p => ids.includes(p.id));
+  if (!produtos.length) { showToast('⚠️ Selecione ao menos um produto.', 'warning'); return; }
+  const num = (typeof numeroDoLead === 'function' && numeroDoLead(l)) || whatsappDoCatalogo(true);
+  const r = await gerarPanfletoPDF(l.nome, produtos, 'catlStatus', 'catlBtn', { comValores: catalogoComValores('catl'), whatsapp: num });
+  if (!r) return;
+  l.catalogoGeradoEm = new Date().toISOString();
+  registrarHistoricoLead(l, `Catálogo especial gerado: ${r.qtd} produto(s), ${r.comValores ? 'com valores base' : 'sem valores'}`);
+  registrarInteracoes([{ leadId: l.id, tipo: 'nota', direcao: 'nota', canal: 'whatsapp',
+    texto: `📄 Catálogo especial gerado (${r.qtd} produto(s), ${r.comValores ? 'com valores base' : 'sem valores'}): ${produtos.map(p => p.nome).join(', ')}. Arquivo ${r.nomeArq}.`,
+    origem: 'catalogo-especial' }]).catch(() => {});
   saveLeads();
+  const pb = playbookDoLead(l);
+  const podeDevolver = waAtivo() && waCfg().modo === 'conversa' && pb && pb.agente &&
+    (l.iaPassado || l.iaAssumido || (l.alertaVenda && !l.alertaVenda.devolvido));
+  const el = document.getElementById('catlPassos');
+  el.style.display = 'block';
+  el.innerHTML = `<b>Agora:</b><br>
+    1. Anexe o <b>${escaparHtml(r.nomeArq)}</b> na conversa com a loja, pelo celular ou pelo WhatsApp Web do ${escaparHtml(num)}. Pode escrever na legenda do arquivo.<br>
+    ${podeDevolver ? '2. Depois de enviar, devolva a conversa: a IA pergunta o que a loja achou e passa para você de novo quando chegar em preço ou quantidade.' : '2. A conversa segue com você.'}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="window.open('https://wa.me/55${telNorm(l.whatsapp)}','_blank')">📱 Abrir a conversa</button>` : ''}
+      ${podeDevolver ? `<button class="btn btn-sm btn-gold" onclick="devolverDoCatalogo()">🤖 Já enviei — devolver para a IA</button>` : ''}
+    </div>`;
+}
+
+function devolverDoCatalogo() {
+  const l = catalogoLeadAtual;
+  if (!l) return;
+  devolverParaIA(l.id);
+  if (!l.iaPassado && !l.iaAssumido) closeModal('modalCatalogoLead');
+}
+
+function copiarSiteCatalogo() {
+  const u = siteVangardis();
+  const ok = () => showToast('🌐 Link do site copiado: ' + u);
+  if (navigator.clipboard) navigator.clipboard.writeText(u).then(ok).catch(ok); else ok();
 }
 
 // ── K) Alerta de venda iminente ──
@@ -12295,12 +12432,14 @@ function renderAvisoVenda() {
         <div style="font-size:12.5px;line-height:1.45">
           <strong style="color:var(--navy)">${escaparHtml(l.nome)}</strong>
           ${sinais.length ? `<span class="text-muted" style="font-size:11.5px">· ${sinais.join(', ')} · ${a.pontos} ponto(s)</span>` : ''}
+          ${a.catalogo ? `<div style="color:#8A6508;font-weight:600">📄 A loja quer o catálogo especial — monte, anexe na conversa e devolva para a IA</div>` : ''}
           ${a.passadoIA ? `<div style="color:#2B5F87">🤖 A IA passou para você${a.motivo ? ': ' + escaparHtml(a.motivo) : ''}</div>` : ''}
           ${a.proximo ? `<div style="color:#2E7D52">→ ${escaparHtml(a.proximo)}</div>` : ''}
         </div>
         <div style="display:flex;gap:4px;white-space:nowrap;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})" title="Abrir a conversa">💬</button>
           ${a.fechou ? `<button class="btn btn-sm btn-gold" onclick="converterDoAlerta(${l.id})">🤝 Virou cliente</button>` : ''}
+          <button class="btn btn-sm ${a.catalogo ? 'btn-gold' : 'btn-ghost'}" onclick="abrirCatalogoLead(${l.id})" title="Montar o catálogo especial desta loja">📄${a.catalogo ? ' Montar catálogo' : ''}</button>
           ${podeDevolver ? `<button class="btn btn-sm btn-ghost" onclick="devolverParaIA(${l.id})" title="Não era negociação: a IA volta a responder esta loja">🤖 Devolver</button>` : ''}
           <button class="btn btn-sm btn-ghost" onclick="marcarAlertaVisto(${l.id})" title="Já estou cuidando">✓ Ciente</button>
         </div>
@@ -12419,8 +12558,9 @@ function htmlRelatorioAgente(eventos, atras, semServidor) {
 // ════════════════════════════════════════════════════
 
 const WA_PADRAO = { url: '', lerAuto: true, catalogoAuto: true, modo: '', textoCatalogo: '', limiteDia: 30, cursor: 0,
-  limiteMsgs: 6, horaIni: 8, horaFim: 19, sabado: true, supervisaoAte: '' };
-const WA_TEXTO_PADRAO = 'Que ótimo{contato}! Aqui está o catálogo da Vangardis: {url}\nQualquer dúvida sobre os modelos, é só me chamar.';
+  limiteMsgs: 6, horaIni: 8, horaFim: 19, sabado: true, supervisaoAte: '', site: '' };
+const SITE_PADRAO = 'https://vangardisexpertise.com.br';
+const WA_TEXTO_PADRAO = 'Que ótimo{contato}! Aqui está o nosso site, com todos os produtos da Vangardis: {url}\nQualquer dúvida sobre os modelos, é só me chamar.';
 const WA_INTERVALO_MS = 120000;   // busca a cada 2 minutos com o dashboard aberto
 const WA_INTERVALO_RASCUNHO_MS = 40000;   // com resposta da IA esperando você, a cada 40 s
 const WA_SUPERVISAO_DIAS = 14;
@@ -12433,6 +12573,9 @@ function waCfg() {
   return c;
 }
 function waAtivo() { return !!String(waCfg().url || '').trim(); }
+function siteVangardis() { const a = agente(); return String((a.wa && a.wa.site) || SITE_PADRAO).trim(); }
+// "vangardisexpertise.com.br" — para achar o link mesmo escrito com www ou sem https
+function hostDoSite(u) { return String(u || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '').toLowerCase(); }
 function waHorario(c) { return { ini: c.horaIni, fim: c.horaFim, dias: c.sabado ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5] }; }
 function waEmSupervisao(c) { c = c || waCfg(); return c.modo === 'conversa' && !!c.supervisaoAte && new Date().toISOString() < c.supervisaoAte; }
 
@@ -12479,11 +12622,11 @@ function montarMapaWA() {
         auto = leadComIA(l, c);
         if (auto && pb.id && !playbooks[pb.id]) playbooks[pb.id] = blocoPlaybook(pb).trim();
       } else {
-        auto = !!(c.modo === 'catalogo' && pb && pb.agente && pb.catalogoUrl && !l.congelado && !l.alertaVenda && !leadNoNumeroAntigo(l) &&
+        auto = !!(c.modo === 'catalogo' && pb && pb.agente && siteVangardis() && !l.congelado && !l.alertaVenda && !leadNoNumeroAntigo(l) &&
           !l.catalogoEnviadoEm && ['contatado', 'conversa'].indexOf(l.estagio) !== -1);
       }
       return { tel: l.whatsapp, nome: l.nome, contato: l.contato || '', segmento: l.segmento || '', cidade: l.cidade || '',
-        pbId: (pb && pb.id) || '', url: (pb && pb.catalogoUrl) || '', auto, catalogoEnviado: l.catalogoEnviadoEm || '',
+        pbId: (pb && pb.id) || '', url: siteVangardis(), auto, catalogoEnviado: l.catalogoEnviadoEm || '',
         devolvidoEm: l.iaDevolvidoEm || '' };
     });
   return { leads, config: {
@@ -12535,6 +12678,7 @@ async function buscarMensagensWA(manual) {
   try {
     const j = await waFetch('/eventos?desde=' + (waCfg().cursor || 0));
     const r = await importarEventosWA(j.eventos || []);
+    sincronizarEstadosWA(j.estados || []);
     const a = agente();
     a.wa.cursor = j.cursor;
     a.wa.desconhecidos = (j.desconhecidos || []).slice(0, 30);
@@ -12557,6 +12701,31 @@ async function buscarMensagensWA(manual) {
   // não redesenha enquanto você edita um rascunho (o texto ficaria pela metade)
   const foco = document.activeElement;
   if (!(foco && foco.id && foco.id.indexOf('rasc_') === 0)) renderCardAgente();
+}
+
+// O porteiro conta quem está fora da IA (você assumiu pelo app, a IA passou).
+// Se o dashboard ainda não sabia — por exemplo, um lead recriado que já tinha
+// conversado antes nesse número —, ele passa a mostrar com o "Devolver".
+function sincronizarEstadosWA(estados) {
+  if (!estados.length) return;
+  const porChave = {};
+  LEADS.forEach(l => { const k = telChaveWA(l.whatsapp); if (k) porChave[k] = l; });
+  let mudou = false;
+  estados.forEach(e => {
+    const l = porChave[e.chave];
+    if (!l) return;
+    const dev = l.iaDevolvidoEm || '';
+    if (e.assumido && !l.iaAssumido && !l.iaPassado && e.assumido > dev) {
+      l.iaAssumido = e.assumido;
+      registrarHistoricoLead(l, 'O porteiro registrou que você respondeu pelo app — a IA saiu desta conversa');
+      mudou = true;
+    }
+    if (e.passado && !l.iaPassado && e.passado > dev) { l.iaPassado = e.passado; mudou = true; }
+  });
+  if (mudou) {
+    saveLeads();
+    if (conversaLeadAtual && document.getElementById('modalConversa').classList.contains('open')) renderStatusIAConversa(conversaLeadAtual);
+  }
 }
 
 // ── Supervisão: respostas da IA esperando você ──
@@ -12661,16 +12830,23 @@ async function importarEventosWA(eventos) {
         itens.push({ leadId: l.id, data: e.ts, direcao: 'saida', tipo: 'mensagem', canal: 'whatsapp', texto: e.texto,
           origem: e.origem === 'agente-ia' ? origemComVersao('agente', l, 'ia-conversa')
             : doAgente ? origemComVersao('agente', l, 'catalogo-auto') : 'whatsapp-app' });
-        const pb = playbookDoLead(l);
-        if (e.origem === 'agente-catalogo' || (e.origem === 'agente-ia' && pb && pb.catalogoUrl && !l.catalogoEnviadoEm && String(e.texto).indexOf(pb.catalogoUrl) !== -1)) {
-          l.catalogoEnviadoEm = e.ts;
-          registrarHistoricoLead(l, e.origem === 'agente-ia' ? 'A IA enviou o catálogo na conversa' : 'Catálogo enviado automaticamente pelo agente (a loja pediu)');
+        const host = hostDoSite(siteVangardis());
+        if (e.origem === 'agente-catalogo' || (e.origem === 'agente-ia' && host && !l.catalogoEnviadoEm && String(e.texto).toLowerCase().indexOf(host) !== -1)) {
+          l.catalogoEnviadoEm = e.ts;   // o link do site já foi
+          registrarHistoricoLead(l, e.origem === 'agente-ia' ? 'A IA enviou o link do site' : 'Link do site enviado automaticamente pelo agente (a loja pediu)');
           catalogos++;
+        }
+        // Arquivo mandado por você pelo app (o catálogo especial em PDF)
+        const ehArquivo = !doAgente && (e.tipo === 'document' || /^\[documento\]/.test(String(e.texto || '')));
+        if (ehArquivo) {
+          l.catalogoEspecialEm = e.ts;
+          registrarHistoricoLead(l, 'Você mandou um arquivo pelo WhatsApp: ' + String(e.texto || '').replace(/^\[documento\]\s*/, ''));
         }
         if (e.origem === 'agente-ia') l.iaUltimaEm = e.ts;
         // Você escreveu pelo app depois que a loja já tinha respondido:
         // a conversa é sua (o porteiro faz a mesma conta e tira a IA)
-        if (!doAgente && lojaJaFalou && waCfg().modo === 'conversa' && !l.iaAssumido && !l.iaPassado) {
+        // Mandar o PDF não conta: a conversa continua com quem estava (o porteiro faz igual)
+        if (!doAgente && !ehArquivo && lojaJaFalou && waCfg().modo === 'conversa' && !l.iaAssumido && !l.iaPassado) {
           l.iaAssumido = e.ts;
           registrarHistoricoLead(l, 'Você respondeu pelo app — a IA saiu desta conversa');
         }
@@ -12706,7 +12882,7 @@ async function importarEventosWA(eventos) {
       l.iaPassado = e.ts;
       const a = l.alertaVenda && !l.alertaVenda.visto && !l.alertaVenda.devolvido ? l.alertaVenda : null;
       l.alertaVenda = Object.assign(a || { em: e.ts, pontos: l.intencao || 0, sinais: [], fechou: false, resumo: '', proximo: '' },
-        { visto: false, passadoIA: true, motivo: e.texto });
+        { visto: false, passadoIA: true, motivo: e.texto, catalogo: /cat[aá]logo especial/i.test(e.texto) });
       registrarHistoricoLead(l, 'A IA passou a conversa para você: ' + e.texto);
       alertas++;
     });
@@ -12816,6 +12992,7 @@ function carregarAjustesWA() {
   document.getElementById('agc_waUrl').value = c.url || '';
   document.getElementById('agc_waLerAuto').checked = !!c.lerAuto;
   document.getElementById('agc_waModo').value = c.modo;
+  document.getElementById('agc_waSite').value = c.site || SITE_PADRAO;
   document.getElementById('agc_waTexto').value = c.textoCatalogo || WA_TEXTO_PADRAO;
   document.getElementById('agc_waLimite').value = c.limiteDia;
   document.getElementById('agc_waLimiteMsgs').value = c.limiteMsgs;
@@ -12870,6 +13047,11 @@ function lerAjustesWA() {
     url,
     lerAuto: document.getElementById('agc_waLerAuto').checked,
     modo,
+    site: (() => {
+      let u = document.getElementById('agc_waSite').value.trim() || SITE_PADRAO;
+      if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+      return u === SITE_PADRAO ? '' : u;
+    })(),
     catalogoAuto: modo !== 'ler',
     textoCatalogo: document.getElementById('agc_waTexto').value.trim() === WA_TEXTO_PADRAO ? '' : document.getElementById('agc_waTexto').value.trim(),
     limiteDia: int('agc_waLimite', 1, 200, 30),
