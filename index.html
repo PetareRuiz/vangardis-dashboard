@@ -8033,6 +8033,8 @@ function excluirLead(id) {
   if (!l) return;
   if (!confirm(`Excluir o lead "${l.nome}"? A conversa registrada com ele também será apagada.`)) return;
   apagarConversaDoLead(id);
+  // O porteiro do WhatsApp também esquece a conversa desse número
+  if (waAtivo() && l.whatsapp && authToken()) waFetch('/esquecer', { method: 'POST', body: JSON.stringify({ tel: l.whatsapp }) }).catch(() => {});
   LEADS = LEADS.filter(x => x.id !== id);
   leadsSelecionados.delete(id);
   saveLeads();
