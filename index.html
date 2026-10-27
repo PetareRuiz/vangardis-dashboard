@@ -10258,41 +10258,65 @@ Responda SOMENTE com um objeto JSON, sem texto fora dele e sem cercas de código
 "termos" (palavras que aparecem no ramo ou no nome desse tipo de loja, separadas por vírgula),
 "porQueCompram", "linguagem" (no formato "Usar: ... Evitar: ..."), "perguntaAbertura" (uma pergunta fácil de responder),
 "objecoes" (uma por linha, no formato "objeção → como tratar"), "calendario" (datas do segmento e quando abordar: 3 a 4 meses antes),
-"proximoPasso", "produtosFoco",
-"modeloA" e "modeloB" (duas mensagens de PRIMEIRO CONTATO diferentes entre si, para o agente testar qual responde mais),
-"lembrete" (retomada curta para quem não respondeu).
-
-REGRAS DAS MENSAGENS (modeloA, modeloB, lembrete), iguais às dos exemplos abaixo:
-- Começam com {ola} (vira "Bom dia, Fulana"). Os modelos dizem que é o Petare, da Vangardis Expertise, de Curitiba.
-- Pedem permissão para mostrar os modelos ou fazem uma pergunta fácil sobre o negócio da loja — nunca uma oferta.
-- Nunca falam de preço, valor, prazo, desconto, frete ou condição de pagamento.
-- Terminam com a frase que dá a opção de não receber mais mensagens ("Se preferir não receber mensagens, é só me avisar.").
-- 3 a 4 linhas, tom de conversa entre empresas, sem emojis, na linguagem do tipo de comprador acima.
-EXEMPLOS: ${JSON.stringify({ modeloA: exModelos.modelos[0].texto, modeloB: exModelos.modelos[1].texto, lembrete: exModelos.lembrete.texto })}`;
+"proximoPasso", "produtosFoco". Seja direto: cada campo com 1 a 3 frases.`;
+  // Duas chamadas: os campos do playbook e, depois, as mensagens do agente.
+  // Numa só, a resposta passava do limite de tamanho e chegava cortada.
   try {
-    const j = extrairJSON(await chamarIA(prompt, 2000));
+    const j = extrairJSON(await chamarIA(prompt, 1500));
     ['termos','porQueCompram','linguagem','perguntaAbertura','objecoes','calendario','proximoPasso','produtosFoco'].forEach(c => {
       if (j[c]) document.getElementById('pbe_' + c).value = String(j[c]);
     });
-    // Mensagens do agente: entram como rascunho, sem aprovação — você revisa
-    const semModelos = !pbeModelos.some(m => String(m.texto || '').trim() && m.texto.indexOf('…') === -1);
-    if (semModelos && (j.modeloA || j.modeloB)) {
-      pbeModelos = [j.modeloA && { id: 'A', texto: removerEmojis(String(j.modeloA)), aprovado: false },
-                    j.modeloB && { id: 'B', texto: removerEmojis(String(j.modeloB)), aprovado: false }].filter(Boolean);
-      renderModelosEditor();
-    }
-    if (j.lembrete && !document.getElementById('pbe_lembrete').value.trim()) {
-      document.getElementById('pbe_lembrete').value = removerEmojis(String(j.lembrete));
-      document.getElementById('pbe_lembreteAprovado').checked = false;
-      if (typeof avisosLembreteEditor === 'function') avisosLembreteEditor();
-    }
     document.getElementById('pbe_status').value = 'rascunho';
     if (!document.getElementById('pbe_origem').value) {
       document.getElementById('pbe_origem').value = `Rascunho da IA em ${new Date().toLocaleDateString('pt-BR')} — a validar com conversas reais.`;
     }
+  } catch (e) {
+    status.textContent = '⚠️ ' + (e.message || 'Não consegui gerar o rascunho.') + ' Tente de novo.';
+    return;
+  }
+
+  // Mensagens do agente: entram como rascunho, sem aprovação — você revisa
+  const semModelos = !pbeModelos.some(m => String(m.texto || '').trim() && m.texto.indexOf('…') === -1);
+  const semLembrete = !document.getElementById('pbe_lembrete').value.trim();
+  if (!semModelos && !semLembrete) {
+    status.textContent = '✅ Rascunho pronto. Os seus modelos de mensagem foram mantidos. Revise cada campo antes de salvar.';
+    return;
+  }
+  status.textContent = '⏳ Campos prontos. Agora a IA escreve as mensagens do agente…';
+  const campo = id => document.getElementById('pbe_' + id).value.trim();
+  const promptMsg = `Você escreve as mensagens de WhatsApp do agente de prospecção da Vangardis Expertise, fabricante de Curitiba de produtos personalizados por impressão 3D, corte a laser e NFC.
+
+PARA: lojas do segmento "${segmento}", tipo de comprador "${TIPOS_COMPRADOR[tipo].label}" (${TIPOS_COMPRADOR[tipo].desc}).
+Linguagem: ${campo('linguagem')}
+Pergunta de abertura recomendada: ${campo('perguntaAbertura')}
+Produtos em foco: ${campo('produtosFoco')}
+
+Escreva "modeloA" e "modeloB" (duas mensagens de PRIMEIRO CONTATO diferentes entre si, para o agente testar qual responde mais) e "lembrete" (retomada curta para quem não respondeu).
+
+REGRAS, iguais às dos exemplos:
+- Começam com {ola} (vira "Bom dia, Fulana"). Os modelos dizem que é o Petare, da Vangardis Expertise, de Curitiba.
+- Pedem permissão para mostrar os modelos ou fazem uma pergunta fácil sobre o negócio da loja — nunca uma oferta.
+- Nunca falam de preço, valor, prazo, desconto, frete ou condição de pagamento.
+- Terminam com a frase que dá a opção de não receber mais mensagens ("Se preferir não receber mensagens, é só me avisar.").
+- 3 a 4 linhas, tom de conversa entre empresas, sem emojis.
+EXEMPLOS: ${JSON.stringify({ modeloA: exModelos.modelos[0].texto, modeloB: exModelos.modelos[1].texto, lembrete: exModelos.lembrete.texto })}
+
+Responda SOMENTE com um objeto JSON, sem texto fora dele e sem cercas de código: {"modeloA": "...", "modeloB": "...", "lembrete": "..."}`;
+  try {
+    const m = extrairJSON(await chamarIA(promptMsg, 900));
+    if (semModelos && (m.modeloA || m.modeloB)) {
+      pbeModelos = [m.modeloA && { id: 'A', texto: removerEmojis(String(m.modeloA)), aprovado: false },
+                    m.modeloB && { id: 'B', texto: removerEmojis(String(m.modeloB)), aprovado: false }].filter(Boolean);
+      renderModelosEditor();
+    }
+    if (m.lembrete && semLembrete) {
+      document.getElementById('pbe_lembrete').value = removerEmojis(String(m.lembrete));
+      document.getElementById('pbe_lembreteAprovado').checked = false;
+      if (typeof avisosLembreteEditor === 'function') avisosLembreteEditor();
+    }
     status.textContent = '✅ Rascunho pronto, inclusive os modelos de mensagem do agente. Revise cada campo, marque "aprovado para uso" nos modelos e no lembrete que você aceitar, e marque "Usar este playbook no agente".';
   } catch (e) {
-    status.textContent = '⚠️ ' + (e.message || 'Não consegui gerar o rascunho.');
+    status.textContent = '⚠️ Os campos ficaram prontos, mas as mensagens não vieram (' + (e.message || 'erro') + '). Clique em Rascunhar com IA de novo: os campos que você já revisou podem ser refeitos, então revise depois.';
   }
 }
 
