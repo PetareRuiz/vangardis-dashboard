@@ -11658,6 +11658,7 @@ const AGENTE_CFG_PADRAO = {
   numeroAnterior: '',         // número usado antes da troca
   trocaEm: '',                // quando a troca aconteceu
   ordemFila: 'primeiros',     // primeiros | lembretes | soPrimeiros | soLembretes
+  filtroPlaybook: '',         // vazio = todos; senão, só os leads deste playbook
   recomecarNoNovo: true       // quem só conhece o número antigo recomeça pelo novo
 };
 const ORDENS_FILA = {
@@ -11903,8 +11904,12 @@ async function chamarIAAgente(prompt, maxTokens) {
 }
 
 // ── E) Seleção diária ──
-function selecionarLeadsAgente() {
+function selecionarLeadsAgente(opts) {
+  opts = opts || {};
   const cfg = cfgAgente();
+  let filtroPb = opts.ignorarFiltro ? '' : (cfg.filtroPlaybook || '');
+  // Filtro de um playbook que saiu do agente ou foi apagado: volta para todos
+  if (filtroPb && !((DB.playbooks && DB.playbooks.itens) || []).some(x => x.id === filtroPb && x.agente)) filtroPb = '';
   const cidades = String(cfg.cidadesPrioritarias || '').split(',').map(normalizarTxt).filter(Boolean);
   const fora = { semPlaybook: 0, playbookFora: 0, semModelo: 0, fixo: 0, semZap: 0, optout: 0, semRegistro: 0, paraCongelar: [] };
   const cands = [];
@@ -11937,6 +11942,7 @@ function selecionarLeadsAgente() {
     const pb = playbookDoLead(l);
     if (!pb) { fora.semPlaybook++; return; }
     if (!pb.agente) { fora.playbookFora++; return; }
+    if (filtroPb && pb.id !== filtroPb) { fora.outroSegmento = (fora.outroSegmento || 0) + 1; return; }
     if (tipo === 'lembrete' ? !lembreteAprovado(pb) : !modelosAprovados(pb).length) { fora.semModelo++; return; }
 
     let p = 0;
@@ -11951,7 +11957,7 @@ function selecionarLeadsAgente() {
   cands.sort((a, b) => b.p - a.p || b.dDesc - a.dDesc || a.l.nome.localeCompare(b.l.nome, 'pt-BR'));
   const porTipo = { primeiro: 0, lembrete: 0, recomeco: 0 };
   cands.forEach(c => { porTipo[c.tipo]++; });
-  return { escolhidos: cands.slice(0, cfg.limiteDia), total: cands.length, fora, porTipo };
+  return { escolhidos: cands.slice(0, cfg.limiteDia), total: cands.length, fora, porTipo, candidatos: cands };
 }
 
 // ── F) Redação ──
@@ -12344,7 +12350,8 @@ function renderCardAgente() {
     fo.fixo && `${fo.fixo} com telefone fixo`,
     fo.optout && `${fo.optout} pediram para não ser contatados`,
     fo.semRegistro && `${fo.semRegistro} contatados sem mensagem registrada`,
-    fo.pelaOrdem && `${fo.pelaOrdem} pela ordem escolhida`
+    fo.pelaOrdem && `${fo.pelaOrdem} pela ordem escolhida`,
+    fo.outroSegmento && `${fo.outroSegmento} de outros segmentos (filtro da fila)`
   ].filter(Boolean);
 
   el.innerHTML = `
@@ -12365,12 +12372,28 @@ function renderCardAgente() {
       ${pbsComModelo.length && !pausa ? `<div style="font-size:12px;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">Ordem da fila:
         <select onchange="mudarOrdemFila(this.value)" style="padding:3px 6px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
           ${Object.entries(ORDENS_FILA).map(([k, v]) => `<option value="${k}" ${(cfg.ordemFila || 'primeiros') === k ? 'selected' : ''}>${v}</option>`).join('')}
+        </select>
+        Segmento:
+        <select onchange="mudarFiltroFila(this.value)" style="padding:3px 6px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+          ${(() => { const todos = selecionarLeadsAgente({ ignorarFiltro: true }); const por = {};
+            (todos.candidatos || []).forEach(c => { por[c.pb.id] = (por[c.pb.id] || 0) + 1; });
+            return `<option value="">Todos (${todos.total})</option>` + pbsComModelo.map(pb =>
+              `<option value="${pb.id}" ${cfg.filtroPlaybook === pb.id ? 'selected' : ''}>${escaparHtml(pb.segmento)} × ${escaparHtml((TIPOS_COMPRADOR[pb.tipoComprador] || {}).label || pb.tipoComprador)} (${por[pb.id] || 0})</option>`).join(''); })()}
         </select>${f && f.itens.some(x => x.status === 'pendente') ? '<span class="text-muted" style="font-size:11.5px">— para aplicar na fila de hoje, abra a fila e clique em “Montar de novo”</span>' : ''}</div>` : ''}
       ${foraTxt.length ? `<div class="text-muted" style="font-size:11.5px;margin-top:4px">Ficaram de fora: ${foraTxt.join(' · ')}.</div>` : ''}
       ${htmlStatusWA()}
       ${fo.paraCongelar.length ? `<div style="font-size:11.5px;margin-top:6px;color:#2B5F87">❄️ ${fo.paraCongelar.length} lead(s) já receberam o primeiro contato e o lembrete sem responder.
         <a href="#" onclick="congelarParadosAgente();return false;" style="color:var(--gold);font-weight:700;margin-left:4px">Congelar agora</a></div>` : ''}
     </div>`;
+}
+
+function mudarFiltroFila(v) {
+  const a = agente();
+  const pb = ((DB.playbooks && DB.playbooks.itens) || []).find(x => x.id === v);
+  a.config = Object.assign({}, a.config || {}, { filtroPlaybook: pb ? v : '' });
+  saveDB();
+  renderCardAgente();
+  showToast(pb ? `Fila só com ${pb.segmento} × ${(TIPOS_COMPRADOR[pb.tipoComprador] || {}).label || ''}` : 'Fila com todos os segmentos');
 }
 
 function mudarOrdemFila(v) {
@@ -12434,7 +12457,8 @@ function salvarAjustesAgente() {
     incluirDescobertos: document.getElementById('agc_incluirDescobertos').checked,
     personalizarIA: document.getElementById('agc_personalizarIA').checked,
     recomecarNoNovo: document.getElementById('agc_recomecar').checked,
-    ordemFila: cfgAgente().ordemFila || p.ordemFila
+    ordemFila: cfgAgente().ordemFila || p.ordemFila,
+    filtroPlaybook: cfgAgente().filtroPlaybook || ''
   };
   const nd = document.getElementById('agc_nuncaDizer').value.split('\n').map(x => x.trim()).filter(Boolean);
   agente().nuncaDizer = nd.length ? nd : NUNCA_DIZER_PADRAO.slice();
