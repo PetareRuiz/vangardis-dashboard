@@ -12903,10 +12903,15 @@ function agendarMapaWA() {
   clearTimeout(waMapaTimer);
   waMapaTimer = setTimeout(() => { sincronizarMapaWA().catch(() => {}); }, 3000);
 }
-async function sincronizarMapaWA() {
+// Só manda o mapa quando ele mudou (cada envio gasta gravações no banco do porteiro)
+let waMapaUltimo = '';
+async function sincronizarMapaWA(forcar) {
   if (!waAtivo() || !authToken()) return;
+  const corpo = JSON.stringify(montarMapaWA());
+  if (!forcar && corpo === waMapaUltimo) return;
   try {
-    await waFetch('/mapa', { method: 'POST', body: JSON.stringify(montarMapaWA()) });
+    await waFetch('/mapa', { method: 'POST', body: corpo });
+    waMapaUltimo = corpo;
     agente().wa.mapaEm = new Date().toISOString();
   } catch (e) { agente().wa.erro = e.message; }
 }
@@ -12942,6 +12947,7 @@ async function buscarMensagensWA(manual) {
     a.wa.desconhecidos = (j.desconhecidos || []).slice(0, 30);
     const antes = new Set((a.wa.rascunhos || []).map(x => x.id));
     a.wa.rascunhos = (j.rascunhos || []).slice(0, 30);
+    a.wa.seguimentos = (j.seguimentos || []).slice(0, 50);
     const novosRasc = a.wa.rascunhos.filter(x => !antes.has(x.id)).length;
     Object.keys(waEdicoes).forEach(k => { if (!a.wa.rascunhos.some(x => String(x.id) === k)) delete waEdicoes[k]; });
     a.wa.ultimaBusca = new Date().toISOString();
@@ -13077,6 +13083,11 @@ async function importarEventosWA(eventos) {
         } else {
           itens.push({ leadId: l.id, data: e.ts, direcao: 'nota', tipo: 'nota', canal: 'whatsapp',
             texto: '🤖 ' + e.texto, origem: origemComVersao('agente', l, 'ia-nota') });
+          if (/Pergunte você pelo app/i.test(e.texto)) {
+            l.perguntarCatalogoEm = e.ts;
+            registrarHistoricoLead(l, 'Não respondeu ao catálogo e a janela de 24 h fechou — pergunte pelo app o que achou');
+            comVoce.push({ nome: l.nome, motivo: 'não respondeu ao catálogo e a janela de 24 h fechou — pergunte pelo app o que achou' });
+          }
           if (/não receber/i.test(e.texto)) {
             registrarOptout(l, 'pediu para não receber mais mensagens (na conversa com a IA)');
             registrarHistoricoLead(l, 'A loja pediu para não receber mensagens — a IA saiu da conversa');
@@ -13201,6 +13212,11 @@ function htmlEsperandoVoceWA() {
   };
   const lista = [];
   LEADS.forEach(l => {
+    if (l.perguntarCatalogoEm && !(l.ultimaEntradaEm > l.perguntarCatalogoEm) && !(l.ultimaSaidaEm > l.perguntarCatalogoEm) &&
+        ['cliente', 'perdido', 'bloqueado'].indexOf(l.estagio) === -1 && new Date(l.perguntarCatalogoEm).getTime() > agora - 7 * 86400000) {
+      lista.push({ l, ia: false, txt: 'não respondeu ao catálogo e a janela de 24 h fechou — pergunte pelo app o que achou', data: l.perguntarCatalogoEm });
+      return;
+    }
     if (!l.whatsapp || !l.ultimaEntradaEm || (l.ultimaSaidaEm && l.ultimaSaidaEm >= l.ultimaEntradaEm)) return;
     if (['cliente', 'perdido', 'bloqueado'].indexOf(l.estagio) !== -1 || registroOptout(l)) return;
     const ent = new Date(l.ultimaEntradaEm).getTime();
@@ -13217,15 +13233,16 @@ function htmlEsperandoVoceWA() {
     }
   });
   if (!lista.length) return '';
-  lista.sort((a, b) => (a.l.ultimaEntradaEm < b.l.ultimaEntradaEm ? 1 : -1));
+  const dt = x => x.data || x.l.ultimaEntradaEm;
+  lista.sort((a, b) => (dt(a) < dt(b) ? 1 : -1));
   return `<div style="margin-top:10px;border:1.5px solid #B9CFE3;border-radius:8px;padding:10px 12px;background:#F4F8FC">
-    <div style="font-size:11px;color:#2B5F87;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📩 Responderam e ninguém respondeu ainda — ${lista.length}</div>
+    <div style="font-size:11px;color:#2B5F87;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📩 Precisam de você — ${lista.length}</div>
     ${lista.slice(0, 12).map(x => {
       const pb = playbookDoLead(x.l);
       const podeDevolver = !x.ia && pb && pb.agente && (x.l.iaPassado || x.l.iaAssumido || (x.l.alertaVenda && !x.l.alertaVenda.devolvido));
       return `<div style="border-top:1px solid #DCE7F1;padding:6px 0;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center">
         <div style="font-size:12px;line-height:1.45"><b style="color:var(--navy)">${escaparHtml(x.l.nome)}</b>
-          <span class="text-muted">· ${new Date(x.l.ultimaEntradaEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${x.ia ? '⏳ ' : '✋ '}${escaparHtml(x.txt)}</span></div>
+          <span class="text-muted">· ${new Date(dt(x)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · ${x.ia ? '⏳ ' : '✋ '}${escaparHtml(x.txt)}</span></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${x.l.id})">💬 Conversa</button>
           ${podeDevolver ? `<button class="btn btn-sm btn-gold" onclick="devolverParaIA(${x.l.id})">🤖 Devolver para a IA</button>` : ''}
@@ -13254,7 +13271,11 @@ function renderStatusIAConversa(l) {
     const devolver = `<a href="#" onclick="devolverParaIA(${l.id});return false;" style="color:var(--gold);font-weight:700;margin-left:6px">🤖 Devolver para a IA</a>`;
     if (l.iaPassado) html = `🤝 A IA passou esta conversa para você${l.alertaVenda && l.alertaVenda.motivo ? ': ' + escaparHtml(l.alertaVenda.motivo) : ''}.${devolver}`;
     else if (l.iaAssumido) html = `✋ Você assumiu esta conversa pelo app — a IA não responde mais.${devolver}`;
-    else if (leadComIA(l, c)) html = `🤖 A IA responde esta loja (${c.horaIni}h–${c.horaFim}h) até chegar na negociação${waEmSupervisao(c) ? ' — cada resposta espera 10 min pela sua revisão' : ''}.`;
+    else if (leadComIA(l, c)) {
+      html = `🤖 A IA responde esta loja (${c.horaIni}h–${c.horaFim}h) até chegar na negociação${waEmSupervisao(c) ? ' — cada resposta espera 10 min pela sua revisão' : ''}.`;
+      const sg = seguimentoDoLead(l);
+      if (sg) html += `<br>📨 Se a loja não responder, a IA pergunta o que ela achou de ${escaparHtml(sg.base || 'o catálogo')} por volta de ${new Date(sg.devido).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.`;
+    }
     else if (l.alertaVenda && !l.alertaVenda.devolvido && playbookDoLead(l) && playbookDoLead(l).agente) html = `🔥 Lead em negociação com você — a IA não responde.${devolver}`;
     else { const m = motivoForaDaIA(l, c); if (m) html = `⏸️ A IA não responde esta loja: ${escaparHtml(m)}.`; }
   }
@@ -13262,10 +13283,15 @@ function renderStatusIAConversa(l) {
   el.style.display = html ? 'block' : 'none';
 }
 
+function seguimentoDoLead(l) {
+  const k = telChaveWA(l.whatsapp);
+  return ((agente().wa || {}).seguimentos || []).find(x => x.chave === k) || null;
+}
+
 function devolverParaIA(id) {
   const l = LEADS.find(x => x.id === id);
   if (!l) return;
-  if (!confirm(`Devolver "${l.nome}" para a IA?\n\nEla volta a responder a partir da PRÓXIMA mensagem da loja (não responde o que já chegou).`)) return;
+  if (!confirm(`Devolver "${l.nome}" para a IA?\n\nEla volta a responder a partir da PRÓXIMA mensagem da loja (não responde o que já chegou).\n\nSe você mandou o catálogo e a loja ainda não respondeu, a IA pergunta o que ela achou umas 3 h depois do envio — só dentro da janela de 24 h do WhatsApp.`)) return;
   const agora = new Date().toISOString();
   if (l.alertaVenda) { l.alertaVenda.visto = true; l.alertaVenda.devolvido = agora; }
   l.iaPassado = ''; l.iaAssumido = ''; l.iaDevolvidoEm = agora;
@@ -13394,7 +13420,7 @@ async function testarConexaoWA() {
   if (!waAtivo()) { el.innerHTML = '<span class="text-muted">Cole o endereço do porteiro primeiro.</span>'; return; }
   el.innerHTML = '<span class="text-muted">⏳ Conversando com o porteiro…</span>';
   try {
-    await sincronizarMapaWA();
+    await sincronizarMapaWA(true);
     const s = await waFetch('/status');
     const item = (okv, txt) => `<div>${okv ? '✅' : '⚠️'} ${txt}</div>`;
     const ult = s.ultimoWebhook ? new Date(s.ultimoWebhook).toLocaleString('pt-BR') : 'nunca';
