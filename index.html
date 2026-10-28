@@ -7985,7 +7985,7 @@ function encontrarDuplicadoLead(nome, whatsapp) {
     c.nome.trim().toLowerCase() === n || (w && (c.whatsapp||'').replace(/\D/g,'') === w));
   if (cli) return cli.nome + ' (já é cliente)';
   const ld = LEADS.find(l =>
-    l.nome.trim().toLowerCase() === n || (w && (l.whatsapp||'').replace(/\D/g,'') === w));
+    l.nome.trim().toLowerCase() === n || (w && ((l.whatsapp||'').replace(/\D/g,'') === w || (l.telefoneFixo||'').replace(/\D/g,'') === w)));
   if (ld) return ld.nome + ' (já está nos leads)';
   const oo = registroOptout({ nome, whatsapp });
   if (oo) return (oo.loja || nome) + ' (pediu para não ser contatado)';
@@ -10471,6 +10471,8 @@ function pareceFixo(tel) {
   const n = String(tel || '').replace(/\D/g, '').replace(/^55/, '');
   return n.length === 10 && !/^[9]/.test(n.slice(2));
 }
+// Fixo que barra a fila: os que você conferiu e têm WhatsApp passam
+function fixoSemZap(l) { return pareceFixo(l.whatsapp) && !l.zapNoFixo; }
 
 // ── Marcadores: quem falou por último em cada lead ──
 // Ficam no próprio lead (leves) e são atualizados a cada registro.
@@ -10612,7 +10614,7 @@ function renderHoje() {
     const l = t.lead, v = TIPOS_TAREFA[t.tipo];
     const est = ESTAGIOS_LEAD[l.estagio] || {};
     const sug = l.sugestaoIA;
-    const fixo = pareceFixo(l.whatsapp);
+    const fixo = fixoSemZap(l);
     return `<div style="display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--gray-100)">
       <div>
         <div style="font-size:10.5px;font-weight:700;color:${v.cor}">${v.label}</div>
@@ -10799,7 +10801,7 @@ ${bloco.map(t => JSON.stringify({
         tipo: t.lead.tipoComprador || '', estagio: t.lead.estagio,
         situacao: t.motivo,
         resumo: String(t.lead.resumoIA || '').slice(0, 400),
-        telefone_parece_fixo: pareceFixo(t.lead.whatsapp)
+        telefone_parece_fixo: fixoSemZap(t.lead)
       })).join('\n')}
 
 Responda SOMENTE com um array JSON, sem texto fora dele e sem cercas de código:
@@ -11914,20 +11916,33 @@ function selecionarLeadsAgente(opts) {
   // Filtro de um playbook que saiu do agente ou foi apagado: volta para todos
   if (filtroPb && !((DB.playbooks && DB.playbooks.itens) || []).some(x => x.id === filtroPb && x.agente)) filtroPb = '';
   const cidades = String(cfg.cidadesPrioritarias || '').split(',').map(normalizarTxt).filter(Boolean);
-  const fora = { semPlaybook: 0, playbookFora: 0, semModelo: 0, fixo: 0, semZap: 0, optout: 0, semRegistro: 0, paraCongelar: [] };
+  const fora = { semPlaybook: 0, playbookFora: 0, semModelo: 0, fixo: 0, fixoConferido: 0, fixos: [], semZap: 0, optout: 0, semRegistro: 0, paraCongelar: [] };
   const cands = [];
+  // Com filtro de segmento, os "de fora" contam só os do segmento escolhido
+  const pbFiltro = filtroPb ? DB.playbooks.itens.find(x => x.id === filtroPb) : null;
+  const doFiltro = l => {
+    if (!pbFiltro) return true;
+    const pb = playbookDoLead(l);
+    if (pb) return pb.id === pbFiltro.id;
+    return normalizarTxt(l.segmento || '') === normalizarTxt(pbFiltro.segmento);
+  };
 
   leadsAtivosNaoCongelados().forEach(l => {
     const est = l.estagio;
     const podePrimeiro = est === 'qualificado' || (cfg.incluirDescobertos && est === 'descoberto');
     if (!podePrimeiro && est !== 'contatado') {
-      if (est === 'descoberto' && l.whatsapp) fora.descobertos = (fora.descobertos || 0) + 1;
+      if (est === 'descoberto' && l.whatsapp && doFiltro(l)) fora.descobertos = (fora.descobertos || 0) + 1;
       return;
     }
     if ((l.entradas || 0) > 0 || l.alertaVenda) return;           // respondeu: o lead é seu
+    if (!doFiltro(l)) { fora.outroSegmento = (fora.outroSegmento || 0) + 1; return; }
     if (!l.whatsapp) { fora.semZap++; return; }
     if (registroOptout(l)) { fora.optout++; return; }
-    if (pareceFixo(l.whatsapp)) { fora.fixo++; return; }
+    if (fixoSemZap(l)) {
+      if (l.semZapFixo) fora.fixoConferido++;
+      else { fora.fixo++; fora.fixos.push(l); }
+      return;
+    }
 
     const saidas = l.saidas || 0;
     const dSaida = diasDesde(l.ultimaSaidaEm);
@@ -12353,11 +12368,12 @@ function renderCardAgente() {
     fo.semPlaybook && `${fo.semPlaybook} sem playbook (defina o tipo de comprador)`,
     fo.playbookFora && `${fo.playbookFora} de playbook fora do agente`,
     fo.semModelo && `${fo.semModelo} sem modelo aprovado`,
-    fo.fixo && `${fo.fixo} com telefone fixo`,
+    fo.fixo && `${fo.fixo} com telefone fixo <a href="#" onclick="abrirConferirFixos();return false;" style="color:var(--gold);font-weight:700">(conferir se têm WhatsApp)</a>`,
+    fo.fixoConferido && `${fo.fixoConferido} fixo(s) sem WhatsApp`,
     fo.optout && `${fo.optout} pediram para não ser contatados`,
     fo.semRegistro && `${fo.semRegistro} contatados sem mensagem registrada`,
     fo.pelaOrdem && `${fo.pelaOrdem} pela ordem escolhida`,
-    fo.outroSegmento && `${fo.outroSegmento} de outros segmentos (filtro da fila)`,
+    fo.outroSegmento && `${fo.outroSegmento} de outros segmentos (filtro da fila — os números ao lado são só deste segmento)`,
     fo.descobertos && `${fo.descobertos} ainda em Descoberto <a href="#" onclick="abrirAjustesAgente();return false;" style="color:var(--gold);font-weight:700">(incluir nos Ajustes ou qualificar)</a>`
   ].filter(Boolean);
 
@@ -12392,6 +12408,78 @@ function renderCardAgente() {
       ${fo.paraCongelar.length ? `<div style="font-size:11.5px;margin-top:6px;color:#2B5F87">❄️ ${fo.paraCongelar.length} lead(s) já receberam o primeiro contato e o lembrete sem responder.
         <a href="#" onclick="congelarParadosAgente();return false;" style="color:var(--gold);font-weight:700;margin-left:4px">Congelar agora</a></div>` : ''}
     </div>`;
+}
+
+// ── Fixos: conferir um a um se a loja tem WhatsApp ──
+function abrirConferirFixos() {
+  if (!document.getElementById('modalFixos')) {
+    const d = document.createElement('div');
+    d.className = 'modal-overlay'; d.id = 'modalFixos';
+    d.innerHTML = `<div class="modal" style="max-width:760px">
+      <div class="modal-title">📞 Leads com telefone fixo</div>
+      <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:12px">
+        Muitas lojas usam o WhatsApp Business no próprio fixo. <b>Testar</b> abre o WhatsApp com esse número: se abrir a conversa, tem WhatsApp. <b>Procurar</b> busca o celular da loja no Google (Instagram e site costumam ter).
+      </div>
+      <div id="fixosLista"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-ghost" onclick="closeModal('modalFixos')">Fechar</button></div>
+    </div>`;
+    document.body.appendChild(d);
+  }
+  renderConferirFixos();
+  openModal('modalFixos');
+}
+
+function renderConferirFixos() {
+  const el = document.getElementById('fixosLista');
+  if (!el) return;
+  const lista = selecionarLeadsAgente().fora.fixos || [];
+  const pbF = (cfgAgente().filtroPlaybook && ((DB.playbooks && DB.playbooks.itens) || []).find(x => x.id === cfgAgente().filtroPlaybook)) || null;
+  if (!lista.length) { el.innerHTML = '<div class="text-muted" style="padding:16px;text-align:center">✅ Nenhum fixo para conferir' + (pbF ? ' neste segmento' : '') + '.</div>'; return; }
+  const fmt = t => { const n = telNorm(t); return n.length === 10 ? `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}` : n; };
+  el.innerHTML = `<div class="text-muted" style="font-size:11.5px;margin-bottom:6px">${lista.length} lead(s)${pbF ? ' de ' + escaparHtml(pbF.segmento) : ''} parados por telefone fixo</div>` + lista.map(l => `
+    <div style="border-top:1px solid var(--gray-100);padding:9px 0;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center">
+      <div style="font-size:12.5px;line-height:1.4">
+        <b style="color:var(--navy)">${escaparHtml(l.nome)}</b> <span class="text-muted">· ${escaparHtml(l.cidade || '')} · ${fmt(l.whatsapp)}</span>
+        <div style="display:flex;gap:6px;margin-top:5px;align-items:center;flex-wrap:wrap">
+          <input id="fxCel_${l.id}" placeholder="celular com DDD" inputmode="tel" style="width:150px;padding:5px 7px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+          <button class="btn btn-sm btn-ghost" onclick="salvarCelularFixo(${l.id})">Salvar celular</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn btn-sm btn-ghost" onclick="window.open('https://wa.me/55${telNorm(l.whatsapp)}','_blank')" title="Abre o WhatsApp com este número, sem mensagem">📱 Testar</button>
+        <button class="btn btn-sm btn-ghost" onclick="window.open('https://www.google.com/search?q=' + encodeURIComponent('${escaparHtml(String(l.nome).replace(/'/g, ' '))} ${escaparHtml(String(l.cidade || '').replace(/'/g, ' '))} whatsapp'),'_blank')">🔍 Procurar</button>
+        <button class="btn btn-sm btn-gold" onclick="marcarFixo(${l.id}, true)">✅ Tem WhatsApp</button>
+        <button class="btn btn-sm btn-ghost" onclick="marcarFixo(${l.id}, false)">❌ Não tem</button>
+      </div>
+    </div>`).join('');
+}
+
+function marcarFixo(id, tem) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  if (tem) { l.zapNoFixo = true; delete l.semZapFixo; registrarHistoricoLead(l, 'Fixo conferido: tem WhatsApp — liberado para a fila'); }
+  else { l.semZapFixo = new Date().toISOString(); registrarHistoricoLead(l, 'Fixo conferido: não tem WhatsApp'); }
+  saveLeads();
+  renderConferirFixos();
+  renderCardAgente();
+}
+
+function salvarCelularFixo(id) {
+  const l = LEADS.find(x => x.id === id);
+  const campo = document.getElementById('fxCel_' + id);
+  if (!l || !campo) return;
+  const n = telNorm(campo.value);
+  if (n.length !== 11 || n.charAt(2) !== '9') { showToast('⚠️ Digite o celular com DDD (11 números, começando com 9 depois do DDD).', 'warning'); return; }
+  const dup = LEADS.find(x => x.id !== l.id && telNorm(x.whatsapp) === n);
+  if (dup && !confirm(`Esse celular já está no lead "${dup.nome}". Salvar mesmo assim?`)) return;
+  l.telefoneFixo = l.telefoneFixo || l.whatsapp;
+  l.whatsapp = n;
+  delete l.semZapFixo; delete l.zapNoFixo;
+  registrarHistoricoLead(l, `WhatsApp trocado do fixo ${l.telefoneFixo} para o celular ${n}`);
+  saveLeads();
+  renderConferirFixos();
+  renderCardAgente();
+  showToast(`📱 ${l.nome}: celular salvo — já pode entrar na fila.`);
 }
 
 function mudarFiltroFila(v) {
