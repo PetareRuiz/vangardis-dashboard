@@ -853,6 +853,7 @@ th.sortable:hover { background: var(--navy-mid); }
             <button class="btn btn-sm" id="leadLoteCongelar" style="background:#E8F1F8;color:#2B5F87" onclick="congelarSelecionados(true)">❄️ Congelar</button>
             <button class="btn btn-sm" id="leadLoteDescongelar" style="background:var(--gold);color:var(--navy-dark);display:none" onclick="congelarSelecionados(false)">☀️ Descongelar</button>
             <button class="btn btn-sm" id="leadLoteAbordar" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirLoteAbordagem()">✨ Abordar em lote</button>
+            <button class="btn btn-sm btn-ghost" id="leadLoteSegmento" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="abrirSegmentoLote()">🏷️ Mudar segmento</button>
             <button class="btn btn-sm btn-ghost" id="leadLoteClassificar" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="classificarSelecionadosIA()">🧭 Classificar tipo (IA)</button>
             <button class="btn btn-sm btn-ghost" id="leadLoteHistorico" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparHistoricoSelecionados()">🗑️ Limpar histórico</button>
             <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparSelecaoLeads()">Limpar seleção</button>
@@ -7849,8 +7850,7 @@ function popularSelectsLead() {
   }
   const dl = document.getElementById('leadSegmentosList');
   if (dl) {
-    const segs = [...new Set((DB.clientes||[]).map(c => c.segmento).filter(Boolean))].sort();
-    dl.innerHTML = segs.map(s => `<option value="${s}">`).join('');
+    dl.innerHTML = segmentosConhecidos().map(s => `<option value="${escaparHtml(s)}">`).join('');
   }
 }
 
@@ -10377,6 +10377,140 @@ async function classificarSelecionadosIA() {
   } catch (e) {
     showToast('⚠️ Não consegui classificar: ' + (e.message || 'erro'), 'warning');
   }
+}
+
+// ════════ Segmento em lote ════════
+// A busca grava o termo pesquisado como segmento ("Presentes"), mas vêm
+// floriculturas, lojas de brinquedos etc. Aqui você corrige vários de uma vez,
+// à mão ou com sugestão da IA, revisando antes de salvar.
+function segmentosConhecidos() {
+  const pbs = ((DB.playbooks && DB.playbooks.itens) || []).map(p => p.segmento);
+  const todos = pbs.concat(LEADS.map(l => l.segmento), (DB.clientes || []).map(c => c.segmento)).map(x => String(x || '').trim()).filter(Boolean);
+  const vistos = {}, lista = [];
+  todos.forEach(x => { const k = normalizarTxt(x); if (!vistos[k]) { vistos[k] = 1; lista.push(x); } });
+  return lista.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+let segLoteIds = [];
+function abrirSegmentoLote() {
+  segLoteIds = [...leadsSelecionados].filter(id => LEADS.some(l => l.id === id));
+  if (!segLoteIds.length) return;
+  if (!document.getElementById('modalSegLote')) {
+    const d = document.createElement('div');
+    d.className = 'modal-overlay'; d.id = 'modalSegLote';
+    d.innerHTML = `<div class="modal" style="max-width:780px">
+      <div class="modal-title">🏷️ Mudar segmento</div>
+      <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:10px">
+        Corrija o segmento de cada loja. O segmento escolhe o playbook: uma loja que deixa de ser "Presentes" sai da fila de Presentes até ter um playbook do novo segmento.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <input id="segLoteTodos" list="segLoteLista" placeholder="Mesmo segmento para todos…" style="flex:1;min-width:200px;padding:7px 9px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+        <button class="btn btn-sm btn-ghost" onclick="preencherSegmentoLote()">Preencher todos</button>
+        <button class="btn btn-sm btn-gold" id="segLoteIABtn" onclick="sugerirSegmentosLoteIA()">✨ Sugerir com a IA</button>
+      </div>
+      <datalist id="segLoteLista"></datalist>
+      <div id="segLoteStatus" class="text-muted" style="font-size:11.5px;margin-bottom:6px"></div>
+      <div id="segLoteLinhas" style="max-height:52vh;overflow:auto"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn btn-ghost" onclick="closeModal('modalSegLote')">Cancelar</button>
+        <button class="btn btn-gold" onclick="salvarSegmentoLote()">Salvar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(d);
+  }
+  document.getElementById('segLoteLista').innerHTML = segmentosConhecidos().map(x => `<option value="${escaparHtml(x)}">`).join('');
+  document.getElementById('segLoteTodos').value = '';
+  document.getElementById('segLoteStatus').textContent = `${segLoteIds.length} lead(s) selecionado(s). Desmarque quem não deve mudar.`;
+  document.getElementById('segLoteLinhas').innerHTML = segLoteIds.map(id => {
+    const l = LEADS.find(x => x.id === id);
+    return `<div style="display:grid;grid-template-columns:22px 1fr 210px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--gray-100)">
+      <input type="checkbox" id="segOk_${id}" checked>
+      <div style="font-size:12.5px;line-height:1.35"><b style="color:var(--navy)">${escaparHtml(l.nome)}</b>
+        <div class="text-muted" style="font-size:11px">${escaparHtml(l.cidade || '')}${l.site ? ' · ' + escaparHtml(String(l.site).replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)) : ''} · hoje: ${escaparHtml(l.segmento || '—')}<span id="segMot_${id}"></span></div></div>
+      <input id="segNovo_${id}" list="segLoteLista" value="${escaparHtml(l.segmento || '')}" oninput="marcarSegmentoMudou(${id})" style="padding:6px 8px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12.5px">
+    </div>`;
+  }).join('');
+  openModal('modalSegLote');
+}
+
+function marcarSegmentoMudou(id) {
+  const l = LEADS.find(x => x.id === id), el = document.getElementById('segNovo_' + id);
+  if (!l || !el) return;
+  const mudou = normalizarTxt(el.value) !== normalizarTxt(l.segmento || '');
+  el.style.borderColor = mudou ? 'var(--gold)' : 'var(--gray-200)';
+  el.style.background = mudou ? '#FFFBEF' : '';
+}
+
+function preencherSegmentoLote() {
+  const v = document.getElementById('segLoteTodos').value.trim();
+  if (!v) { showToast('⚠️ Escreva o segmento primeiro.', 'warning'); return; }
+  segLoteIds.forEach(id => { const ok = document.getElementById('segOk_' + id); if (ok && ok.checked) { document.getElementById('segNovo_' + id).value = v; marcarSegmentoMudou(id); } });
+}
+
+async function sugerirSegmentosLoteIA() {
+  const alvo = segLoteIds.map(id => LEADS.find(l => l.id === id)).filter(Boolean);
+  if (!alvo.length || !iaPermitida(Math.ceil(alvo.length / 25))) return;
+  const btn = document.getElementById('segLoteIABtn'), st = document.getElementById('segLoteStatus');
+  btn.disabled = true; btn.textContent = '⏳ Sugerindo…';
+  const conhecidos = segmentosConhecidos();
+  let n = 0;
+  try {
+    for (let i = 0; i < alvo.length; i += 25) {
+      const bloco = alvo.slice(i, i + 25);
+      st.textContent = `A IA está olhando ${Math.min(i + 25, alvo.length)} de ${alvo.length}…`;
+      const prompt = `Você corrige o SEGMENTO (ramo de atividade) de lojas encontradas numa busca do Google para a prospecção da Vangardis Expertise, fabricante de produtos personalizados que vende para lojas.
+
+A busca gravou o termo pesquisado como segmento, mas vieram lojas de outros ramos. Para cada loja, diga o ramo real dela pelo nome, pelo site e pelo endereço.
+
+Regras:
+- Prefira um destes segmentos já usados, escrito exatamente igual, quando servir: ${conhecidos.join('; ') || '(nenhum ainda)'}.
+- Se nenhum servir, crie um nome curto em português, de 1 a 3 palavras, com inicial maiúscula (ex.: Floricultura, Brinquedos, Aromatizantes, Artigos esotéricos, Papelaria, Decoração).
+- Loja de presentes de verdade (presentes em geral, utilidades, bazar de presentes) continua "Presentes".
+- Se não der para saber, mantenha o segmento atual e use confiança "baixa".
+
+LOJAS:
+${bloco.map(l => JSON.stringify({ id: String(l.id), nome: l.nome, atual: l.segmento || '', site: l.site || '', endereco: String(l.endereco || '').slice(0, 80), notas: String(l.ficha || '').slice(0, 150) })).join('\n')}
+
+Responda SOMENTE com um objeto JSON, sem texto fora dele: {"lojas": [{"id": "...", "segmento": "...", "confianca": "alta|media|baixa"}]}`;
+      const j = extrairJSON(await chamarIA(prompt, 1800));
+      (j.lojas || []).forEach(r => {
+        const id = parseInt(r.id, 10), el = document.getElementById('segNovo_' + id);
+        const seg = String(r.segmento || '').trim().slice(0, 60);
+        if (!el || !seg) return;
+        // escreve igual a um segmento que já existe (mesmo sem acento/maiúscula)
+        const igual = conhecidos.find(x => normalizarTxt(x) === normalizarTxt(seg));
+        el.value = igual || seg;
+        marcarSegmentoMudou(id);
+        const m = document.getElementById('segMot_' + id);
+        if (m) m.innerHTML = r.confianca === 'baixa' ? ' · <span style="color:var(--warning)">IA em dúvida</span>' : '';
+        n++;
+      });
+    }
+    const mud = segLoteIds.filter(id => { const l = LEADS.find(x => x.id === id), el = document.getElementById('segNovo_' + id); return l && el && normalizarTxt(el.value) !== normalizarTxt(l.segmento || ''); }).length;
+    st.innerHTML = `✨ A IA sugeriu ${n} segmento(s): <b>${mud}</b> mudam (em amarelo). Revise e clique em Salvar — nada mudou ainda.`;
+  } catch (e) {
+    st.textContent = '⚠️ A IA não respondeu agora (' + (e.message || 'erro') + '). Tente de novo ou preencha à mão.';
+  }
+  btn.disabled = false; btn.textContent = '✨ Sugerir com a IA';
+}
+
+function salvarSegmentoLote() {
+  let n = 0;
+  segLoteIds.forEach(id => {
+    const l = LEADS.find(x => x.id === id), ok = document.getElementById('segOk_' + id), el = document.getElementById('segNovo_' + id);
+    if (!l || !ok || !ok.checked || !el) return;
+    const v = el.value.trim();
+    if (!v || normalizarTxt(v) === normalizarTxt(l.segmento || '')) return;
+    registrarHistoricoLead(l, `Segmento: ${l.segmento || '—'} → ${v}`);
+    l.segmento = v;
+    n++;
+  });
+  closeModal('modalSegLote');
+  if (!n) { showToast('Nenhum segmento mudou.'); return; }
+  saveLeads();
+  limparSelecaoLeads();
+  renderProspeccao();
+  showToast(`🏷️ ${n} lead(s) mudaram de segmento.`);
 }
 
 // Na ficha do lead: sugere o tipo só para ele
