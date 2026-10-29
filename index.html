@@ -853,6 +853,7 @@ th.sortable:hover { background: var(--navy-mid); }
             <button class="btn btn-sm" id="leadLoteCongelar" style="background:#E8F1F8;color:#2B5F87" onclick="congelarSelecionados(true)">❄️ Congelar</button>
             <button class="btn btn-sm" id="leadLoteDescongelar" style="background:var(--gold);color:var(--navy-dark);display:none" onclick="congelarSelecionados(false)">☀️ Descongelar</button>
             <button class="btn btn-sm" id="leadLoteAbordar" style="background:var(--gold);color:var(--navy-dark)" onclick="abrirLoteAbordagem()">✨ Abordar em lote</button>
+            <button class="btn btn-sm btn-ghost" id="leadLoteSites" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="abrirContatosSites([...leadsSelecionados])" title="Lê o site de cada lead e traz WhatsApp e e-mail">🌐 Contatos do site</button>
             <button class="btn btn-sm btn-ghost" id="leadLoteSegmento" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="abrirSegmentoLote()">🏷️ Mudar segmento</button>
             <button class="btn btn-sm btn-ghost" id="leadLoteClassificar" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="classificarSelecionadosIA()">🧭 Classificar tipo (IA)</button>
             <button class="btn btn-sm btn-ghost" id="leadLoteHistorico" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparHistoricoSelecionados()">🗑️ Limpar histórico</button>
@@ -2340,6 +2341,8 @@ th.sortable:hover { background: var(--navy-mid); }
       Cada playbook ensina a IA a falar com um tipo de loja: por que ela compra, que palavras usar, que pergunta fazer, como tratar as objeções e quando abordar.
       O playbook certo é escolhido pelo <b>segmento</b> e pelo <b>tipo de comprador</b> de cada lead.
     </div>
+
+    <div id="pbFaltam" style="margin-bottom:14px"></div>
 
     <div class="flex-between" style="margin-bottom:8px">
       <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Playbooks</div>
@@ -10126,7 +10129,71 @@ function abrirPlaybooks() {
   openModal('modalPlaybooks');
 }
 
+// Segmento × tipo de comprador dos seus leads que ainda não têm playbook
+function playbooksFaltando() {
+  const grupos = {}, semTipo = {};
+  leadsAtivosNaoCongelados().forEach(l => {
+    if (['cliente', 'perdido', 'bloqueado'].indexOf(l.estagio) !== -1 || registroOptout(l)) return;
+    const seg = String(l.segmento || '').trim();
+    if (!seg || playbookDoLead(l)) return;
+    const k = normalizarTxt(seg);
+    const alvo = l.tipoComprador ? grupos : semTipo;
+    const chave = l.tipoComprador ? k + '|' + l.tipoComprador : k;
+    const g = alvo[chave] = alvo[chave] || { segmento: seg, tipo: l.tipoComprador || '', leads: [], grafias: {} };
+    g.grafias[seg] = (g.grafias[seg] || 0) + 1;
+    g.leads.push(l);
+  });
+  const fechar = o => Object.values(o).map(g => {
+    g.segmento = Object.entries(g.grafias).sort((a, b) => b[1] - a[1])[0][0];   // a grafia mais usada
+    g.comZap = g.leads.filter(l => l.whatsapp && !fixoSemZap(l)).length;
+    return g;
+  }).sort((a, b) => b.leads.length - a.leads.length || a.segmento.localeCompare(b.segmento, 'pt-BR'));
+  return { comTipo: fechar(grupos), semTipo: fechar(semTipo) };
+}
+
+function renderPlaybooksFaltando() {
+  const el = document.getElementById('pbFaltam');
+  if (!el) return;
+  const { comTipo, semTipo } = playbooksFaltando();
+  if (!comTipo.length && !semTipo.length) { el.innerHTML = ''; return; }
+  const linha = (g, i, acao) => `<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid #F0E2B6">
+      <div style="font-size:12.5px"><b style="color:var(--navy)">${escaparHtml(g.segmento)}${g.tipo ? ' × ' + escaparHtml((TIPOS_COMPRADOR[g.tipo] || {}).label || g.tipo) : ''}</b>
+        <span class="text-muted" style="font-size:11.5px">· ${g.leads.length} lead(s), ${g.comZap} com WhatsApp</span></div>
+      ${acao}
+    </div>`;
+  el.innerHTML = `<div style="border:1.5px solid #E8C872;border-radius:8px;padding:10px 12px;background:#FFFBEF">
+    <div style="font-size:11px;color:#8A6508;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">🧩 Faltam playbooks — leads parados por isso</div>
+    <div class="text-muted" style="font-size:11.5px;margin-bottom:4px">Escolha um e a IA rascunha o playbook com as mensagens; você revisa e salva. Sem playbook, o agente não aborda esses leads.</div>
+    ${comTipo.map((g, i) => linha(g, i, `<button class="btn btn-sm btn-gold" onclick="gerarPlaybookFaltante(${i})">✨ Gerar playbook</button>`)).join('')}
+    ${semTipo.length ? `<div style="font-size:11.5px;color:#8A6508;margin-top:8px">Sem tipo de comprador (defina o tipo para saber qual playbook falta):</div>` +
+      semTipo.map((g, i) => linha(g, i, `<button class="btn btn-sm btn-ghost" onclick="classificarFaltantes(${i})">🧭 Classificar tipo (IA)</button>`)).join('') : ''}
+  </div>`;
+}
+
+function gerarPlaybookFaltante(i) {
+  const g = playbooksFaltando().comTipo[i];
+  if (!g) return;
+  novoPlaybook();
+  document.getElementById('pbe_segmento').value = g.segmento;
+  document.getElementById('pbe_tipoComprador').value = g.tipo;
+  document.getElementById('pbeTitulo').textContent = `Novo playbook — ${g.segmento} × ${(TIPOS_COMPRADOR[g.tipo] || {}).label || g.tipo}`;
+  rascunharPlaybookIA();
+}
+
+async function classificarFaltantes(i) {
+  const g = playbooksFaltando().semTipo[i];
+  if (!g || !iaPermitida(Math.ceil(g.leads.length / 20))) return;
+  showToast(`⏳ Classificando ${g.leads.length} lead(s) de ${g.segmento}…`, 'warning');
+  try {
+    const n = aplicarTiposClassificados(await classificarTiposIA(g.leads));
+    renderListaPlaybooks();
+    renderProspeccao();
+    showToast(`🧭 ${n} lead(s) classificado(s). Confira a lista "Faltam playbooks".`);
+  } catch (e) { showToast('⚠️ Não consegui classificar agora.', 'warning'); }
+}
+
 function renderListaPlaybooks() {
+  renderPlaybooksFaltando();
   const el = document.getElementById('pbLista');
   const itens = DB.playbooks.itens.slice().sort((a, b) =>
     a.segmento.localeCompare(b.segmento, 'pt-BR') || a.tipoComprador.localeCompare(b.tipoComprador));
@@ -12070,7 +12137,7 @@ function selecionarLeadsAgente(opts) {
     }
     if ((l.entradas || 0) > 0 || l.alertaVenda) return;           // respondeu: o lead é seu
     if (!doFiltro(l)) { fora.outroSegmento = (fora.outroSegmento || 0) + 1; return; }
-    if (!l.whatsapp) { fora.semZap++; return; }
+    if (!l.whatsapp) { fora.semZap++; if (l.site) (fora.semZapComSite = fora.semZapComSite || []).push(l.id); return; }
     if (registroOptout(l)) { fora.optout++; return; }
     if (fixoSemZap(l)) {
       if (l.semZapFixo) fora.fixoConferido++;
@@ -12502,6 +12569,7 @@ function renderCardAgente() {
     fo.semPlaybook && `${fo.semPlaybook} sem playbook (defina o tipo de comprador)`,
     fo.playbookFora && `${fo.playbookFora} de playbook fora do agente`,
     fo.semModelo && `${fo.semModelo} sem modelo aprovado`,
+    fo.semZap && `${fo.semZap} sem WhatsApp${(fo.semZapComSite || []).length ? ` <a href="#" onclick="abrirContatosSites(selecionarLeadsAgente().fora.semZapComSite);return false;" style="color:var(--gold);font-weight:700">(procurar nos sites: ${fo.semZapComSite.length})</a>` : ''}`,
     fo.fixo && `${fo.fixo} com telefone fixo <a href="#" onclick="abrirConferirFixos();return false;" style="color:var(--gold);font-weight:700">(conferir se têm WhatsApp)</a>`,
     fo.fixoConferido && `${fo.fixoConferido} fixo(s) sem WhatsApp`,
     fo.optout && `${fo.optout} pediram para não ser contatados`,
@@ -12544,6 +12612,159 @@ function renderCardAgente() {
     </div>`;
 }
 
+// ── Contatos nos sites: o porteiro lê o site e traz WhatsApp e e-mail ──
+// O navegador não consegue ler outros sites (bloqueio de segurança), por isso
+// quem lê é o porteiro. Nada muda no lead antes de você clicar em Salvar.
+let sitesLote = [];   // { id, estado, r }
+let sitesRodando = false;
+
+function precisaContato(l) { return !l.whatsapp || fixoSemZap(l) || !l.email; }
+
+function abrirContatosSites(ids) {
+  if (!waAtivo()) { showToast('⚠️ Configure o porteiro do WhatsApp nos Ajustes do agente: é ele que lê os sites.', 'warning'); return; }
+  if (sitesRodando) { openModal('modalSites'); return; }
+  const leads = (ids || []).map(id => LEADS.find(l => l.id === id)).filter(Boolean);
+  const comSite = leads.filter(l => String(l.site || '').trim());
+  const alvo = comSite.filter(precisaContato);
+  if (!alvo.length) {
+    showToast(comSite.length ? '✅ Os selecionados com site já têm celular e e-mail.' : '⚠️ Nenhum dos selecionados tem site cadastrado.', 'warning');
+    return;
+  }
+  if (!document.getElementById('modalSites')) {
+    const d = document.createElement('div');
+    d.className = 'modal-overlay'; d.id = 'modalSites';
+    d.innerHTML = `<div class="modal" style="max-width:820px">
+      <div class="modal-title">🌐 Contatos nos sites</div>
+      <div style="font-size:12.5px;color:var(--gray-600);line-height:1.55;margin-bottom:8px">
+        O porteiro abre o site de cada loja (e a página de contato, se precisar) e procura o WhatsApp, o e-mail e o Instagram. Escolha o que entra na ficha e clique em Salvar — nada muda antes disso.
+      </div>
+      <div id="sitesStatus" style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px"></div>
+      <div id="sitesLinhas" style="max-height:55vh;overflow:auto"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button class="btn btn-ghost" onclick="pararContatosSites()">Fechar</button>
+        <button class="btn btn-gold" id="sitesSalvar" onclick="salvarContatosSites()">Salvar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(d);
+  }
+  sitesLote = alvo.map(l => ({ id: l.id, estado: 'esperando', r: null }));
+  renderContatosSites();
+  openModal('modalSites');
+  rodarContatosSites();
+}
+
+async function lerSiteNoPorteiro(url) {
+  const base = String(waCfg().url || '').trim().replace(/\/+$/, '');
+  const r = await fetch(base + '/ler-site', { method: 'POST', body: JSON.stringify({ url }),
+    headers: { 'Authorization': 'Bearer ' + authToken(), 'Content-Type': 'application/json' } });
+  let j; try { j = await r.json(); } catch (e) { throw new Error('o porteiro respondeu algo inesperado (HTTP ' + r.status + ')'); }
+  if (j.authError) throw new Error('login recusado pelo porteiro');
+  if (r.status === 404) throw new Error('atualize o porteiro para a versão 2.7 (ele ainda não lê sites)');
+  return j;
+}
+
+async function rodarContatosSites() {
+  sitesRodando = true;
+  for (const it of sitesLote) {
+    if (!sitesRodando) break;
+    if (it.estado !== 'esperando') continue;
+    const l = LEADS.find(x => x.id === it.id);
+    it.estado = 'lendo'; renderContatosSites();
+    try {
+      it.r = await lerSiteNoPorteiro(l.site);
+      it.estado = it.r.ok ? 'pronto' : 'falhou';
+      // o que vem marcado: celular novo se o lead não tem ou tem fixo; e-mail se não tem
+      const cel = (it.r.whatsapps || []).find(z => z.length === 11) || '';
+      const outro = (it.r.whatsapps || [])[0] || '';
+      it.zap = (!l.whatsapp || fixoSemZap(l)) ? (cel || (!l.whatsapp ? outro : '')) : '';
+      if (it.zap && telNorm(it.zap) === telNorm(l.whatsapp)) it.zap = '';
+      it.email = !l.email ? ((it.r.emails || [])[0] || '') : '';
+      it.ig = !l.instagram && it.r.instagram ? it.r.instagram : '';
+      if (it.zap === '' && fixoSemZap(l) && (it.r.whatsapps || []).indexOf(telNorm(l.whatsapp)) !== -1) it.fixoTemZap = true;
+    } catch (e) {
+      it.estado = 'falhou'; it.r = { erro: e.message };
+      if (/atualize o porteiro|login recusado/.test(e.message)) { sitesLote.forEach(x => { if (x.estado === 'esperando') { x.estado = 'falhou'; x.r = { erro: e.message }; } }); renderContatosSites(); break; }
+    }
+    l.siteLidoEm = new Date().toISOString();
+    renderContatosSites();
+  }
+  sitesRodando = false;
+  renderContatosSites();
+}
+
+function pararContatosSites() {
+  sitesRodando = false;
+  closeModal('modalSites');
+}
+
+function renderContatosSites() {
+  const el = document.getElementById('sitesLinhas');
+  if (!el) return;
+  const fmt = t => { const n = telNorm(t); return n.length === 11 ? `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}` : n.length === 10 ? `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}` : n; };
+  const feitos = sitesLote.filter(x => x.estado === 'pronto' || x.estado === 'falhou').length;
+  const achou = sitesLote.filter(x => x.zap || x.email || x.ig || x.fixoTemZap).length;
+  document.getElementById('sitesStatus').innerHTML = sitesRodando
+    ? `⏳ Lendo ${feitos + 1} de ${sitesLote.length}… (pode ir marcando enquanto isso)`
+    : `✅ ${sitesLote.length} site(s) lidos · ${achou} com algo novo para a ficha`;
+  const opc = (it, campo, valores, rotulo) => valores.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:3px"><span class="text-muted" style="font-size:11px;width:68px">${rotulo}</span>
+      ${valores.map(v => `<label style="font-size:12px;cursor:pointer;border:1.5px solid ${it[campo] === v ? 'var(--gold)' : 'var(--gray-200)'};background:${it[campo] === v ? '#FFFBEF' : '#fff'};border-radius:14px;padding:2px 9px">
+        <input type="radio" name="s${campo}_${it.id}" ${it[campo] === v ? 'checked' : ''} onchange="escolherContatoSite(${it.id},'${campo}','${escaparHtml(v)}')" style="margin-right:3px">${escaparHtml(campo === 'zap' ? fmt(v) : v)}</label>`).join('')}
+      <label style="font-size:11.5px;cursor:pointer;color:var(--gray-600)"><input type="radio" name="s${campo}_${it.id}" ${!it[campo] ? 'checked' : ''} onchange="escolherContatoSite(${it.id},'${campo}','')"> não usar</label></div>` : '';
+  el.innerHTML = sitesLote.map(it => {
+    const l = LEADS.find(x => x.id === it.id);
+    const r = it.r || {};
+    let corpo;
+    if (it.estado === 'esperando') corpo = '<span class="text-muted">na fila</span>';
+    else if (it.estado === 'lendo') corpo = '<span style="color:var(--gold)">⏳ lendo o site…</span>';
+    else if (it.estado === 'falhou') corpo = `<span style="color:var(--warning)">⚠️ ${escaparHtml(r.erro || 'não consegui ler')}</span>${r.instagram && !l.instagram ? opc(it, 'ig', [r.instagram], 'Instagram') : ''}`;
+    else {
+      const zaps = r.whatsapps || [], emails = r.emails || [];
+      corpo = (zaps.length || emails.length || r.instagram || (r.telefones || []).length)
+        ? opc(it, 'zap', zaps, 'WhatsApp') + opc(it, 'email', emails, 'E-mail') + (r.instagram && !l.instagram ? opc(it, 'ig', [r.instagram], 'Instagram') : '') +
+          (it.fixoTemZap ? '<div style="font-size:11.5px;color:#2E7D52;margin-top:3px">✅ O site mostra o próprio fixo como WhatsApp — ele será liberado para a fila.</div>' : '') +
+          ((r.telefones || []).length && !zaps.length ? `<div class="text-muted" style="font-size:11px;margin-top:3px">Telefones no site (sem indicação de WhatsApp): ${r.telefones.map(fmt).join(', ')}</div>` : '')
+        : '<span class="text-muted">Nada de WhatsApp ou e-mail no site.</span>';
+    }
+    return `<div style="border-top:1px solid var(--gray-100);padding:8px 0">
+      <div style="font-size:12.5px"><b style="color:var(--navy)">${escaparHtml(l.nome)}</b>
+        <span class="text-muted">· hoje: ${l.whatsapp ? fmt(l.whatsapp) + (fixoSemZap(l) ? ' (fixo)' : '') : 'sem WhatsApp'}${l.email ? ' · ' + escaparHtml(l.email) : ''}</span>
+        <a href="${escaparHtml(/^https?:/i.test(l.site) ? l.site : 'https://' + l.site)}" target="_blank" style="font-size:11px;color:var(--gold);margin-left:4px">abrir site ↗</a></div>
+      <div style="font-size:12px;margin-top:2px">${corpo}</div>
+    </div>`;
+  }).join('');
+}
+
+function escolherContatoSite(id, campo, v) {
+  const it = sitesLote.find(x => x.id === id);
+  if (!it) return;
+  it[campo] = v;
+  renderContatosSites();
+}
+
+function salvarContatosSites() {
+  let n = 0;
+  sitesLote.forEach(it => {
+    const l = LEADS.find(x => x.id === it.id);
+    if (!l) return;
+    const mud = [];
+    if (it.zap && telNorm(it.zap) !== telNorm(l.whatsapp)) {
+      if (l.whatsapp && pareceFixo(l.whatsapp)) l.telefoneFixo = l.telefoneFixo || l.whatsapp;
+      mud.push(`WhatsApp ${l.whatsapp ? telNorm(l.whatsapp) + ' → ' : ''}${it.zap}`);
+      l.whatsapp = it.zap; delete l.zapNoFixo; delete l.semZapFixo;
+    } else if (it.fixoTemZap && !l.zapNoFixo) {
+      l.zapNoFixo = true; delete l.semZapFixo; mud.push('o fixo é WhatsApp (o site diz)');
+    }
+    if (it.email && it.email !== l.email) { l.email = it.email; mud.push('e-mail ' + it.email); }
+    if (it.ig && !l.instagram) { l.instagram = it.ig; mud.push('Instagram ' + it.ig); }
+    if (mud.length) { registrarHistoricoLead(l, 'Do site: ' + mud.join(', ')); n++; }
+  });
+  sitesRodando = false;
+  closeModal('modalSites');
+  saveLeads();
+  renderProspeccao();
+  showToast(n ? `🌐 ${n} ficha(s) atualizada(s) com dados do site.` : 'Nada novo para salvar.');
+}
+
 // ── Fixos: conferir um a um se a loja tem WhatsApp ──
 function abrirConferirFixos() {
   if (!document.getElementById('modalFixos')) {
@@ -12570,7 +12791,9 @@ function renderConferirFixos() {
   const pbF = (cfgAgente().filtroPlaybook && ((DB.playbooks && DB.playbooks.itens) || []).find(x => x.id === cfgAgente().filtroPlaybook)) || null;
   if (!lista.length) { el.innerHTML = '<div class="text-muted" style="padding:16px;text-align:center">✅ Nenhum fixo para conferir' + (pbF ? ' neste segmento' : '') + '.</div>'; return; }
   const fmt = t => { const n = telNorm(t); return n.length === 10 ? `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}` : n; };
-  el.innerHTML = `<div class="text-muted" style="font-size:11.5px;margin-bottom:6px">${lista.length} lead(s)${pbF ? ' de ' + escaparHtml(pbF.segmento) : ''} parados por telefone fixo</div>` + lista.map(l => `
+  const comSite = lista.filter(l => l.site).map(l => l.id);
+  el.innerHTML = `<div class="flex-between" style="margin-bottom:6px"><span class="text-muted" style="font-size:11.5px">${lista.length} lead(s)${pbF ? ' de ' + escaparHtml(pbF.segmento) : ''} parados por telefone fixo</span>
+    ${comSite.length ? `<button class="btn btn-sm btn-gold" onclick="closeModal('modalFixos');abrirContatosSites([${comSite.join(',')}])">🌐 Procurar o WhatsApp nos sites (${comSite.length})</button>` : ''}</div>` + lista.map(l => `
     <div style="border-top:1px solid var(--gray-100);padding:9px 0;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center">
       <div style="font-size:12.5px;line-height:1.4">
         <b style="color:var(--navy)">${escaparHtml(l.nome)}</b> <span class="text-muted">· ${escaparHtml(l.cidade || '')} · ${fmt(l.whatsapp)}</span>
