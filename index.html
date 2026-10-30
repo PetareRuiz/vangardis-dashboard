@@ -512,6 +512,7 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="nav-item" onclick="goTab('catalogo')"><span class="icon">📖</span> Catálogo de Produtos</div>
     <div class="nav-section">Comercial</div>
     <div class="nav-item" onclick="goTab('prospeccao')"><span class="icon">🎯</span> Prospecção</div>
+    <div class="nav-item" onclick="goTab('propostas')"><span class="icon">📝</span> Propostas</div>
     <div class="nav-item" onclick="goTab('pedidos')"><span class="icon">🛒</span> Pedidos</div>
     <div class="nav-item" onclick="goTab('fila')"><span class="icon">🏭</span> Fila de Produção</div>
     <div class="nav-item" onclick="goTab('clientes')"><span class="icon">🏪</span> Clientes</div>
@@ -881,6 +882,28 @@ th.sortable:hover { background: var(--navy-mid); }
     </div>
 
     <!-- ═══════════════ PEDIDOS ═══════════════ -->
+    <div class="tab" id="tab-propostas">
+      <div id="kpiPropostas" class="kpi-grid" style="margin-bottom:20px"></div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">📝 Propostas comerciais</div>
+            <div class="text-muted" style="font-size:12px">Monte a proposta com os produtos do catálogo, gere o PDF e acompanhe até virar pedido.</div>
+          </div>
+          <button class="btn btn-gold" onclick="abrirNovaProposta()">+ Nova proposta</button>
+        </div>
+        <div class="card-body">
+          <div class="cat-tabs" id="propFiltros"></div>
+          <div class="table-wrap"><table>
+            <thead><tr>
+              <th>Nº</th><th>Para</th><th>Emitida</th><th>Válida até</th><th>Itens</th><th>Total</th><th>Situação</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="propostasTbody"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
     <div class="tab" id="tab-pedidos">
       <div id="kpiPedidos" class="kpi-grid" style="margin-bottom:20px"></div>
       <div class="card">
@@ -1236,6 +1259,94 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalProduto')">Cancelar</button>
       <button class="btn btn-gold" onclick="addProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODAL PROPOSTA ═══════ -->
+<div class="modal-overlay" id="modalProposta">
+  <div class="modal" style="max-width:860px">
+    <div class="modal-title">📝 <span id="propTitulo">Nova proposta</span></div>
+    <input type="hidden" id="propId">
+
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Para quem</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Loja (lead, cliente ou nova)</label>
+        <input type="text" id="propDest" list="propDestLista" placeholder="Comece a digitar o nome…" oninput="escolherDestinatarioProposta()" autocomplete="off">
+        <datalist id="propDestLista"></datalist>
+        <div id="propDestInfo" class="text-muted" style="font-size:11px;margin-top:3px"></div>
+      </div>
+      <div class="form-group"><label>Contato</label><input type="text" id="propContato" placeholder="Nome de quem compra"></div>
+      <div class="form-group"><label>Cidade</label><input type="text" id="propCidade"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>WhatsApp</label><input type="text" id="propWhats" inputmode="tel"></div>
+      <div class="form-group"><label>E-mail</label><input type="email" id="propEmail"></div>
+    </div>
+
+    <div style="background:var(--gray-100);border-radius:8px;padding:12px 14px;margin:6px 0 14px">
+      <div class="flex-between" style="margin-bottom:8px">
+        <div style="font-size:12px;color:var(--gray-600);font-weight:600">📦 Produtos</div>
+        <button class="btn btn-sm btn-gold" onclick="addItemProposta()">+ Adicionar produto</button>
+      </div>
+      <datalist id="propProdLista"></datalist>
+      <div id="propItens"></div>
+      <div id="propTotais" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gray-200);font-size:13px"></div>
+    </div>
+
+    <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Condições</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Desconto no total</label>
+        <div style="display:flex;gap:6px">
+          <input type="number" id="propDescValor" min="0" step="0.01" value="0" oninput="atualizarTotaisProposta()" style="flex:1">
+          <select id="propDescTipo" onchange="atualizarTotaisProposta()" style="width:70px"><option value="pct">%</option><option value="rs">R$</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Frete</label>
+        <select id="propFreteTipo" onchange="atualizarTotaisProposta()">
+          <option value="retirada">Retirada em Curitiba</option>
+          <option value="cliente">Por conta do cliente (a combinar)</option>
+          <option value="incluso">Incluso no valor (CIF)</option>
+          <option value="valor">Valor fixo (somado ao total)</option>
+        </select>
+      </div>
+      <div class="form-group" id="propFreteValorWrap" style="display:none">
+        <label>Valor do frete (R$)</label>
+        <input type="number" id="propFreteValor" min="0" step="0.01" value="0" oninput="atualizarTotaisProposta()">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Pagamento</label>
+        <select id="propPgto" onchange="document.getElementById('propPgtoOutroWrap').style.display=this.value==='outro'?'block':'none'">
+          <option value="pix">Pix à vista</option>
+          <option value="5050">50% na aprovação + 50% na entrega</option>
+          <option value="15dias">Pix em 15 dias após a entrega</option>
+          <option value="cartao">Cartão de crédito</option>
+          <option value="outro">Outra condição…</option>
+        </select>
+      </div>
+      <div class="form-group" id="propPgtoOutroWrap" style="display:none;flex:2">
+        <label>Qual condição</label>
+        <input type="text" id="propPgtoOutro" placeholder="Ex: boleto 28 dias">
+      </div>
+      <div class="form-group"><label>Prazo de produção (dias úteis)</label><input type="number" id="propPrazo" min="1" value="15"></div>
+      <div class="form-group"><label>Validade (dias)</label><input type="number" id="propValidade" min="1" value="15"></div>
+    </div>
+    <div class="form-group">
+      <label>Observações <span class="text-muted" style="font-weight:400;font-size:11px">(saem no PDF)</span></label>
+      <textarea id="propObs" rows="2" placeholder="Ex: personalização com a logo da loja inclusa; arte enviada para aprovação antes da produção." style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-family:inherit;font-size:13px"></textarea>
+    </div>
+    <label style="font-size:12.5px;cursor:pointer"><input type="checkbox" id="propFotos" checked> Mostrar a foto de cada produto no PDF</label>
+    <div id="propStatus" class="text-muted" style="font-size:12px;margin-top:8px"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalProposta')">Cancelar</button>
+      <button class="btn btn-ghost" onclick="salvarProposta(false)">Salvar</button>
+      <button class="btn btn-gold" id="propPdfBtn" onclick="salvarProposta(true)">Salvar e gerar PDF</button>
     </div>
   </div>
 </div>
@@ -2253,6 +2364,7 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalConversa')">Fechar</button>
       <button class="btn btn-ghost" onclick="enviarCatalogoConversa()" title="Monta o catálogo especial desta loja em PDF">📄 Catálogo</button>
+      <button class="btn btn-ghost" onclick="if(conversaLeadAtual){closeModal('modalConversa');abrirNovaProposta({leadId:conversaLeadAtual.id});}" title="Monta uma proposta comercial para esta loja">📝 Proposta</button>
       <button class="btn btn-ghost" onclick="abrirAmostra(conversaLeadAtual && conversaLeadAtual.id)">📦 Amostra entregue</button>
       <button class="btn btn-gold" onclick="gerarMensagemDaConversa()">✨ Escrever a próxima mensagem</button>
     </div>
@@ -3230,7 +3342,7 @@ const TAB_TITLES = {
   overview:'Visão Geral', filamentos:'Filamentos', produtos:'Produtos Acabados',
   catalogo:'Catálogo de Produtos',
   prospeccao:'Prospecção de Clientes',
-  pedidos:'Pedidos', fila:'Fila de Produção', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
+  propostas:'Propostas Comerciais', pedidos:'Pedidos', fila:'Fila de Produção', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
 };
 function goTab(id) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -13307,6 +13419,7 @@ function renderAvisoVenda() {
           <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${l.id})" title="Abrir a conversa">💬</button>
           ${a.fechou ? `<button class="btn btn-sm btn-gold" onclick="converterDoAlerta(${l.id})">🤝 Virou cliente</button>` : ''}
           <button class="btn btn-sm ${a.catalogo ? 'btn-gold' : 'btn-ghost'}" onclick="abrirCatalogoLead(${l.id})" title="Montar o catálogo especial desta loja">📄${a.catalogo ? ' Montar catálogo' : ''}</button>
+          <button class="btn btn-sm btn-ghost" onclick="abrirNovaProposta({leadId:${l.id}})" title="Montar a proposta comercial desta loja">📝 Proposta</button>
           ${podeDevolver ? `<button class="btn btn-sm btn-ghost" onclick="devolverParaIA(${l.id})" title="Não era negociação: a IA volta a responder esta loja">🤖 Devolver</button>` : ''}
           <button class="btn btn-sm btn-ghost" onclick="marcarAlertaVisto(${l.id})" title="Já estou cuidando">✓ Ciente</button>
         </div>
@@ -14086,9 +14199,647 @@ function iniciarFase5() {
 }
 
 
+// ════════════════════════════════════════════════════
+// PROPOSTAS COMERCIAIS
+// Monta a proposta com os produtos do catálogo, gera o PDF no visual do
+// catálogo e acompanha a situação até virar pedido. Fica em DB.propostas.
+// ════════════════════════════════════════════════════
+const SITUACOES_PROPOSTA = {
+  rascunho: { label: 'Rascunho', cor: '#7A7A7A', fundo: '#EFEFEF' },
+  enviada:  { label: 'Enviada',  cor: '#2B5F87', fundo: '#E8F1F8' },
+  vencida:  { label: 'Vencida',  cor: '#A85A00', fundo: '#FBEBD8' },
+  aceita:   { label: 'Aceita',   cor: '#2E7D52', fundo: '#E5F2EA' },
+  recusada: { label: 'Recusada', cor: '#A33B3B', fundo: '#FBE7E4' }
+};
+const PGTO_PROPOSTA = {
+  pix:    'Pix à vista',
+  '5050': '50% na aprovação + 50% na entrega',
+  '15dias': 'Pix em 15 dias após a entrega',
+  cartao: 'Cartão de crédito'
+};
+const FRETE_PROPOSTA = {
+  retirada: 'Retirada em Curitiba (sem frete)',
+  cliente:  'Por conta do cliente, a combinar',
+  incluso:  'Incluso no valor (CIF)',
+  valor:    'Frete'
+};
+
+let propItens = [];         // itens do editor: { produtoId, nome, qtd, valor }
+let propDestinatario = null; // { tipo, id }
+let propFiltro = 'todas';
+
+function propostas() {
+  if (!Array.isArray(DB.propostas)) DB.propostas = [];
+  return DB.propostas;
+}
+
+function brlProposta(v) {
+  return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function hojeISO() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function somarDiasISO(iso, dias) { const d = parseLocalDate(iso); d.setDate(d.getDate() + (parseInt(dias, 10) || 0)); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function dataBR(iso) { return iso ? parseLocalDate(iso).toLocaleDateString('pt-BR') : '—'; }
+
+// Situação mostrada: a enviada que passou da validade aparece como vencida
+function situacaoProposta(p) {
+  if (p.status === 'enviada' && p.validaAte && p.validaAte < hojeISO()) return 'vencida';
+  return p.status || 'rascunho';
+}
+
+function totaisProposta(p) {
+  const subtotal = (p.itens || []).reduce((s, it) => s + (Number(it.qtd) || 0) * (Number(it.valor) || 0), 0);
+  const d = p.desconto || {};
+  let desconto = d.tipo === 'rs' ? Number(d.valor) || 0 : subtotal * (Number(d.valor) || 0) / 100;
+  desconto = Math.min(Math.max(desconto, 0), subtotal);
+  const frete = p.frete && p.frete.tipo === 'valor' ? Math.max(0, Number(p.frete.valor) || 0) : 0;
+  return { subtotal, desconto, frete, total: subtotal - desconto + frete, qtd: (p.itens || []).reduce((s, it) => s + (Number(it.qtd) || 0), 0) };
+}
+
+function proximoNumeroProposta() {
+  const ano = String(new Date().getFullYear());
+  const n = propostas().filter(p => String(p.numero || '').indexOf(ano + '-') === 0)
+    .reduce((m, p) => Math.max(m, parseInt(String(p.numero).split('-')[1], 10) || 0), 0);
+  return ano + '-' + String(n + 1).padStart(3, '0');
+}
+
+function textoPagamento(p) {
+  return p.pgto === 'outro' ? (p.pgtoOutro || 'A combinar') : (PGTO_PROPOSTA[p.pgto] || 'A combinar');
+}
+function textoFrete(p) {
+  const f = p.frete || {};
+  return f.tipo === 'valor' ? 'Frete: ' + brlProposta(f.valor) + ' (somado ao total)' : (FRETE_PROPOSTA[f.tipo] || FRETE_PROPOSTA.cliente);
+}
+
+// ── Lista ──
+function renderPropostas() {
+  const tbody = document.getElementById('propostasTbody');
+  if (!tbody) return;
+  const lista = propostas().slice().sort((a, b) => (a.criadaEm < b.criadaEm ? 1 : -1));
+  const conta = { todas: lista.length };
+  lista.forEach(p => { const s = situacaoProposta(p); conta[s] = (conta[s] || 0) + 1; });
+
+  // KPIs
+  const abertas = lista.filter(p => situacaoProposta(p) === 'enviada');
+  const mes = hojeISO().slice(0, 7);
+  const aceitasMes = lista.filter(p => p.status === 'aceita' && String(p.aceitaEm || '').slice(0, 7) === mes);
+  const decididas = lista.filter(p => ['aceita', 'recusada', 'vencida'].indexOf(situacaoProposta(p)) !== -1);
+  const taxa = decididas.length ? Math.round(100 * lista.filter(p => p.status === 'aceita').length / decididas.length) : null;
+  const vencendo = abertas.filter(p => p.validaAte && p.validaAte <= somarDiasISO(hojeISO(), 3)).length;
+  const kpi = document.getElementById('kpiPropostas');
+  if (kpi) kpi.innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid #2B5F87"><div class="kpi-icon">📤</div><div class="kpi-label">Em aberto</div>
+      <div class="kpi-value">${abertas.length}</div><div class="kpi-sub">${brlProposta(abertas.reduce((s, p) => s + totaisProposta(p).total, 0))} esperando resposta</div></div>
+    <div class="kpi-card" style="border-top:3px solid #2E7D52"><div class="kpi-icon">✅</div><div class="kpi-label">Aceitas no mês</div>
+      <div class="kpi-value">${aceitasMes.length}</div><div class="kpi-sub">${brlProposta(aceitasMes.reduce((s, p) => s + totaisProposta(p).total, 0))}</div></div>
+    <div class="kpi-card" style="border-top:3px solid var(--gold)"><div class="kpi-icon">🎯</div><div class="kpi-label">Taxa de aceite</div>
+      <div class="kpi-value">${taxa === null ? '—' : taxa + '%'}</div><div class="kpi-sub">das propostas já decididas</div></div>
+    <div class="kpi-card" style="border-top:3px solid ${vencendo ? '#A85A00' : 'var(--gray-200)'}"><div class="kpi-icon">⏳</div><div class="kpi-label">Vencem em 3 dias</div>
+      <div class="kpi-value" style="color:${vencendo ? '#A85A00' : 'inherit'}">${vencendo}</div><div class="kpi-sub">vale um contato antes</div></div>`;
+
+  const filtros = document.getElementById('propFiltros');
+  if (filtros) filtros.innerHTML = [['todas', 'Todas']].concat(Object.entries(SITUACOES_PROPOSTA).map(([k, v]) => [k, v.label + 's']))
+    .map(([k, lbl]) => `<div class="cat-tab ${propFiltro === k ? 'active' : ''}" onclick="propFiltro='${k}';renderPropostas()">${lbl}${conta[k] ? ' (' + conta[k] + ')' : ''}</div>`).join('');
+
+  const vis = lista.filter(p => propFiltro === 'todas' || situacaoProposta(p) === propFiltro);
+  if (!vis.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--gray-400);padding:36px">${lista.length ? 'Nenhuma proposta nesta situação.' : 'Nenhuma proposta ainda. Clique em "+ Nova proposta" — ou, numa conversa com um lead, em "📝 Proposta".'}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = vis.map(p => {
+    const s = situacaoProposta(p), sv = SITUACOES_PROPOSTA[s];
+    const t = totaisProposta(p);
+    const dest = p.destinatario || {};
+    const acoes = [
+      `<button class="btn btn-sm btn-ghost" onclick="gerarPropostaPDF('${p.id}')" title="Baixar o PDF">📄</button>`,
+      `<button class="btn btn-sm btn-ghost" onclick="editarProposta('${p.id}')" title="Abrir e editar">✏️</button>`,
+      s === 'rascunho' ? `<button class="btn btn-sm btn-ghost" onclick="marcarProposta('${p.id}','enviada')" title="Marcar como enviada">📤 Enviada</button>` : '',
+      (s === 'enviada' || s === 'vencida') ? `<button class="btn btn-sm btn-gold" onclick="marcarProposta('${p.id}','aceita')" title="O cliente aceitou">✅ Aceita</button>
+        <button class="btn btn-sm btn-ghost" onclick="marcarProposta('${p.id}','recusada')" title="O cliente recusou">❌</button>` : '',
+      s === 'aceita' && !p.pedidoId ? `<button class="btn btn-sm btn-gold" onclick="virarPedidoProposta('${p.id}')">🛒 Virar pedido</button>` : '',
+      s === 'aceita' && p.pedidoId ? `<span class="text-muted" style="font-size:11px">pedido nº ${escaparHtml(pedidoDaProposta(p) ? pedidoDaProposta(p).num : '—')}</span>` : '',
+      `<button class="btn btn-sm btn-ghost" onclick="duplicarProposta('${p.id}')" title="Duplicar (nova proposta com os mesmos itens)">⧉</button>`,
+      `<button class="btn btn-sm btn-ghost" onclick="excluirProposta('${p.id}')" title="Excluir" style="color:var(--danger)">🗑️</button>`
+    ].filter(Boolean).join(' ');
+    return `<tr>
+      <td style="white-space:nowrap"><strong>${escaparHtml(p.numero)}</strong></td>
+      <td><strong style="color:var(--navy)">${escaparHtml(dest.nome || '—')}</strong>
+        <div class="text-muted" style="font-size:11px">${escaparHtml([dest.tipo === 'lead' ? 'lead' : dest.tipo === 'cliente' ? 'cliente' : '', dest.cidade].filter(Boolean).join(' · '))}</div></td>
+      <td>${dataBR(p.emitidaEm)}</td>
+      <td style="${s === 'vencida' ? 'color:#A85A00;font-weight:700' : ''}">${dataBR(p.validaAte)}</td>
+      <td style="white-space:nowrap">${(p.itens || []).length} · ${t.qtd} un.</td>
+      <td style="white-space:nowrap"><strong>${brlProposta(t.total)}</strong></td>
+      <td><span class="badge" style="background:${sv.fundo};color:${sv.cor}">${sv.label}</span>${p.motivoRecusa ? `<div class="text-muted" style="font-size:10.5px;max-width:160px">${escaparHtml(p.motivoRecusa)}</div>` : ''}</td>
+      <td style="white-space:nowrap">${acoes}</td>
+    </tr>`;
+  }).join('');
+}
+
+function pedidoDaProposta(p) { return (DB.pedidos || []).find(x => x.id === p.pedidoId) || null; }
+
+// ── Editor ──
+function opcoesDestinatario() {
+  const ops = [];
+  (DB.clientes || []).forEach(c => ops.push({ tipo: 'cliente', id: c.id, nome: c.nome, cidade: c.cidade || '', contato: c.contato || '', whatsapp: c.whatsapp || c.telefone || '', email: c.email || '' }));
+  LEADS.filter(l => !l.convertido && ['perdido', 'bloqueado'].indexOf(l.estagio) === -1)
+    .forEach(l => ops.push({ tipo: 'lead', id: l.id, nome: l.nome, cidade: l.cidade || '', contato: l.contato || '', whatsapp: l.whatsapp || '', email: l.email || '' }));
+  return ops;
+}
+
+function abrirNovaProposta(opts) {
+  opts = opts || {};
+  document.getElementById('propId').value = '';
+  document.getElementById('propTitulo').textContent = 'Nova proposta · nº ' + proximoNumeroProposta();
+  ['propDest', 'propContato', 'propCidade', 'propWhats', 'propEmail', 'propObs', 'propPgtoOutro'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('propDescValor').value = 0;
+  document.getElementById('propDescTipo').value = 'pct';
+  document.getElementById('propFreteTipo').value = 'cliente';
+  document.getElementById('propFreteValor').value = 0;
+  document.getElementById('propPgto').value = '5050';
+  document.getElementById('propPgtoOutroWrap').style.display = 'none';
+  document.getElementById('propPrazo').value = 15;
+  document.getElementById('propValidade').value = 15;
+  document.getElementById('propFotos').checked = true;
+  document.getElementById('propStatus').textContent = '';
+  propDestinatario = null;
+  propItens = [];
+  prepararListasProposta();
+  if (opts.leadId) {
+    const l = LEADS.find(x => x.id === opts.leadId);
+    if (l) {
+      preencherDestinatario({ tipo: 'lead', id: l.id, nome: l.nome, cidade: l.cidade || '', contato: l.contato || '', whatsapp: l.whatsapp || '', email: l.email || '' });
+      // Já começa com os produtos em foco do playbook da loja
+      const pb = playbookDoLead(l);
+      const foco = normalizarTxt((pb && pb.produtosFoco) || '');
+      (DB.catalogo || []).filter(c => !c.exclusivo && c.nome && foco && foco.indexOf(normalizarTxt(c.nome)) !== -1).slice(0, 6)
+        .forEach(c => propItens.push({ produtoId: c.id, nome: c.nome, qtd: 10, valor: Number(c.valor) || 0 }));
+    }
+  }
+  if (!propItens.length) propItens.push({ produtoId: null, nome: '', qtd: 10, valor: 0 });
+  renderItensProposta();
+  atualizarTotaisProposta();
+  openModal('modalProposta');
+}
+
+function editarProposta(id) {
+  const p = propostas().find(x => x.id === id);
+  if (!p) return;
+  abrirNovaProposta();
+  document.getElementById('propId').value = p.id;
+  document.getElementById('propTitulo').textContent = `Proposta nº ${p.numero} · ${SITUACOES_PROPOSTA[situacaoProposta(p)].label.toLowerCase()}`;
+  const d = p.destinatario || {};
+  propDestinatario = d.tipo && d.tipo !== 'avulso' ? { tipo: d.tipo, id: d.id } : null;
+  document.getElementById('propDest').value = d.nome || '';
+  document.getElementById('propContato').value = d.contato || '';
+  document.getElementById('propCidade').value = d.cidade || '';
+  document.getElementById('propWhats').value = d.whatsapp || '';
+  document.getElementById('propEmail').value = d.email || '';
+  document.getElementById('propDestInfo').textContent = propDestinatario ? (d.tipo === 'lead' ? '🎯 Lead da prospecção' : '🏪 Cliente da base') : '';
+  propItens = (p.itens || []).map(it => ({ ...it }));
+  document.getElementById('propDescValor').value = (p.desconto || {}).valor || 0;
+  document.getElementById('propDescTipo').value = (p.desconto || {}).tipo || 'pct';
+  document.getElementById('propFreteTipo').value = (p.frete || {}).tipo || 'cliente';
+  document.getElementById('propFreteValor').value = (p.frete || {}).valor || 0;
+  document.getElementById('propPgto').value = p.pgto || 'pix';
+  document.getElementById('propPgtoOutro').value = p.pgtoOutro || '';
+  document.getElementById('propPgtoOutroWrap').style.display = p.pgto === 'outro' ? 'block' : 'none';
+  document.getElementById('propPrazo').value = p.prazoDias || 15;
+  document.getElementById('propValidade').value = p.validadeDias || 15;
+  document.getElementById('propObs').value = p.observacoes || '';
+  document.getElementById('propFotos').checked = p.comFotos !== false;
+  if (p.status !== 'rascunho') document.getElementById('propStatus').innerHTML = '⚠️ Esta proposta já foi enviada. Se mudar valores, gere o PDF de novo e mande a versão nova para a loja.';
+  renderItensProposta();
+  atualizarTotaisProposta();
+}
+
+function prepararListasProposta() {
+  document.getElementById('propDestLista').innerHTML = opcoesDestinatario()
+    .map(o => `<option value="${escaparHtml(o.nome)}">${o.tipo === 'lead' ? 'Lead' : 'Cliente'}${o.cidade ? ' · ' + escaparHtml(o.cidade) : ''}</option>`).join('');
+  document.getElementById('propProdLista').innerHTML = (DB.catalogo || []).filter(c => c.nome)
+    .map(c => `<option value="${escaparHtml(c.nome)}">${Number(c.valor) > 0 ? brlProposta(c.valor) : ''}${c.exclusivo ? ' · exclusivo' + (c.clienteExclusivo ? ' de ' + escaparHtml(c.clienteExclusivo) : '') : ''}</option>`).join('');
+}
+
+function preencherDestinatario(o) {
+  propDestinatario = { tipo: o.tipo, id: o.id };
+  document.getElementById('propDest').value = o.nome;
+  document.getElementById('propContato').value = o.contato || '';
+  document.getElementById('propCidade').value = o.cidade || '';
+  document.getElementById('propWhats').value = o.whatsapp || '';
+  document.getElementById('propEmail').value = o.email || '';
+  document.getElementById('propDestInfo').textContent = o.tipo === 'lead' ? '🎯 Lead da prospecção' : '🏪 Cliente da base';
+}
+
+function escolherDestinatarioProposta() {
+  const nome = document.getElementById('propDest').value.trim().toLowerCase();
+  const achado = opcoesDestinatario().find(o => o.nome.trim().toLowerCase() === nome);
+  if (achado) { preencherDestinatario(achado); return; }
+  propDestinatario = null;
+  document.getElementById('propDestInfo').textContent = nome ? '✨ Loja nova (não está nos leads nem nos clientes)' : '';
+}
+
+function renderItensProposta() {
+  const el = document.getElementById('propItens');
+  el.innerHTML = propItens.map((it, i) => `
+    <div style="display:grid;grid-template-columns:1fr 80px 110px 110px 30px;gap:6px;align-items:center;margin-bottom:6px">
+      <input type="text" list="propProdLista" value="${escaparHtml(it.nome || '')}" placeholder="Produto do catálogo (ou escreva)" oninput="mudarItemProposta(${i},'nome',this.value)"
+        style="padding:7px 9px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+      <input type="number" min="1" value="${it.qtd}" title="Quantidade" oninput="mudarItemProposta(${i},'qtd',this.value)" style="padding:7px 6px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+      <input type="number" min="0" step="0.01" id="propVal_${i}" value="${it.valor}" title="Valor por unidade (R$)" oninput="mudarItemProposta(${i},'valor',this.value)" style="padding:7px 6px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
+      <div id="propSub_${i}" style="font-size:12.5px;font-weight:700;color:var(--navy);text-align:right">${brlProposta((Number(it.qtd) || 0) * (Number(it.valor) || 0))}</div>
+      <button class="btn btn-sm btn-ghost" onclick="removerItemProposta(${i})" title="Remover" style="padding:2px 6px">✕</button>
+    </div>`).join('') +
+    `<div class="text-muted" style="font-size:10.5px;display:grid;grid-template-columns:1fr 80px 110px 110px 30px;gap:6px"><span></span><span>quantidade</span><span>R$ por unidade</span><span style="text-align:right">subtotal</span><span></span></div>`;
+}
+
+function mudarItemProposta(i, campo, v) {
+  const it = propItens[i];
+  if (!it) return;
+  if (campo === 'nome') {
+    it.nome = v;
+    const c = (DB.catalogo || []).find(x => (x.nome || '').trim().toLowerCase() === v.trim().toLowerCase());
+    it.produtoId = c ? c.id : null;
+    if (c && !(Number(it.valor) > 0) && Number(c.valor) > 0) {   // traz o valor do catálogo se ainda não tem
+      it.valor = Number(c.valor);
+      const campoVal = document.getElementById('propVal_' + i);
+      if (campoVal) campoVal.value = it.valor;
+    }
+  } else it[campo] = campo === 'qtd' ? Math.max(0, parseInt(v, 10) || 0) : Math.max(0, parseFloat(v) || 0);
+  const sub = document.getElementById('propSub_' + i);
+  if (sub) sub.textContent = brlProposta((Number(it.qtd) || 0) * (Number(it.valor) || 0));
+  atualizarTotaisProposta();
+}
+
+function addItemProposta() {
+  propItens.push({ produtoId: null, nome: '', qtd: 10, valor: 0 });
+  renderItensProposta();
+  atualizarTotaisProposta();
+}
+
+function removerItemProposta(i) {
+  propItens.splice(i, 1);
+  if (!propItens.length) propItens.push({ produtoId: null, nome: '', qtd: 10, valor: 0 });
+  renderItensProposta();
+  atualizarTotaisProposta();
+}
+
+function lerPropostaDoEditor() {
+  const freteTipo = document.getElementById('propFreteTipo').value;
+  return {
+    itens: propItens.filter(it => String(it.nome || '').trim() && (Number(it.qtd) || 0) > 0)
+      .map(it => ({ produtoId: it.produtoId || null, nome: String(it.nome).trim(), qtd: Number(it.qtd) || 0, valor: Number(it.valor) || 0 })),
+    desconto: { tipo: document.getElementById('propDescTipo').value, valor: Math.max(0, parseFloat(document.getElementById('propDescValor').value) || 0) },
+    frete: { tipo: freteTipo, valor: freteTipo === 'valor' ? Math.max(0, parseFloat(document.getElementById('propFreteValor').value) || 0) : 0 }
+  };
+}
+
+function atualizarTotaisProposta() {
+  document.getElementById('propFreteValorWrap').style.display = document.getElementById('propFreteTipo').value === 'valor' ? 'block' : 'none';
+  const t = totaisProposta(lerPropostaDoEditor());
+  const linha = (rot, v, forte) => `<div class="flex-between" style="${forte ? 'font-size:15px;font-weight:700;color:var(--gold);margin-top:4px' : 'color:var(--gray-600)'}"><span>${rot}</span><span>${v}</span></div>`;
+  document.getElementById('propTotais').innerHTML =
+    linha(`Subtotal (${t.qtd} un.)`, brlProposta(t.subtotal)) +
+    (t.desconto ? linha('Desconto', '− ' + brlProposta(t.desconto)) : '') +
+    (t.frete ? linha('Frete', brlProposta(t.frete)) : '') +
+    linha('Total da proposta', brlProposta(t.total), true);
+}
+
+function salvarProposta(gerarPdf) {
+  const nome = document.getElementById('propDest').value.trim();
+  if (!nome) { showToast('⚠️ Escolha ou escreva a loja.', 'warning'); return; }
+  const base = lerPropostaDoEditor();
+  if (!base.itens.length) { showToast('⚠️ Adicione ao menos um produto com quantidade.', 'warning'); return; }
+  const semValor = base.itens.filter(it => !(it.valor > 0)).map(it => it.nome);
+  if (semValor.length && !confirm(`Sem valor por unidade: ${semValor.join(', ')}.\n\nSalvar mesmo assim?`)) return;
+  const id = document.getElementById('propId').value;
+  const lista = propostas();
+  let p = id ? lista.find(x => x.id === id) : null;
+  const novo = !p;
+  if (novo) {
+    p = { id: 'pp_' + Date.now().toString(36), numero: proximoNumeroProposta(), criadaEm: new Date().toISOString(), emitidaEm: hojeISO(), status: 'rascunho', historico: [] };
+    lista.push(p);
+  }
+  const validadeDias = Math.max(1, parseInt(document.getElementById('propValidade').value, 10) || 15);
+  Object.assign(p, base, {
+    destinatario: {
+      tipo: propDestinatario ? propDestinatario.tipo : 'avulso', id: propDestinatario ? propDestinatario.id : null, nome,
+      contato: document.getElementById('propContato').value.trim(), cidade: document.getElementById('propCidade').value.trim(),
+      whatsapp: document.getElementById('propWhats').value.trim(), email: document.getElementById('propEmail').value.trim()
+    },
+    pgto: document.getElementById('propPgto').value,
+    pgtoOutro: document.getElementById('propPgtoOutro').value.trim(),
+    prazoDias: Math.max(1, parseInt(document.getElementById('propPrazo').value, 10) || 15),
+    validadeDias,
+    validaAte: somarDiasISO(p.emitidaEm || hojeISO(), validadeDias),
+    observacoes: document.getElementById('propObs').value.trim(),
+    comFotos: document.getElementById('propFotos').checked,
+    atualizadaEm: new Date().toISOString()
+  });
+  p.historico.unshift({ em: new Date().toISOString(), texto: novo ? 'Proposta criada' : 'Proposta editada' });
+  saveDB();
+  closeModal('modalProposta');
+  if (typeof goTab === 'function' && !document.getElementById('tab-propostas').classList.contains('active')) goTab('propostas');
+  else renderPropostas();
+  showToast(`📝 Proposta nº ${p.numero} salva.`);
+  if (gerarPdf) gerarPropostaPDF(p.id);
+}
+
+function duplicarProposta(id) {
+  const o = propostas().find(x => x.id === id);
+  if (!o) return;
+  const p = JSON.parse(JSON.stringify(o));
+  Object.assign(p, { id: 'pp_' + Date.now().toString(36), numero: proximoNumeroProposta(), criadaEm: new Date().toISOString(), emitidaEm: hojeISO(),
+    status: 'rascunho', pedidoId: null, aceitaEm: '', enviadaEm: '', recusadaEm: '', motivoRecusa: '', historico: [{ em: new Date().toISOString(), texto: 'Duplicada da nº ' + o.numero }] });
+  p.validaAte = somarDiasISO(p.emitidaEm, p.validadeDias || 15);
+  propostas().push(p);
+  saveDB();
+  renderPropostas();
+  editarProposta(p.id);
+  showToast(`⧉ Nova proposta nº ${p.numero}, cópia da ${o.numero}. Ajuste e salve.`);
+}
+
+function excluirProposta(id) {
+  const p = propostas().find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Excluir a proposta nº ${p.numero} (${(p.destinatario || {}).nome || ''})?${p.pedidoId ? '\n\nO pedido que veio dela continua nos Pedidos.' : ''}`)) return;
+  DB.propostas = propostas().filter(x => x.id !== id);
+  saveDB();
+  renderPropostas();
+}
+
+// ── Situação e ligação com o lead ──
+function leadDaProposta(p) {
+  const d = p.destinatario || {};
+  if (d.tipo === 'lead') return LEADS.find(l => l.id === d.id) || null;
+  return LEADS.find(l => !l.convertido && l.nome.trim().toLowerCase() === String(d.nome || '').trim().toLowerCase()) || null;
+}
+
+function anotarNoLead(p, texto) {
+  const l = leadDaProposta(p);
+  if (!l) return null;
+  registrarHistoricoLead(l, texto);
+  if (typeof registrarInteracoes === 'function') {
+    registrarInteracoes([{ leadId: l.id, tipo: 'nota', direcao: 'nota', canal: 'whatsapp', texto: '📝 ' + texto, origem: 'proposta' }]).catch(() => {});
+  }
+  return l;
+}
+
+function marcarProposta(id, nova) {
+  const p = propostas().find(x => x.id === id);
+  if (!p) return;
+  const t = totaisProposta(p);
+  const agora = new Date().toISOString();
+  if (nova === 'enviada') {
+    p.status = 'enviada'; p.enviadaEm = agora;
+    p.historico.unshift({ em: agora, texto: 'Marcada como enviada' });
+    const l = anotarNoLead(p, `Proposta nº ${p.numero} enviada: ${brlProposta(t.total)}, válida até ${dataBR(p.validaAte)}`);
+    if (l && (ESTAGIOS_LEAD[l.estagio] || {}).ordem < ESTAGIOS_LEAD.proposta.ordem) {
+      const ant = l.estagio; l.estagio = 'proposta';
+      registrarHistoricoLead(l, `Estágio: ${ESTAGIOS_LEAD[ant]?.label} → Proposta (proposta nº ${p.numero})`);
+    }
+    if (l) saveLeads();
+    showToast(`📤 Proposta nº ${p.numero} marcada como enviada.${l ? ' O lead foi para o estágio Proposta.' : ''}`);
+  } else if (nova === 'recusada') {
+    const motivo = prompt(`Por que a proposta nº ${p.numero} foi recusada? (opcional — ajuda a ajustar as próximas)`, '');
+    if (motivo === null) return;
+    p.status = 'recusada'; p.recusadaEm = agora; p.motivoRecusa = String(motivo || '').trim().slice(0, 200);
+    p.historico.unshift({ em: agora, texto: 'Recusada' + (p.motivoRecusa ? ': ' + p.motivoRecusa : '') });
+    const l = anotarNoLead(p, `Proposta nº ${p.numero} recusada${p.motivoRecusa ? ': ' + p.motivoRecusa : ''}`);
+    if (l) saveLeads();
+  } else if (nova === 'aceita') {
+    p.status = 'aceita'; p.aceitaEm = agora;
+    p.historico.unshift({ em: agora, texto: 'Aceita' });
+    anotarNoLead(p, `Proposta nº ${p.numero} aceita: ${brlProposta(t.total)}`);
+    saveDB();
+    renderPropostas();
+    if (confirm(`🎉 Proposta nº ${p.numero} aceita!\n\nLançar o pedido agora? Ele entra em Pedidos como "Em produção", com os itens, o desconto e a condição de pagamento da proposta.`)) virarPedidoProposta(id);
+    return;
+  }
+  saveDB();
+  renderPropostas();
+}
+
+// ── Virar pedido ──
+function virarPedidoProposta(id) {
+  const p = propostas().find(x => x.id === id);
+  if (!p) return;
+  if (p.pedidoId && pedidoDaProposta(p)) { showToast(`Esta proposta já virou o pedido nº ${pedidoDaProposta(p).num}.`, 'warning'); return; }
+  const d = p.destinatario || {};
+  // Lead que fechou vira cliente (o mesmo caminho do "🤝 Virou cliente")
+  const l = leadDaProposta(p);
+  let cli = (DB.clientes || []).find(c => c.nome.trim().toLowerCase() === String(d.nome || '').trim().toLowerCase());
+  if (l && !l.convertido) cli = efetivarConversao(l);
+  if (!cli) {
+    if (!DB.clientes) DB.clientes = [];
+    cli = { id: Date.now(), nome: d.nome, cidade: d.cidade || '', contato: d.contato || '', whatsapp: d.whatsapp || '', email: d.email || '' };
+    DB.clientes.push(cli);
+  }
+  const t = totaisProposta(p);
+  const itens = (p.itens || []).map(it => ({ produto: it.nome, qtd: it.qtd, valor: it.valor }));
+  if (t.frete > 0) itens.push({ produto: 'Frete', qtd: 1, valor: t.frete });
+  const subtotal = itens.reduce((s, it) => s + it.qtd * it.valor, 0);
+  const valor = subtotal - t.desconto;
+  const condicao = p.pgto === '5050' ? '5050' : p.pgto === '15dias' ? '15dias' : 'avista';
+  const hoje = hojeISO();
+  const pedido = {
+    id: Date.now(),
+    num: ((DB.pedidos || []).length + 1).toString().padStart(4, '0'),
+    cliente: cli.nome, cidade: cli.cidade || d.cidade || '',
+    produto: itens.length === 1 ? itens[0].produto : `${itens[0].produto} +${itens.length - 1} item(ns)`,
+    itens, qtd: itens.filter(it => it.produto !== 'Frete').reduce((s, it) => s + it.qtd, 0),
+    subtotal, desconto: t.desconto, valor,
+    pgto: p.pgto === 'cartao' ? 'Cartão' : 'Pix',
+    condicao, status: 'Em produção', data: hoje,
+    parcelas: condicao === '5050' ? { parc1: { valor: valor / 2, data: hoje, status: 'pendente' }, parc2: { valor: valor / 2, data: '', status: 'pendente' } } : null,
+    prazo15: condicao === '15dias' ? { data: somarDiasISO(hoje, (p.prazoDias || 15) + 15), status: 'pendente' } : null,
+    propostaId: p.id, obs: `Da proposta nº ${p.numero}` + (p.pgto === 'outro' && p.pgtoOutro ? ` · pagamento: ${p.pgtoOutro}` : '')
+  };
+  if (!DB.pedidos) DB.pedidos = [];
+  DB.pedidos.push(pedido);
+  p.pedidoId = pedido.id;
+  if (p.status !== 'aceita') { p.status = 'aceita'; p.aceitaEm = new Date().toISOString(); }
+  p.historico.unshift({ em: new Date().toISOString(), texto: 'Virou o pedido nº ' + pedido.num });
+  if (l) anotarNoLead(p, `Proposta nº ${p.numero} virou o pedido nº ${pedido.num}`);
+  saveDB();
+  if (l) saveLeads();
+  renderAll();
+  showToast(`🛒 Pedido nº ${pedido.num} lançado (${brlProposta(valor)}). Confira e ajuste as datas de pagamento.`);
+  if (typeof editPedido === 'function') editPedido(pedido.id);
+}
+
+// ── PDF no visual do catálogo ──
+async function gerarPropostaPDF(id) {
+  const p = propostas().find(x => x.id === id);
+  if (!p) return;
+  if (!window.jspdf) { showToast('⚠️ Biblioteca PDF não carregada. Recarregue a página.', 'warning'); return; }
+  showToast('⏳ Montando o PDF da proposta…');
+  const dest = p.destinatario || {};
+  const prods = (p.itens || []).map(it => (DB.catalogo || []).find(c => c.id === it.produtoId) ||
+    (DB.catalogo || []).find(c => (c.nome || '').trim().toLowerCase() === String(it.nome).trim().toLowerCase()) || null);
+  const [logoInfo, ...fotos] = await Promise.all([carregarLogoInfo()].concat(prods.map(c =>
+    p.comFotos !== false && c && c.imagens && c.imagens[0] ? carregarImagemInfo(resolverImagem(c.imagens[0])) : Promise.resolve(null))));
+  const t = totaisProposta(p);
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, H = 297, margin = 15;
+  const navy = [27, 42, 74], gold = [201, 148, 10], goldLight = [232, 201, 106], grayLight = [242, 237, 230], darkText = [26, 26, 26];
+  const limiteY = H - 30;
+  const fundo = () => { doc.setFillColor(navy[0], navy[1], navy[2]); doc.rect(0, 0, W, H, 'F'); };
+  const cabecalho = continuacao => {
+    const alt = continuacao ? 26 : 42;
+    doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, alt, 'F');
+    doc.setFillColor(gold[0], gold[1], gold[2]); doc.rect(0, alt, W, 2, 'F');
+    desenharLogo(doc, logoInfo, margin, continuacao ? 4 : 7, continuacao ? 20 : 34, continuacao ? 13 : 22);
+    doc.setFont('times', 'bold'); doc.setTextColor(navy[0], navy[1], navy[2]); doc.setFontSize(continuacao ? 14 : 18);
+    doc.text('PROPOSTA COMERCIAL', W - margin, continuacao ? 12 : 17, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90, 90, 90);
+    doc.text(`Nº ${p.numero}`, W - margin, continuacao ? 19 : 25, { align: 'right' });
+    if (!continuacao) {
+      doc.setFontSize(8.5); doc.setTextColor(150, 150, 150);
+      doc.text(`Emitida em ${dataBR(p.emitidaEm)}  ·  válida até ${dataBR(p.validaAte)}`, W - margin, 33, { align: 'right' });
+    }
+    return alt + 8;
+  };
+  const rodape = () => {
+    const fy = H - 24;
+    doc.setDrawColor(gold[0], gold[1], gold[2]); doc.setLineWidth(0.5); doc.line(margin, fy, W - margin, fy);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(goldLight[0], goldLight[1], goldLight[2]);
+    doc.text('Vangardis Expertise', W / 2, fy + 7, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(215, 215, 215);
+    const zap = whatsappDoCatalogo(dest.tipo === 'lead');
+    doc.text('WhatsApp ' + zap + '  ·  petare@vangardisexpertise.com.br  ·  www.vangardisexpertise.com.br', W / 2, fy + 12, { align: 'center' });
+    doc.text('Rua Alfredo Bufren, 51 — Centro, Curitiba/PR  ·  @vangardisexpertise', W / 2, fy + 16.5, { align: 'center' });
+    doc.setFillColor(gold[0], gold[1], gold[2]); doc.rect(0, H - 3, W, 3, 'F');
+  };
+  const card = (y, h) => { doc.setFillColor(255, 255, 255); doc.setDrawColor(230, 225, 215); doc.setLineWidth(0.3); doc.roundedRect(margin, y, W - margin * 2, h, 2, 2, 'FD'); };
+  const rotulo = (txt, x, y) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(gold[0], gold[1], gold[2]); doc.text(txt.toUpperCase(), x, y); };
+  let pagina = 1;
+  const garantir = (y, h) => { if (y + h <= limiteY) return y; rodape(); doc.addPage(); fundo(); pagina++; return cabecalho(true); };
+
+  fundo();
+  let y = cabecalho(false);
+
+  // Para quem
+  const fone = t0 => { const n = telNorm(t0); return n.length === 11 ? `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}` : n.length === 10 ? `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}` : t0; };
+  const linhaContato = [dest.contato, dest.cidade, dest.whatsapp && fone(dest.whatsapp), dest.email].filter(Boolean).join('  ·  ');
+  card(y, linhaContato ? 19 : 14);
+  rotulo('Para', margin + 5, y + 6);
+  doc.setFont('times', 'bold'); doc.setFontSize(13); doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.text(String(dest.nome || ''), margin + 5, y + 12, { maxWidth: W - margin * 2 - 10 });
+  if (linhaContato) { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 100); doc.text(linhaContato, margin + 5, y + 16.5, { maxWidth: W - margin * 2 - 10 }); }
+  y += (linhaContato ? 19 : 14) + 5;
+
+  // Itens
+  const comFotos = p.comFotos !== false;
+  const xValores = W - margin - 4;
+  (p.itens || []).forEach((it, i) => {
+    const c = prods[i];
+    const h = comFotos ? 32 : 17;
+    y = garantir(y, h);
+    card(y, h);
+    let tx = margin + 5;
+    if (comFotos) {
+      const box = 24, bx = margin + 4, by = y + (h - box) / 2, info = fotos[i];
+      if (info) {
+        let iw = box, ih = box; const r = info.w / info.h; if (r > 1) ih = box / r; else iw = box * r;
+        try { doc.addImage(info.dataUrl, info.dataUrl.indexOf('image/png') !== -1 ? 'PNG' : 'JPEG', bx + (box - iw) / 2, by + (box - ih) / 2, iw, ih); }
+        catch (e) { desenharPlaceholderFoto(doc, bx, by, box, grayLight); }
+      } else desenharPlaceholderFoto(doc, bx, by, box, grayLight);
+      tx = bx + box + 6;
+    }
+    const larg = xValores - 46 - tx;
+    doc.setFont('times', 'bold'); doc.setFontSize(12); doc.setTextColor(navy[0], navy[1], navy[2]);
+    const nomeLinhas = doc.splitTextToSize(String(it.nome), larg).slice(0, 2);
+    doc.text(nomeLinhas, tx, y + 8);
+    let ty = y + 8 + nomeLinhas.length * 4.6;
+    if (c) {
+      const specs = [c.dimensoes && 'Dimensões: ' + c.dimensoes, c.peso && 'Peso: ' + c.peso, c.desc && 'Material: ' + c.desc].filter(Boolean).join('   |   ');
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+      if (specs) { doc.text(doc.splitTextToSize(specs, larg)[0], tx, ty); ty += 4; }
+      if (comFotos && c.descricao && ty < y + h - 4) {
+        doc.setFontSize(8.5); doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+        const lh = 8.5 * 1.15 * 0.3528, larguras = [];
+        for (let by2 = ty; by2 <= y + h - 3.5; by2 += lh) larguras.push(larg);
+        linhasDescricaoCatalogo(doc, c.descricao, larguras).forEach((ln, k) => doc.text(ln, tx, ty + k * lh));
+      }
+    }
+    // Quantidade × valor e subtotal, à direita
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110, 110, 110);
+    doc.text(`${Number(it.qtd).toLocaleString('pt-BR')} un. × ${brlProposta(it.valor)}`, xValores, y + h / 2 - 1.5, { align: 'right' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(gold[0], gold[1], gold[2]);
+    doc.text(brlProposta(it.qtd * it.valor), xValores, y + h / 2 + 4.5, { align: 'right' });
+    y += h + 3;
+  });
+
+  // Totais
+  const linhasTot = [['Subtotal (' + t.qtd.toLocaleString('pt-BR') + ' unidades)', brlProposta(t.subtotal)]];
+  if (t.desconto) linhasTot.push([p.desconto && p.desconto.tipo === 'pct' ? `Desconto (${String(p.desconto.valor).replace('.', ',')}%)` : 'Desconto', '- ' + brlProposta(t.desconto)]);
+  if (t.frete) linhasTot.push(['Frete', brlProposta(t.frete)]);
+  const hTot = 8 + linhasTot.length * 5.5 + 10;
+  y = garantir(y + 2, hTot);
+  card(y, hTot);
+  let ly = y + 8;
+  linhasTot.forEach(([a, b]) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(90, 90, 90);
+    doc.text(a, margin + 5, ly); doc.text(b, xValores, ly, { align: 'right' }); ly += 5.5;
+  });
+  doc.setDrawColor(230, 225, 215); doc.line(margin + 5, ly - 2.5, xValores, ly - 2.5);
+  doc.setFont('times', 'bold'); doc.setFontSize(13); doc.setTextColor(navy[0], navy[1], navy[2]);
+  doc.text('Total da proposta', margin + 5, ly + 4);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(gold[0], gold[1], gold[2]);
+  doc.text(brlProposta(t.total), xValores, ly + 4.5, { align: 'right' });
+  y += hTot + 5;
+
+  // Condições
+  const conds = [
+    ['Pagamento', textoPagamento(p)],
+    ['Prazo de produção', `${p.prazoDias || 15} dias úteis após a aprovação${p.pgto === '5050' ? ' e o pagamento da entrada' : ''}`],
+    ['Frete', textoFrete(p)],
+    ['Validade', `Proposta válida até ${dataBR(p.validaAte)}`]
+  ];
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+  const largCond = W - margin * 2 - 10 - 38;
+  const obsLinhas = p.observacoes ? doc.splitTextToSize(p.observacoes, W - margin * 2 - 10) : [];
+  const hCond = 10 + conds.length * 5.5 + (obsLinhas.length ? 6 + obsLinhas.length * 4.3 : 0) + 2;
+  y = garantir(y, hCond);
+  card(y, hCond);
+  rotulo('Condições comerciais', margin + 5, y + 6);
+  ly = y + 12;
+  conds.forEach(([a, b]) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(navy[0], navy[1], navy[2]); doc.text(a, margin + 5, ly);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(darkText[0], darkText[1], darkText[2]); doc.text(doc.splitTextToSize(b, largCond)[0], margin + 43, ly);
+    ly += 5.5;
+  });
+  if (obsLinhas.length) {
+    rotulo('Observações', margin + 5, ly + 1.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(darkText[0], darkText[1], darkText[2]);
+    doc.text(obsLinhas, margin + 5, ly + 6.5);
+  }
+  y += hCond + 5;
+
+  // Chamada final (só se couber nesta página: não abre uma página só para ela)
+  if (y + 6 <= limiteY) {
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(goldLight[0], goldLight[1], goldLight[2]);
+    doc.text('Para aprovar, é só responder esta proposta pelo WhatsApp ou e-mail. Obrigado pela confiança!', W / 2, y + 4, { align: 'center' });
+  }
+
+  rodape();
+  if (pagina > 1) {
+    for (let i = 1; i <= pagina; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(200, 200, 200); doc.text(`página ${i} de ${pagina}`, W - margin, H - 6, { align: 'right' }); }
+  }
+  const limpo = String(dest.nome || 'cliente').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const nomeArq = `Proposta_${p.numero}_${limpo}.pdf`;
+  doc.save(nomeArq);
+  p.pdfEm = new Date().toISOString();
+  saveDB();
+  const semFoto = comFotos ? (p.itens || []).filter((it, i) => !fotos[i]).map(it => it.nome) : [];
+  showToast(`📄 ${nomeArq} baixado.${p.status === 'rascunho' ? ' Depois de mandar para a loja, clique em "📤 Enviada".' : ''}${semFoto.length ? ' Sem foto: ' + semFoto.join(', ') + '.' : ''}`);
+  return nomeArq;
+}
+
 function renderAll(){
   renderOverview();renderFilamentos();renderProdutos();renderCatalogo();
-  renderPedidos();renderFilaProducao();renderClientes();renderFinanceiro();renderABC();
+  renderPropostas();renderPedidos();renderFilaProducao();renderClientes();renderFinanceiro();renderABC();
   renderProspeccao();
 }
 
