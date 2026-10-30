@@ -2787,9 +2787,13 @@ th.sortable:hover { background: var(--navy-mid); }
         style="width:100%;padding:8px 10px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:13px">
     </div>
     <div class="form-group">
-      <label>Descrição do produto <span class="text-muted" style="font-weight:400;font-size:11px">(texto que aparece no site)</span></label>
+      <div class="flex-between" style="margin:10px 0 6px;gap:8px">
+        <label style="margin:0">Descrição do produto <span class="text-muted" style="font-weight:400;font-size:11px">(texto que aparece no site)</span></label>
+        <button type="button" class="btn btn-sm btn-gold" id="prodCatDescIABtn" onclick="gerarDescricaoProdutoIA()" title="A IA olha as fotos e os dados do cadastro e escreve a descrição">✨ Gerar com IA</button>
+      </div>
       <textarea id="prodCatDescricao" rows="3" placeholder="Escreva uma descrição atrativa sobre o produto: o que é, para que serve, diferenciais, ocasiões de uso..."
         style="width:100%;padding:10px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;line-height:1.5"></textarea>
+      <div id="prodCatDescIAStatus" class="text-muted" style="font-size:11.5px;margin-top:4px;line-height:1.45;display:none"></div>
     </div>
 
     <div style="font-size:12px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 8px">Imagens (até 4 · digite o nome do arquivo)</div>
@@ -7228,6 +7232,80 @@ function previewImagem(idx) {
   }
 }
 
+// ── Descrição do produto escrita pela IA (pelo porteiro, que vê as fotos) ──
+let descricaoAnteriorIA = null;
+
+function limparStatusDescricaoIA() {
+  descricaoAnteriorIA = null;
+  const st = document.getElementById('prodCatDescIAStatus');
+  if (st) { st.style.display = 'none'; st.innerHTML = ''; }
+}
+
+// Foto reduzida (JPEG ~800 px): sai barato para a IA e cabe no pedido
+function fotoParaIA(url) {
+  return carregarImagemInfo(url).then(info => {
+    if (!info) return null;
+    return new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const MAX = 800, esc = Math.min(1, MAX / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+          const cv = document.createElement('canvas');
+          cv.width = Math.max(1, Math.round((img.naturalWidth || 1) * esc)); cv.height = Math.max(1, Math.round((img.naturalHeight || 1) * esc));
+          const ctx = cv.getContext('2d'); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, cv.width, cv.height);
+          ctx.drawImage(img, 0, 0, cv.width, cv.height);
+          res(cv.toDataURL('image/jpeg', 0.85));
+        } catch (e) { res(/^data:image\/jpeg/.test(info.dataUrl) ? info.dataUrl : null); }
+      };
+      img.onerror = () => res(null);
+      img.src = info.dataUrl;
+    });
+  });
+}
+
+async function gerarDescricaoProdutoIA() {
+  const st = document.getElementById('prodCatDescIAStatus');
+  const btn = document.getElementById('prodCatDescIABtn');
+  const campo = document.getElementById('prodCatDescricao');
+  const nome = document.getElementById('prodCatNome').value.trim();
+  const mostrar = html => { st.style.display = 'block'; st.innerHTML = html; };
+  if (!nome) { showToast('⚠️ Preencha o nome do produto primeiro.', 'warning'); return; }
+  if (!waAtivo()) { showToast('⚠️ A descrição é escrita pelo porteiro do WhatsApp: configure-o nos Ajustes do agente.', 'warning'); return; }
+  const urls = getImagensProdCat().map(resolverImagem).filter(Boolean).slice(0, 4);
+  btn.disabled = true; btn.textContent = '⏳ Escrevendo…';
+  mostrar(urls.length ? `⏳ Preparando ${urls.length} foto(s)…` : '⏳ Sem fotos no cadastro: a IA vai usar só os dados.');
+  try {
+    const fotos = (await Promise.all(urls.map(fotoParaIA))).filter(Boolean);
+    mostrar(`⏳ A IA está olhando ${fotos.length ? fotos.length + ' foto(s) e ' : ''}os dados do produto…`);
+    const base = String(waCfg().url || '').trim().replace(/\/+$/, '');
+    const r = await fetch(base + '/descrever-produto', { method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + authToken(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, categorias: [...prodCatCategoriasSel], material: document.getElementById('prodCatDesc').value.trim(),
+        dimensoes: document.getElementById('prodCatDimensoes').value.trim(), peso: document.getElementById('prodCatPeso').value.trim(),
+        descricaoAtual: campo.value.trim(), imagens: fotos }) });
+    if (r.status === 404) throw new Error('atualize o porteiro para a versão 2.8 (ele ainda não escreve descrições)');
+    let j; try { j = await r.json(); } catch (e) { throw new Error('o porteiro respondeu algo inesperado (HTTP ' + r.status + ')'); }
+    if (j.authError) throw new Error('login recusado pelo porteiro');
+    if (!j.ok) throw new Error(j.error || 'não deu certo');
+    if (descricaoAnteriorIA === null) descricaoAnteriorIA = campo.value;
+    campo.value = j.descricao;
+    campo.rows = Math.max(3, Math.min(10, Math.ceil(j.descricao.length / 70) + 2));
+    const faltaram = urls.length - fotos.length;
+    mostrar(`✨ Pronto — revise e clique em <b>Salvar Produto</b>. ${j.observacoes ? escaparHtml(j.observacoes) + '. ' : ''}${faltaram ? `⚠️ ${faltaram} foto(s) não abriram. ` : ''}
+      <a href="#" onclick="gerarDescricaoProdutoIA();return false;" style="color:var(--gold);font-weight:700">Outra versão</a> ·
+      <a href="#" onclick="desfazerDescricaoIA();return false;" style="color:var(--gold);font-weight:700">Desfazer</a>`);
+  } catch (e) {
+    mostrar(`<span style="color:var(--warning)">⚠️ ${escaparHtml(e.message || 'Não consegui gerar agora.')}</span>`);
+  }
+  btn.disabled = false; btn.textContent = '✨ Gerar com IA';
+}
+
+function desfazerDescricaoIA() {
+  if (descricaoAnteriorIA === null) return;
+  document.getElementById('prodCatDescricao').value = descricaoAnteriorIA;
+  limparStatusDescricaoIA();
+}
+
 function getImagensProdCat() {
   const list = document.getElementById('prodCatImagens');
   const urls = [];
@@ -7331,6 +7409,7 @@ function abrirNovoProdutoCatalogo() {
   renderChipsCategorias();
   document.getElementById('prodCatImagens').innerHTML = '';
   addLinhaImagem(); // começa com 1 linha
+  limparStatusDescricaoIA();
   openModal('modalProdCatalogo');
 }
 
@@ -7412,6 +7491,7 @@ function editarProdutoCatalogo(id) {
   const imgs = p.imagens || [];
   if (imgs.length) imgs.forEach(u => addLinhaImagem(u));
   else addLinhaImagem();
+  limparStatusDescricaoIA();
   openModal('modalProdCatalogo');
 }
 
