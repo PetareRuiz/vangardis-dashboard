@@ -5677,6 +5677,52 @@ function whatsappDoCatalogo(paraLead) {
   return (paraLead && cfg.numeroAtual) ? cfg.numeroAtual : '(41) 99613-9000';
 }
 
+// Quebra a descrição nas linhas disponíveis (cada uma com sua largura) e
+// corta no fim da última frase que cabe inteira — nunca no meio de uma frase.
+function linhasDescricaoCatalogo(doc, texto, larguras) {
+  const max = larguras.length;
+  if (!max) return [];
+  const quebrar = t => {
+    const palavras = t.split(' ').filter(Boolean), linhas = [];
+    let atual = '';
+    for (const w of palavras) {
+      const teste = atual ? atual + ' ' + w : w;
+      const larg = larguras[Math.min(linhas.length, max - 1)];
+      if (!atual || doc.getTextWidth(teste) <= larg) atual = teste;
+      else { linhas.push(atual); atual = w; }
+    }
+    if (atual) linhas.push(atual);
+    return linhas;
+  };
+  const limpo = String(texto || '').replace(/\s+/g, ' ').trim();
+  if (!limpo) return [];
+  const fechar = t => /[.!?…]["')\]]?$/.test(t) ? t : t.replace(/[\s,;:—–-]+$/, '') + '.';
+  const tudo = quebrar(fechar(limpo));
+  if (tudo.length <= max) return tudo;
+  // Junta frase por frase enquanto couber
+  const frases = limpo.match(/[^.!?…]+[.!?…]+["')\]]?\s*|[^.!?…]+$/g) || [limpo];
+  let aceito = '';
+  for (const f of frases) {
+    const cand = (aceito + f).trim();
+    if (quebrar(cand).length > max) break;
+    aceito = cand + ' ';
+  }
+  aceito = aceito.trim();
+  if (aceito) return quebrar(fechar(aceito));
+  // A primeira frase sozinha já não cabe: corta na última vírgula ou
+  // ponto e vírgula que caiba e fecha com ponto; em último caso, reticências.
+  const primeira = frases[0];
+  for (let i = primeira.length - 1; i > 20; i--) {
+    if (/[,;:]/.test(primeira[i])) {
+      const cand = fechar(primeira.slice(0, i));
+      if (quebrar(cand).length <= max) return quebrar(cand);
+    }
+  }
+  const linhas = quebrar(primeira).slice(0, max);
+  linhas[max - 1] = linhas[max - 1].replace(/\s*\S*$/, '').replace(/[\s,;:—–-]+$/, '') + '…';
+  return linhas;
+}
+
 async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId, opts) {
   // nomeDestinatario vazio = catálogo genérico do lote, sem loja no cabeçalho
   opts = opts || {};
@@ -5851,8 +5897,14 @@ async function gerarPanfletoPDF(nomeDestinatario, produtos, statusElId, btnId, o
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-      const linhas = doc.splitTextToSize(p.descricao, textW).slice(0, 2);
-      doc.text(linhas, textX, ty);
+      // Usa todo o espaço livre do card (antes eram só 2 linhas) e termina
+      // sempre no fim de uma frase. Onde fica o preço, a linha é mais curta.
+      const lh = 9 * 1.15 * 0.3528;                       // altura da linha em mm
+      const temPreco = comValores && Number(p.valor) > 0;
+      const larguras = [];
+      for (let by = ty; by <= y + cardH - 4.5; by += lh) larguras.push(temPreco && by > y + cardH - 15 ? textW - 30 : textW);
+      const linhas = linhasDescricaoCatalogo(doc, p.descricao, larguras);
+      linhas.forEach((ln, k) => doc.text(ln, textX, ty + k * lh));
     }
 
     if (comValores && Number(p.valor) > 0) {
