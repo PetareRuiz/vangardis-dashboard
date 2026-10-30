@@ -10390,13 +10390,17 @@ async function rascunharPlaybookIA() {
   status.textContent = '⏳ A IA está rascunhando…';
   const exemplo = DB.playbooks.itens.find(x => x.status === 'validado') || PLAYBOOKS_SEMENTE[0];
   const cats = [...new Set((DB.catalogo || []).filter(p => !p.exclusivo).flatMap(p => getCategoriasProduto(p)))];
-  const nomes = (DB.catalogo || []).filter(p => !p.exclusivo).map(p => p.nome).slice(0, 60);
+  // Catálogo inteiro (antes ia só os 60 primeiros cadastrados, e os produtos
+  // novos ficavam de fora), do mais novo para o mais antigo, com a categoria
+  const nomes = (DB.catalogo || []).filter(p => !p.exclusivo && p.nome)
+    .slice().sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, 400)
+    .map(p => { const c = getCategoriasProduto(p); return p.nome + (c.length ? ' [' + c.join(', ') + ']' : ''); });
   const exModelos = MODELOS_SEMENTE[tipo === 'revenda' ? 'pb_foto_revenda' : 'pb_foto_uso'];
   const prompt = `Você ajuda a Vangardis Expertise, fabricante de Curitiba de produtos personalizados por impressão 3D, corte a laser e NFC, a montar um PLAYBOOK de prospecção.
 
 Monte o playbook para: SEGMENTO "${segmento}" × TIPO DE COMPRADOR "${TIPOS_COMPRADOR[tipo].label}" (${TIPOS_COMPRADOR[tipo].desc}).
 
-Isto é um rascunho: escreva hipóteses razoáveis e concretas sobre como esse tipo de negócio compra no Brasil, sem inventar dados ou números de mercado. Use APENAS produtos que existam no catálogo abaixo.
+Isto é um rascunho: escreva hipóteses razoáveis e concretas sobre como esse tipo de negócio compra no Brasil, sem inventar dados ou números de mercado. Use APENAS produtos que existam no catálogo abaixo. Em "produtosFoco", escolha os que mais combinam com esse segmento olhando o nome e a categoria de cada um (a lista vem do mais novo para o mais antigo: os recentes foram cadastrados pensando em segmentos novos), escrevendo o nome exatamente como está.
 
 CATÁLOGO — categorias: ${cats.join(', ') || '(nenhuma)'}
 CATÁLOGO — produtos: ${nomes.join('; ') || '(nenhum)'}
