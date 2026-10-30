@@ -9742,6 +9742,28 @@ Responda com este JSON:
 ATENÇÃO: se a NOVA mensagem confirma uma compra (ex.: "fechado", "qual o pix?", "pode mandar"), o interesse é "alto" e o sinal "fechou" tem de aparecer — não confunda com adiamento.`;
 }
 
+// Como extrairJSON, mas se a resposta veio cortada no meio (limite de
+// tamanho), aproveita o que chegou inteiro e fecha as chaves que faltam.
+function extrairJSONTolerante(txt) {
+  try { return extrairJSON(txt); } catch (e) { /* tenta salvar */ }
+  const t = String(txt).replace(/```json|```/g, '');
+  const ini = t.indexOf('{');
+  if (ini < 0) throw new Error('A IA não devolveu JSON.');
+  const pilha = [], cortes = [];
+  let emTexto = false, escape = false;
+  for (let i = ini; i < t.length; i++) {
+    const c = t[i];
+    if (emTexto) { if (escape) escape = false; else if (c === '\\') escape = true; else if (c === '"') emTexto = false; continue; }
+    if (c === '"') emTexto = true;
+    else if (c === '{' || c === '[') pilha.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') { pilha.pop(); cortes.push({ i, fecha: pilha.slice().reverse().join('') }); }
+  }
+  for (let k = cortes.length - 1; k >= 0 && k >= cortes.length - 300; k--) {
+    try { return JSON.parse(t.slice(ini, cortes[k].i + 1) + cortes[k].fecha); } catch (e) { /* corte anterior */ }
+  }
+  throw new Error('A resposta da IA veio incompleta. Tente de novo.');
+}
+
 function extrairJSON(txt) {
   const limpo = String(txt).replace(/```json|```/g, '').trim();
   const ini = limpo.indexOf('{'), fim = limpo.lastIndexOf('}');
@@ -11694,7 +11716,7 @@ async function rodarDiagnostico() {
     .sort((a, b) => (a.ultimaEntradaEm < b.ultimaEntradaEm ? 1 : -1))
     .slice(0, 25);
 
-  if (!iaPermitida(3)) { status.textContent = ''; return; }
+  if (!iaPermitida(4)) { status.textContent = ''; return; }
   btn.disabled = true;
   status.textContent = `⏳ Lendo ${candidatos.length} conversa(s) e comparando com os números…`;
 
@@ -11714,7 +11736,7 @@ COMO PENSAR:
 - Proponha só o que as conversas sustentam. Se a amostra é pequena, diga que é hipótese no campo "porQue" em vez de inventar certeza.
 - Ataque o que impede a resposta ou o próximo passo: linguagem errada para o tipo de negócio, pergunta difícil de responder, objeção mal tratada, conversa que morreu num agradecimento, data do calendário fora de hora.
 - Prefira poucas propostas boas a muitas genéricas. No máximo 6 propostas de playbook e 2 de regra.
-- Texto proposto no mesmo formato e tamanho do campo atual, em português do Brasil, sem emojis.
+- Nesta etapa NÃO escreva o texto novo dos campos: descreva em "ideia" o que muda (até 40 palavras). O texto completo é escrito depois, campo por campo.
 - NÃO proponha mudar segmento, tipo de comprador nem as palavras de identificação.
 
 NÚMEROS DO PERÍODO (resposta de pessoa; robô não conta):
@@ -11749,25 +11771,49 @@ ${conversaParaPrompt(inters, 6).slice(0, 1400)}`;
 
 Responda SOMENTE com um objeto JSON, sem texto fora dele e sem cercas de código:
 {"resumo":"em até 70 palavras, o que os números e as conversas mostram deste período",
- "propostas":[{"playbook":"id do playbook","campo":"um de: porQueCompram, linguagem, perguntaAbertura, objecoes, calendario, proximoPasso, produtosFoco","proposto":"o texto novo completo desse campo","porQue":"até 30 palavras, citando o que na conversa ou nos números justifica"}],
+ "propostas":[{"playbook":"id do playbook","campo":"um de: porQueCompram, linguagem, perguntaAbertura, objecoes, calendario, proximoPasso, produtosFoco","ideia":"até 40 palavras: o que mudar nesse campo","porQue":"até 30 palavras, citando o que na conversa ou nos números justifica"}],
  "regras":[{"acao":"adicionar"|"trocar"|"remover","indice":numero da regra quando for trocar ou remover,"texto":"a regra nova quando for adicionar ou trocar","porQue":"até 25 palavras"}]}`;
 
   try {
-    const j = extrairJSON(await chamarIA(prompt, 2500));
-    const propostas = (Array.isArray(j.propostas) ? j.propostas : [])
-      .filter(p => p && pbs.some(pb => pb.id === p.playbook) && CAMPOS_PROPOSTA[p.campo] && String(p.proposto || '').trim())
-      .slice(0, 8)
-      .map(p => {
-        const pb = pbs.find(x => x.id === p.playbook);
-        return {
-          playbook: p.playbook, campo: p.campo,
-          atual: String(pb[p.campo] || ''),
-          proposto: String(p.proposto).trim().slice(0, 1200),
-          porQue: String(p.porQue || '').slice(0, 220),
-          status: 'pendente'
-        };
-      })
-      .filter(p => p.proposto !== p.atual);
+    // 1ª etapa: a análise (curta). Numa chamada só, com os textos completos de
+    // cada campo, a resposta passava do limite de tamanho e chegava cortada.
+    const j = extrairJSONTolerante(await chamarIA(prompt, 2000));
+    const ideias = (Array.isArray(j.propostas) ? j.propostas : [])
+      .filter(p => p && pbs.some(pb => pb.id === p.playbook) && CAMPOS_PROPOSTA[p.campo] && String(p.ideia || p.proposto || '').trim())
+      .slice(0, 6);
+
+    // 2ª etapa: o texto novo de cada campo, de 3 em 3
+    const propostas = [];
+    let falharam = 0;
+    for (let i = 0; i < ideias.length; i += 3) {
+      const bloco = ideias.slice(i, i + 3);
+      status.textContent = `⏳ Escrevendo as propostas (${Math.min(i + 3, ideias.length)} de ${ideias.length})…`;
+      const promptTexto = `Você reescreve campos de playbooks de prospecção da Vangardis Expertise (fabricante de Curitiba de produtos personalizados em impressão 3D, corte a laser e NFC, que vende para lojas pelo WhatsApp).
+
+Para cada item abaixo, escreva o TEXTO NOVO COMPLETO do campo, aplicando a ideia. Mantenha o formato e um tamanho parecido com o texto de hoje (objeções: uma por linha, no formato "objeção → como tratar"; linguagem: "Usar: ... Evitar: ..."). Português do Brasil, sem emojis, sem markdown.
+
+${bloco.map((p, k) => {
+  const pb = pbs.find(x => x.id === p.playbook);
+  return `ITEM ${k + 1} — playbook ${pb.segmento} × ${(TIPOS_COMPRADOR[pb.tipoComprador] || {}).label || pb.tipoComprador}, campo "${CAMPOS_PROPOSTA[p.campo]}"
+Texto de hoje: ${String(pb[p.campo] || '(vazio)')}
+Ideia: ${String(p.ideia || p.proposto || '')}
+Por quê: ${String(p.porQue || '')}`;
+}).join('\n\n')}
+
+Responda SOMENTE com JSON, sem texto fora dele: {"textos":[{"item":1,"proposto":"texto completo"}]}`;
+      try {
+        const r = extrairJSONTolerante(await chamarIA(promptTexto, 2000));
+        bloco.forEach((p, k) => {
+          const achado = (r.textos || []).find(x => parseInt(x.item, 10) === k + 1);
+          const pb = pbs.find(x => x.id === p.playbook);
+          const proposto = achado ? String(achado.proposto || '').trim().slice(0, 1200) : '';
+          if (!proposto) { falharam++; return; }
+          if (proposto === String(pb[p.campo] || '')) return;
+          propostas.push({ playbook: p.playbook, campo: p.campo, atual: String(pb[p.campo] || ''), proposto,
+            porQue: String(p.porQue || '').slice(0, 220), status: 'pendente' });
+        });
+      } catch (e) { falharam += bloco.length; }
+    }
 
     const regras = (Array.isArray(j.regras) ? j.regras : [])
       .filter(r => r && ['adicionar','trocar','remover'].indexOf(r.acao) !== -1)
@@ -11789,7 +11835,7 @@ Responda SOMENTE com um objeto JSON, sem texto fora dele e sem cercas de código
     DB.prospeccao.diagnosticos = DB.prospeccao.diagnosticos.slice(0, 12);
     saveDB();
     diagAberto = 0;
-    status.textContent = '';
+    status.textContent = falharam ? `⚠️ ${falharam} proposta(s) não vieram completas e ficaram de fora. As demais estão abaixo.` : '';
     renderDiagnostico();
     renderProspeccao();
   } catch (e) {
