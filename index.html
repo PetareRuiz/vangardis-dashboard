@@ -1536,6 +1536,16 @@ th.sortable:hover { background: var(--navy-mid); }
       </div>
     </div>
     <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>📍 Endereço</label>
+        <input type="text" id="cliEndereco" placeholder="Rua, número — complemento">
+      </div>
+      <div class="form-group">
+        <label>Bairro</label>
+        <input type="text" id="cliBairro" placeholder="Ex: Centro">
+      </div>
+    </div>
+    <div class="form-row">
       <div class="form-group">
         <label>🌐 Site</label>
         <input type="text" id="cliSite" placeholder="www.loja.com.br">
@@ -3137,6 +3147,7 @@ async function entrarNoDashboard() {
   if (!_dashboardIniciado) {
     _dashboardIniciado = true;
     await Promise.all([loadDB(), loadLeads()]);
+    try { recuperarDadosClientesDeLeads(); } catch (e) { /* não impede a entrada */ }
     renderAll();
     iniciarFase1();
     iniciarFase2();
@@ -3659,7 +3670,7 @@ function clearPedidoForm() {
 }
 
 function clearClienteForm() {
-  ['cliNome','cliCidade','cliContato','cliSegmento','cliTipoCliente','cliWhatsapp','cliEmail','cliSite','cliTelefone',
+  ['cliNome','cliCidade','cliContato','cliSegmento','cliTipoCliente','cliWhatsapp','cliEmail','cliSite','cliTelefone','cliEndereco','cliBairro',
    'cliInstagram','cliFacebook','cliTiktok','cliOutraRede','cliFicha'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -4908,6 +4919,8 @@ function addCliente(){
     email:     document.getElementById('cliEmail').value.trim(),
     site:      document.getElementById('cliSite').value.trim(),
     telefone:  document.getElementById('cliTelefone').value.trim(),
+    endereco:  document.getElementById('cliEndereco').value.trim(),
+    bairro:    document.getElementById('cliBairro').value.trim(),
     instagram: document.getElementById('cliInstagram').value.trim(),
     facebook:  document.getElementById('cliFacebook').value.trim(),
     tiktok:    document.getElementById('cliTiktok').value.trim(),
@@ -5087,6 +5100,8 @@ function editarCliente(id) {
   document.getElementById('cliEmail').value     = c.email || '';
   document.getElementById('cliSite').value      = c.site || '';
   document.getElementById('cliTelefone').value  = c.telefone || '';
+  document.getElementById('cliEndereco').value  = c.endereco || '';
+  document.getElementById('cliBairro').value    = c.bairro || '';
   document.getElementById('cliInstagram').value = c.instagram || '';
   document.getElementById('cliFacebook').value  = c.facebook || '';
   document.getElementById('cliTiktok').value    = c.tiktok || '';
@@ -5119,7 +5134,7 @@ function verFichaCliente(id) {
   document.getElementById('fichaClienteBody').innerHTML = `
     <div style="background:var(--navy);color:#fff;padding:16px;border-radius:var(--radius-sm);margin-bottom:16px">
       <div style="font-family:'Playfair Display',serif;font-size:22px;color:var(--gold-light)">${c.nome}</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px">📍 ${c.cidade||'Cidade não informada'}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px">📍 ${[c.endereco, c.bairro, c.cidade].filter(Boolean).map(escaparHtml).join(' — ') || 'Endereço não informado'}</div>
       ${c.contato ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">👤 Contato: ${c.contato}</div>` : ''}
       ${c.segmento ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">🏷️ ${c.segmento}</div>` : ''}
       ${c.tipoCliente ? `<div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:2px">${TIPO_CLIENTE_LABELS[c.tipoCliente]}</div>` : ''}
@@ -8323,12 +8338,13 @@ function efetivarConversao(l) {
       nome: l.nome, cidade: l.cidade || '', contato: l.contato || '',
       segmento: l.segmento || '', tipoCliente: '',
       whatsapp: l.whatsapp || '', email: l.email || '', site: l.site || '',
-      telefone: '', instagram: l.instagram || '', facebook: '', tiktok: '', outraRede: '',
+      endereco: l.endereco || '', bairro: l.bairro || '',
+      telefone: l.telefoneFixo || '', instagram: l.instagram || '', facebook: '', tiktok: '', outraRede: '',
       ficha: fichaFinal
     };
     DB.clientes.push(cli);
     saveDB();
-  }
+  } else if (completarClienteComLead(cli, l)) saveDB();
   // O lead não é apagado — vira registro de conversão (mantém a métrica do funil honesta)
   const jaEra = l.convertido;
   l.estagio = 'cliente';
@@ -8337,6 +8353,31 @@ function efetivarConversao(l) {
   if (!jaEra) registrarHistoricoLead(l, 'Convertido em cliente');
   saveLeads();
   return cli;
+}
+
+// Preenche no cliente o que estiver vazio e o lead souber (endereço, contatos)
+function completarClienteComLead(cli, l) {
+  if (!cli || !l) return false;
+  let mudou = false;
+  [['endereco', 'endereco'], ['bairro', 'bairro'], ['cidade', 'cidade'], ['contato', 'contato'], ['whatsapp', 'whatsapp'],
+   ['email', 'email'], ['site', 'site'], ['instagram', 'instagram'], ['segmento', 'segmento'], ['telefone', 'telefoneFixo']].forEach(([c, k]) => {
+    if (!String(cli[c] || '').trim() && String(l[k] || '').trim()) { cli[c] = l[k]; mudou = true; }
+  });
+  return mudou;
+}
+
+// Clientes que vieram de lead antes desta correção ficaram sem endereço:
+// busca no lead convertido (que continua guardado) e completa
+function recuperarDadosClientesDeLeads() {
+  if (!Array.isArray(DB.clientes) || !LEADS.length) return 0;
+  let n = 0;
+  DB.clientes.forEach(cli => {
+    const nome = String(cli.nome || '').trim().toLowerCase();
+    const l = LEADS.find(x => x.convertido && String(x.nome || '').trim().toLowerCase() === nome);
+    if (l && completarClienteComLead(cli, l)) n++;
+  });
+  if (n) saveDB();
+  return n;
 }
 
 // Depois de converter, o primeiro pedido já abre com o cliente preenchido
