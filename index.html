@@ -13993,6 +13993,10 @@ function htmlEsperandoVoceWA() {
   };
   const lista = [];
   LEADS.forEach(l => {
+    if (l.congelado) return;
+    // "✓ Resolvido": sai da lista até a loja escrever de novo
+    const ultimoFato = [l.ultimaEntradaEm, l.perguntarCatalogoEm].filter(Boolean).sort().pop() || '';
+    if (l.esperaResolvidaEm && l.esperaResolvidaEm >= ultimoFato) return;
     if (l.perguntarCatalogoEm && !(l.ultimaEntradaEm > l.perguntarCatalogoEm) && !(l.ultimaSaidaEm > l.perguntarCatalogoEm) &&
         ['cliente', 'perdido', 'bloqueado'].indexOf(l.estagio) === -1 && new Date(l.perguntarCatalogoEm).getTime() > agora - 7 * 86400000) {
       lista.push({ l, ia: false, txt: 'não respondeu ao catálogo e a janela de 24 h fechou — pergunte pelo app o que achou', data: l.perguntarCatalogoEm });
@@ -14027,6 +14031,7 @@ function htmlEsperandoVoceWA() {
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
           <button class="btn btn-sm btn-ghost" onclick="abrirConversa(${x.l.id})">💬 Conversa</button>
           ${podeDevolver ? `<button class="btn btn-sm btn-gold" onclick="devolverParaIA(${x.l.id})">🤖 Devolver para a IA</button>` : ''}
+          <button class="btn btn-sm btn-ghost" onclick="marcarEsperaResolvida(${x.l.id})" title="Já cuidei desta loja: sai da lista até ela mandar uma mensagem nova">✓ Resolvido</button>
         </div>
       </div>`;
     }).join('')}
@@ -14062,6 +14067,16 @@ function renderStatusIAConversa(l) {
   }
   el.innerHTML = html;
   el.style.display = html ? 'block' : 'none';
+}
+
+function marcarEsperaResolvida(id) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  l.esperaResolvidaEm = new Date().toISOString();
+  registrarHistoricoLead(l, 'Tirado da lista "Precisam de você" (já resolvido)');
+  saveLeads();
+  renderCardAgente();
+  showToast(`✓ ${l.nome} saiu da lista. Volta se a loja mandar uma mensagem nova.`);
 }
 
 function seguimentoDoLead(l) {
