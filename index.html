@@ -510,6 +510,8 @@ th.sortable:hover { background: var(--navy-mid); }
     <div class="nav-item" onclick="goTab('filamentos')"><span class="icon">🧵</span> Filamentos</div>
     <div class="nav-item" onclick="goTab('produtos')"><span class="icon">📦</span> Produtos Acabados</div>
     <div class="nav-item" onclick="goTab('catalogo')"><span class="icon">📖</span> Catálogo de Produtos</div>
+    <div class="nav-section">Desenvolvimento</div>
+    <div class="nav-item" onclick="goTab('ideias')"><span class="icon">💡</span> Ideias de Produto</div>
     <div class="nav-section">Comercial</div>
     <div class="nav-item" onclick="goTab('prospeccao')"><span class="icon">🎯</span> Prospecção</div>
     <div class="nav-item" onclick="goTab('propostas')"><span class="icon">📝</span> Propostas</div>
@@ -887,6 +889,35 @@ th.sortable:hover { background: var(--navy-mid); }
     </div>
 
     <!-- ═══════════════ PEDIDOS ═══════════════ -->
+    <div class="tab" id="tab-ideias">
+      <div id="kpiIdeias" class="kpi-grid" style="margin-bottom:20px"></div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🧩 Lacunas do catálogo</div>
+            <div class="text-muted" style="font-size:12px">Segmentos dos seus leads e clientes, e quantos produtos do catálogo os playbooks deles usam em "Produtos em foco".</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="selecionarLacunasIdeias()" title="Marca até 6 segmentos sem produto, com mais leads">Marcar os sem produto</button>
+            <button class="btn btn-gold btn-sm" id="ideiasGerarBtn" onclick="gerarIdeiasProduto()" disabled>✨ Marque os segmentos na tabela</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="ideiasStatus" class="text-muted" style="font-size:12px;margin-bottom:8px"></div>
+          <div id="ideiasLacunas"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">💡 Ideias sugeridas</div>
+            <div class="text-muted" style="font-size:12px">Busca pronta nos sites de STL: ✅ STLFLIX com uso comercial pela sua assinatura; os demais só como inspiração. 📈 mostra a busca no Google (Brasil, 12 meses).</div>
+          </div>
+        </div>
+        <div class="card-body"><div id="ideiasLista"></div></div>
+      </div>
+    </div>
+
     <div class="tab" id="tab-propostas">
       <div id="kpiPropostas" class="kpi-grid" style="margin-bottom:20px"></div>
       <div class="card">
@@ -3358,7 +3389,7 @@ const TAB_TITLES = {
   overview:'Visão Geral', filamentos:'Filamentos', produtos:'Produtos Acabados',
   catalogo:'Catálogo de Produtos',
   prospeccao:'Prospecção de Clientes',
-  propostas:'Propostas Comerciais', pedidos:'Pedidos', fila:'Fila de Produção', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
+  ideias:'Ideias de Produto', propostas:'Propostas Comerciais', pedidos:'Pedidos', fila:'Fila de Produção', clientes:'Clientes', financeiro:'Receitas & Despesas', abc:'Curva ABC'
 };
 function goTab(id) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -15165,9 +15196,303 @@ async function buscarLogosQuadro() {
   showToast(`🖼️ ${achou} logo(s) encontrada(s) em ${feitos} site(s). Quem não tem fica com as iniciais.`);
 }
 
+// ════════════════════════════════════════════════════
+// IDEIAS DE PRODUTO
+// Onde há leads e clientes mas faltam produtos no catálogo, a IA sugere o que
+// desenvolver, com busca pronta nos repositórios de STL e a tendência no
+// Google Trends. Fica em DB.ideias. Nada entra no catálogo sem você.
+// ════════════════════════════════════════════════════
+const REPOS_STL = [
+  { id: 'stlflix', nome: 'STLFLIX', comercial: true, url: t => 'https://www.google.com/search?q=' + encodeURIComponent('site:stlflix.com ' + t) },
+  { id: 'makerworld', nome: 'MakerWorld', url: t => 'https://makerworld.com/en/search/models?keyword=' + encodeURIComponent(t) },
+  { id: 'printables', nome: 'Printables', url: t => 'https://www.printables.com/search/models?q=' + encodeURIComponent(t) },
+  { id: 'thingiverse', nome: 'Thingiverse', url: t => 'https://www.thingiverse.com/search?type=things&q=' + encodeURIComponent(t) },
+  { id: 'cults', nome: 'Cults3D', url: t => 'https://cults3d.com/en/search?q=' + encodeURIComponent(t) }
+];
+const PROCESSOS_IDEIA = {
+  'impressão 3D': { cor: '#2B5F87', fundo: '#E8F1F8' },
+  'corte a laser': { cor: '#A8651A', fundo: '#FBEFDF' },
+  'NFC': { cor: '#5B4A9C', fundo: '#EEEAF8' },
+  'combinado': { cor: '#2E7D52', fundo: '#E5F2EA' }
+};
+let ideiasSelSeg = new Set();
+let ideiasComparar = new Set();
+let ideiasFiltro = 'ativas';
+let ideiasGerando = false;
+
+function dadosIdeias() {
+  if (!DB.ideias || typeof DB.ideias !== 'object') DB.ideias = {};
+  if (!DB.ideias.segmentos) DB.ideias.segmentos = {};
+  return DB.ideias;
+}
+
+// Produtos do catálogo que os playbooks do segmento usam como "em foco"
+function produtosDoSegmento(segNorm) {
+  const pbs = ((DB.playbooks && DB.playbooks.itens) || []).filter(pb => {
+    const s = normalizarTxt(pb.segmento);
+    return s === segNorm || (' ' + segNorm + ' ').indexOf(' ' + s + ' ') !== -1 || (' ' + s + ' ').indexOf(' ' + segNorm + ' ') !== -1;
+  });
+  const foco = normalizarTxt(pbs.map(pb => pb.produtosFoco || '').join(' | '));
+  if (!foco) return { produtos: [], temPlaybook: pbs.length > 0 };
+  const produtos = (DB.catalogo || []).filter(c => !c.exclusivo && c.nome && foco.indexOf(normalizarTxt(c.nome)) !== -1);
+  return { produtos, temPlaybook: pbs.length > 0 };
+}
+
+function lacunasCatalogo() {
+  const grupos = {};
+  const add = (seg, campo) => {
+    const s = String(seg || '').trim();
+    if (!s) return;
+    const k = normalizarTxt(s);
+    const g = grupos[k] = grupos[k] || { chave: k, grafias: {}, leads: 0, clientes: 0, exemplos: [] };
+    g.grafias[s] = (g.grafias[s] || 0) + 1;
+    g[campo]++;
+  };
+  LEADS.filter(l => !l.congelado && !l.convertido && ['perdido', 'bloqueado', 'cliente'].indexOf(l.estagio) === -1)
+    .forEach(l => { add(l.segmento, 'leads'); const g = grupos[normalizarTxt(l.segmento || '')]; if (g && g.exemplos.length < 8) g.exemplos.push(l.nome); });
+  (DB.clientes || []).forEach(c => add(c.segmento, 'clientes'));
+  const salvos = dadosIdeias().segmentos;
+  return Object.values(grupos).map(g => {
+    g.segmento = Object.entries(g.grafias).sort((a, b) => b[1] - a[1])[0][0];
+    const r = produtosDoSegmento(g.chave);
+    g.produtos = r.produtos; g.temPlaybook = r.temPlaybook;
+    const s = salvos[g.chave];
+    g.ideias = s ? (s.ideias || []).filter(i => i.status !== 'descartada').length : 0;
+    g.nivel = g.produtos.length === 0 ? 0 : g.produtos.length < 3 ? 1 : 2;
+    return g;
+  }).sort((a, b) => a.nivel - b.nivel || (b.leads + b.clientes) - (a.leads + a.clientes) || a.segmento.localeCompare(b.segmento, 'pt-BR'));
+}
+
+function renderIdeias() {
+  const el = document.getElementById('ideiasLacunas');
+  if (!el) return;
+  const lac = lacunasCatalogo();
+  const sem = lac.filter(g => g.nivel === 0);
+  const todas = Object.values(dadosIdeias().segmentos).flatMap(s => (s.ideias || []).map(i => ({ ...i, segmento: s.segmento })));
+  const kpi = document.getElementById('kpiIdeias');
+  if (kpi) kpi.innerHTML = `
+    <div class="kpi-card" style="border-top:3px solid #A33B3B"><div class="kpi-icon">🧩</div><div class="kpi-label">Segmentos sem produto</div>
+      <div class="kpi-value">${sem.length}</div><div class="kpi-sub">${sem.reduce((s, g) => s + g.leads, 0)} lead(s) esperando algo para oferecer</div></div>
+    <div class="kpi-card" style="border-top:3px solid var(--gold)"><div class="kpi-icon">💡</div><div class="kpi-label">Ideias guardadas</div>
+      <div class="kpi-value">${todas.filter(i => i.status !== 'descartada').length}</div><div class="kpi-sub">sugeridas pela IA</div></div>
+    <div class="kpi-card" style="border-top:3px solid #2E7D52"><div class="kpi-icon">🛠️</div><div class="kpi-label">A desenvolver</div>
+      <div class="kpi-value">${todas.filter(i => i.status === 'desenvolver').length}</div><div class="kpi-sub">marcadas por você</div></div>`;
+
+  const nivel = [
+    { t: '🔴 sem produto', cor: '#A33B3B' }, { t: '🟡 poucos', cor: '#8A6508' }, { t: '🟢 coberto', cor: '#2E7D52' }];
+  el.innerHTML = lac.length ? `
+    <div class="table-wrap"><table>
+      <thead><tr><th style="width:30px"></th><th>Segmento</th><th>Leads</th><th>Clientes</th><th>Produtos em foco</th><th>Ideias</th><th>Situação</th></tr></thead>
+      <tbody>${lac.slice(0, 60).map(g => `<tr>
+        <td><input type="checkbox" ${ideiasSelSeg.has(g.chave) ? 'checked' : ''} onchange="this.checked?ideiasSelSeg.add('${g.chave}'):ideiasSelSeg.delete('${g.chave}');atualizarBotaoIdeias()"></td>
+        <td><strong style="color:var(--navy)">${escaparHtml(g.segmento)}</strong>${g.temPlaybook ? '' : ' <span class="text-muted" style="font-size:10.5px">· sem playbook</span>'}</td>
+        <td>${g.leads}</td><td>${g.clientes}</td>
+        <td title="${escaparHtml(g.produtos.map(p => p.nome).join(', '))}">${g.produtos.length ? g.produtos.length + ' · <span class="text-muted" style="font-size:11px">' + escaparHtml(g.produtos.slice(0, 2).map(p => p.nome).join(', ')) + (g.produtos.length > 2 ? '…' : '') + '</span>' : '—'}</td>
+        <td>${g.ideias ? `<a href="#ideia_${g.chave.replace(/\s+/g, '_')}" style="color:var(--gold);font-weight:700">${g.ideias}</a>` : '—'}</td>
+        <td style="color:${nivel[g.nivel].cor};font-weight:700;white-space:nowrap">${nivel[g.nivel].t}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>` : '<div class="text-muted" style="padding:24px;text-align:center">Nenhum lead ou cliente com segmento preenchido ainda.</div>';
+  atualizarBotaoIdeias();
+  renderListaIdeias();
+}
+
+function atualizarBotaoIdeias() {
+  const b = document.getElementById('ideiasGerarBtn');
+  if (!b) return;
+  b.disabled = !ideiasSelSeg.size || ideiasGerando;
+  b.textContent = ideiasGerando ? '⏳ A IA está pensando…' : ideiasSelSeg.size ? `✨ Sugerir produtos para ${ideiasSelSeg.size} segmento(s)` : '✨ Marque os segmentos na tabela';
+}
+
+function selecionarLacunasIdeias() {
+  lacunasCatalogo().filter(g => g.nivel === 0 && g.leads > 0).slice(0, 6).forEach(g => ideiasSelSeg.add(g.chave));
+  renderIdeias();
+}
+
+async function gerarIdeiasProduto() {
+  const lac = lacunasCatalogo().filter(g => ideiasSelSeg.has(g.chave));
+  if (!lac.length || ideiasGerando) return;
+  if (!iaPermitida(Math.ceil(lac.length / 3))) return;
+  ideiasGerando = true; atualizarBotaoIdeias();
+  const st = document.getElementById('ideiasStatus');
+  const catalogo = (DB.catalogo || []).filter(c => c.nome).slice().sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, 300)
+    .map(c => { const k = getCategoriasProduto(c); return c.nome + (k.length ? ' [' + k.join(', ') + ']' : ''); });
+  const salvos = dadosIdeias().segmentos;
+  let feitos = 0, falhas = 0;
+  for (let i = 0; i < lac.length; i += 3) {
+    const bloco = lac.slice(i, i + 3);
+    st.textContent = `⏳ Pensando em ${bloco.map(g => g.segmento).join(', ')}…`;
+    const prompt = `Você é o desenvolvedor de produtos da Vangardis Expertise, fabricante em Curitiba que vende NO ATACADO para lojas e empresas de todo o Brasil. A Vangardis fabrica com: impressão 3D (seis impressoras Bambu Lab; PLA, PETG e TPU), corte e gravação a laser (MDF, acrílico) e etiquetas NFC embutidas. Produtos personalizados com nome ou logo da loja são um diferencial.
+
+TAREFA: para cada segmento abaixo, sugira 4 produtos NOVOS que as lojas desse segmento comprariam da Vangardis para revender ou usar (presentear clientes, decorar, expor). A Vangardis já tem leads e clientes nesses segmentos, mas faltam produtos para oferecer.
+
+REGRAS:
+- Viáveis com os processos acima, com custo e tempo de produção razoáveis para atacado.
+- NÃO repita produtos que já estão no catálogo (lista abaixo) nem as ideias já guardadas.
+- Pense no que gira no balcão desse tipo de loja e em datas comemorativas do Brasil.
+- Use os nomes das lojas como pista do subsegmento (ex.: floricultura que também vende presentes).
+
+CATÁLOGO ATUAL (mais novos primeiro): ${catalogo.join('; ') || '(vazio)'}
+
+SEGMENTOS:
+${bloco.map(g => `- "${g.segmento}": ${g.leads} lead(s), ${g.clientes} cliente(s). Exemplos de lojas: ${g.exemplos.join(', ') || '—'}.${salvos[g.chave] ? ' Ideias já guardadas: ' + salvos[g.chave].ideias.map(x => x.nome).join(', ') + '.' : ''}`).join('\n')}
+
+Responda SOMENTE com JSON, sem texto fora dele:
+{"segmentos":[{"segmento":"nome exatamente como acima","ideias":[{"nome":"nome curto do produto","porque":"até 25 palavras: por que essa loja compraria e como vende","processo":"impressão 3D|corte a laser|NFC|combinado","busca_en":"2 a 4 palavras em inglês para buscar o modelo em sites de STL","busca_pt":"2 a 4 palavras em português","trends":"1 a 3 palavras que um consumidor brasileiro digitaria no Google","personalizavel":true}]}]}`;
+    try {
+      const j = extrairJSONTolerante(await chamarIA(prompt, 2000));
+      (j.segmentos || []).forEach(sj => {
+        const g = bloco.find(x => normalizarTxt(x.segmento) === normalizarTxt(sj.segmento || '')) || (bloco.length === 1 ? bloco[0] : null);
+        if (!g) return;
+        const s = salvos[g.chave] = salvos[g.chave] || { segmento: g.segmento, ideias: [] };
+        s.segmento = g.segmento; s.em = new Date().toISOString();
+        // não guarda o que já está no catálogo nem ideia repetida
+        const nomes = new Set(s.ideias.map(x => normalizarTxt(x.nome)).concat((DB.catalogo || []).map(c => normalizarTxt(c.nome || ''))));
+        (sj.ideias || []).slice(0, 5).forEach(x => {
+          const nome = String(x.nome || '').trim().slice(0, 80);
+          if (!nome || nomes.has(normalizarTxt(nome))) return;
+          nomes.add(normalizarTxt(nome));
+          s.ideias.push({ id: 'id_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), nome,
+            porque: String(x.porque || '').slice(0, 240), processo: PROCESSOS_IDEIA[x.processo] ? x.processo : 'impressão 3D',
+            buscaEn: String(x.busca_en || nome).slice(0, 60), buscaPt: String(x.busca_pt || nome).slice(0, 60),
+            trends: String(x.trends || x.busca_pt || nome).slice(0, 40), personalizavel: !!x.personalizavel,
+            status: 'nova', em: new Date().toISOString() });
+        });
+        feitos++;
+      });
+    } catch (e) { falhas += bloco.length; }
+  }
+  ideiasGerando = false;
+  saveDB();
+  ideiasSelSeg.clear();
+  st.textContent = falhas ? `⚠️ ${falhas} segmento(s) ficaram sem resposta da IA. Tente de novo só com eles.` : `✅ Ideias prontas para ${feitos} segmento(s). Estão logo abaixo.`;
+  renderIdeias();
+}
+
+function renderListaIdeias() {
+  const el = document.getElementById('ideiasLista');
+  if (!el) return;
+  const segs = Object.entries(dadosIdeias().segmentos).sort((a, b) => ((a[1].em || '') < (b[1].em || '') ? 1 : -1));
+  const visivel = i => ideiasFiltro === 'todas' || (ideiasFiltro === 'ativas' ? i.status !== 'descartada' : i.status === ideiasFiltro);
+  const filtros = [['ativas', 'Ativas'], ['desenvolver', '🛠️ A desenvolver'], ['descartada', 'Descartadas'], ['todas', 'Todas']]
+    .map(([k, l]) => `<div class="cat-tab ${ideiasFiltro === k ? 'active' : ''}" onclick="ideiasFiltro='${k}';renderListaIdeias()">${l}</div>`).join('');
+  const blocos = segs.map(([k, s]) => {
+    const ideias = (s.ideias || []).filter(visivel);
+    if (!ideias.length) return '';
+    return `<div id="ideia_${k.replace(/\s+/g, '_')}" style="margin-bottom:18px">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${escaparHtml(s.segmento)}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px">${ideias.map(i => cardIdeia(k, i)).join('')}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div class="cat-tabs" style="margin-bottom:10px">${filtros}</div>
+    <div id="ideiasCompararBar"></div>
+    ${blocos || '<div class="text-muted" style="padding:20px;text-align:center">Nenhuma ideia aqui ainda. Marque segmentos na tabela acima e clique em "✨ Sugerir produtos".</div>'}`;
+  renderCompararIdeias();
+}
+
+function cardIdeia(seg, i) {
+  const pr = PROCESSOS_IDEIA[i.processo] || PROCESSOS_IDEIA['impressão 3D'];
+  const links = REPOS_STL.map(r => `<a href="${r.url(i.buscaEn)}" target="_blank" rel="noopener"
+      title="${r.comercial ? 'Uso comercial liberado pela sua assinatura vitalícia' : 'Só inspiração: depende de licença comercial ou não é livre'}"
+      style="font-size:11px;font-weight:700;text-decoration:none;border-radius:12px;padding:2px 8px;${r.comercial ? 'background:#E5F2EA;color:#2E7D52;border:1px solid #BFDCCB' : 'background:#fff;color:var(--gray-600);border:1px solid var(--gray-200)'}">${r.comercial ? '✅ ' : ''}${r.nome}</a>`).join(' ');
+  const estado = i.status === 'desenvolver' ? '<span style="color:#2E7D52;font-weight:700;font-size:11px">🛠️ a desenvolver</span>'
+    : i.status === 'descartada' ? '<span class="text-muted" style="font-size:11px">descartada</span>' : '';
+  return `<div style="background:#fff;border:1px solid var(--gray-200);border-radius:10px;padding:11px 12px;${i.status === 'descartada' ? 'opacity:.55' : ''}">
+    <div class="flex-between" style="gap:8px;align-items:flex-start">
+      <strong style="color:var(--navy);font-size:13.5px;line-height:1.3">${escaparHtml(i.nome)}</strong>
+      <span style="white-space:nowrap;font-size:10.5px;font-weight:700;border-radius:10px;padding:1px 7px;background:${pr.fundo};color:${pr.cor}">${escaparHtml(i.processo)}</span>
+    </div>
+    <div style="font-size:12px;color:var(--gray-600);line-height:1.45;margin:5px 0 8px">${escaparHtml(i.porque)}${i.personalizavel ? ' <span title="Dá para personalizar com nome ou logo">✨ personalizável</span>' : ''}</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">${links}</div>
+    <div class="text-muted" style="font-size:10.5px;margin-bottom:8px">✅ uso comercial · demais: só inspiração (licença comercial à parte ou não livres)</div>
+    <div class="flex-between" style="gap:6px;flex-wrap:wrap">
+      <label style="font-size:11.5px;cursor:pointer" title="Comparar a busca no Google (até 5)"><input type="checkbox" ${ideiasComparar.has(i.id) ? 'checked' : ''} onchange="marcarCompararIdeia('${i.id}',this.checked)"> 📈 comparar “${escaparHtml(i.trends)}”</label>
+      <span>${estado}</span>
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">
+      <button class="btn btn-sm btn-ghost" onclick="verTendenciaIdeia('${i.id}')">📈 Tendência</button>
+      ${i.status !== 'desenvolver' ? `<button class="btn btn-sm btn-ghost" onclick="statusIdeia('${seg}','${i.id}','desenvolver')">🛠️ Vou desenvolver</button>` : ''}
+      <button class="btn btn-sm btn-ghost" onclick="cadastrarIdeiaNoCatalogo('${seg}','${i.id}')" title="Abre o cadastro do catálogo já com o nome">➕ Catálogo</button>
+      ${i.status !== 'descartada' ? `<button class="btn btn-sm btn-ghost" onclick="statusIdeia('${seg}','${i.id}','descartada')" title="Descartar">✕</button>`
+        : `<button class="btn btn-sm btn-ghost" onclick="statusIdeia('${seg}','${i.id}','nova')">↩ Recuperar</button>`}
+    </div>
+    <div id="trend_${i.id}"></div>
+  </div>`;
+}
+
+function acharIdeia(id) {
+  for (const s of Object.values(dadosIdeias().segmentos)) { const i = (s.ideias || []).find(x => x.id === id); if (i) return i; }
+  return null;
+}
+
+function statusIdeia(seg, id, st) {
+  const s = dadosIdeias().segmentos[seg];
+  const i = s && (s.ideias || []).find(x => x.id === id);
+  if (!i) return;
+  i.status = st;
+  if (st === 'descartada') ideiasComparar.delete(id);
+  saveDB();
+  renderIdeias();
+}
+
+function cadastrarIdeiaNoCatalogo(seg, id) {
+  const i = acharIdeia(id);
+  if (!i) return;
+  if (i.status === 'nova') { i.status = 'desenvolver'; saveDB(); renderIdeias(); }
+  abrirNovoProdutoCatalogo();
+  document.getElementById('prodCatNome').value = i.nome;
+  showToast('➕ Cadastro aberto com o nome da ideia. Complete fotos, material e medidas quando o produto existir.');
+}
+
+// ── Google Trends: o gráfico oficial incorporado (sem custo) ──
+function urlTrendsEmbed(termos) {
+  const req = { comparisonItem: termos.map(k => ({ keyword: k, geo: 'BR', time: 'today 12-m' })), category: 0, property: '' };
+  const eq = 'q=' + termos.map(encodeURIComponent).join(',') + '&geo=BR&date=today 12-m';
+  return 'https://trends.google.com/trends/embed/explore/TIMESERIES?req=' + encodeURIComponent(JSON.stringify(req)) + '&tz=180&eq=' + encodeURIComponent(eq);
+}
+function urlTrendsAbrir(termos) {
+  return 'https://trends.google.com.br/trends/explore?geo=BR&date=today%2012-m&q=' + termos.map(encodeURIComponent).join(',');
+}
+function htmlTrends(termos, altura) {
+  return `<div style="margin-top:8px;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;background:#fff">
+    <iframe src="${urlTrendsEmbed(termos)}" title="Google Trends" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+      style="width:100%;height:${altura || 330}px;border:0;display:block"></iframe>
+    <div class="text-muted" style="font-size:10.5px;padding:5px 8px;border-top:1px solid var(--gray-100)">Interesse de busca no Brasil, últimos 12 meses (100 = pico). Se o gráfico não aparecer, o Google limitou a exibição:
+      <a href="${urlTrendsAbrir(termos)}" target="_blank" rel="noopener" style="color:var(--gold);font-weight:700">abrir no Google Trends ↗</a></div>
+  </div>`;
+}
+
+function verTendenciaIdeia(id) {
+  const i = acharIdeia(id);
+  const el = document.getElementById('trend_' + id);
+  if (!i || !el) return;
+  el.innerHTML = el.innerHTML ? '' : htmlTrends([i.trends], 300);
+}
+
+function marcarCompararIdeia(id, marcar) {
+  if (marcar && ideiasComparar.size >= 5) { showToast('⚠️ O Google Trends compara no máximo 5 termos.', 'warning'); renderListaIdeias(); return; }
+  if (marcar) ideiasComparar.add(id); else ideiasComparar.delete(id);
+  renderCompararIdeias();
+}
+
+function renderCompararIdeias(abrir) {
+  const el = document.getElementById('ideiasCompararBar');
+  if (!el) return;
+  const termos = [...ideiasComparar].map(acharIdeia).filter(Boolean).map(i => i.trends);
+  const unicos = termos.filter((t, k) => termos.findIndex(x => normalizarTxt(x) === normalizarTxt(t)) === k);
+  if (!unicos.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div style="background:#FFFBEF;border:1.5px solid #E8C872;border-radius:8px;padding:10px 12px;margin-bottom:14px">
+    <div class="flex-between" style="gap:8px;flex-wrap:wrap">
+      <span style="font-size:12.5px"><b>📈 Comparar no Google:</b> ${unicos.map(escaparHtml).join(' × ')}</span>
+      <span style="display:flex;gap:6px"><button class="btn btn-sm btn-gold" onclick="renderCompararIdeias(true)">Ver gráfico</button>
+      <button class="btn btn-sm btn-ghost" onclick="ideiasComparar.clear();renderListaIdeias()">Limpar</button></span>
+    </div>
+    ${abrir ? htmlTrends(unicos, 360) : ''}
+  </div>`;
+}
+
 function renderAll(){
   renderOverview();renderFilamentos();renderProdutos();renderCatalogo();
-  renderPropostas();renderPedidos();renderFilaProducao();renderClientes();renderFinanceiro();renderABC();
+  renderIdeias();renderPropostas();renderPedidos();renderFilaProducao();renderClientes();renderFinanceiro();renderABC();
   renderProspeccao();
 }
 
