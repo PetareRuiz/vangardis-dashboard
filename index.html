@@ -817,6 +817,10 @@ th.sortable:hover { background: var(--navy-mid); }
         <div class="card-header">
           <div class="card-title">Leads</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <span id="visaoLeadsBtns" style="display:inline-flex;gap:0;border-radius:8px;overflow:hidden">
+              <button data-v="lista" class="btn btn-sm btn-gold" onclick="mudarVisaoLeads('lista')" title="Ver os leads em tabela">☰ Lista</button>
+              <button data-v="quadro" class="btn btn-sm btn-ghost" onclick="mudarVisaoLeads('quadro')" title="Ver o funil em colunas, com cards">▦ Quadro</button>
+            </span>
             <button class="btn btn-ghost" onclick="abrirMetricas()" title="Taxa de resposta por versão de playbook, segmento e tom">📊 Resultados</button>
             <button class="btn btn-ghost" onclick="abrirJanelas()" title="Em que mês abordar para cada data comemorativa">📅 Calendário</button>
             <button class="btn btn-ghost" onclick="abrirPlaybooks()" title="Playbooks por tipo de negócio">📘 Playbooks</button>
@@ -861,6 +865,7 @@ th.sortable:hover { background: var(--navy-mid); }
             <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="limparSelecaoLeads()">Limpar seleção</button>
           </div>
 
+          <div id="leadsQuadro" style="display:none"></div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -8626,6 +8631,8 @@ function renderFunilTrilha() {
 }
 
 function filtrarPorEstagio(k) {
+  // No quadro, clicar num estágio do funil abre a lista filtrada (ex.: Descoberto, Perdido)
+  if (typeof visaoLeads !== 'undefined' && visaoLeads === 'quadro') visaoLeads = 'lista';
   const sel = document.getElementById('leadFiltroEstagio');
   sel.value = (sel.value === k) ? '' : k;
   limparSelecaoLeads();
@@ -8675,6 +8682,20 @@ function renderLeads() {
   const termo = (document.getElementById('leadBusca').value || '').toLowerCase();
   const fEst = document.getElementById('leadFiltroEstagio').value;
   const fCid = document.getElementById('leadFiltroCidade').value;
+  aplicarVisaoLeads();
+  if (visaoLeads === 'quadro') {
+    // No quadro o estágio é a coluna: vale a busca e a cidade
+    renderQuadroLeads(leadsDaVisao().filter(l => {
+      if (fCid && l.cidade !== fCid) return false;
+      if (termo) {
+        const campos = [l.nome,l.cidade,l.bairro,l.contato,l.segmento,l.whatsapp,l.email,l.ficha].filter(Boolean).join(' ').toLowerCase();
+        if (!campos.includes(termo)) return false;
+      }
+      return true;
+    }));
+    atualizarBarraLote();
+    return;
+  }
 
   let data = leadsDaVisao().filter(l => {
     if (fEst && l.estagio !== fEst) return false;
@@ -9946,6 +9967,8 @@ function aplicarLeituraNoLead(l, j) {
     sinais: (j.sinais || []).filter(k => SINAIS_VENDA[k]),
     em: new Date().toISOString()
   };
+  // A IA move o card sozinha quando a leitura indica um avanço seguro
+  moverPelaLeitura(l, j);
   // Agente de vendas: soma os sinais de compra e dispara o alerta
   if (!j.e_robo) {
     // Com a IA conversando, quem decide a hora da negociação é ela (passa para você);
@@ -9958,6 +9981,25 @@ function aplicarLeituraNoLead(l, j) {
       showToast(`🔥 Sinal de venda em ${l.nome}: ${alerta.sinais.map(k => SINAIS_VENDA[k].label).join(', ')}`, 'warning');
     }
   }
+}
+
+// Só avança (nunca volta), só dentro do funil ativo (Contatado → Em conversa → Proposta)
+// e nunca tira da IA uma loja que ela está conduzindo — essa a própria IA passa
+// para você quando chega a negociação. Cliente, Perdido e Não perturbar continuam
+// sendo sugestão para você confirmar.
+function moverPelaLeitura(l, j) {
+  const sug = j && j.estagio_sugerido;
+  if (!sug || j.e_robo || ['conversa', 'proposta'].indexOf(sug) === -1) return false;
+  const atual = ESTAGIOS_LEAD[l.estagio], alvo = ESTAGIOS_LEAD[sug];
+  if (!atual || !alvo || alvo.ordem <= atual.ordem || ['contatado', 'conversa'].indexOf(l.estagio) === -1) return false;
+  if (sug === 'proposta' && waAtivo() && waCfg().modo === 'conversa' && leadComIA(l)) return false;
+  const de = atual.label;
+  l.estagio = sug;
+  l.estagioPelaIA = { em: new Date().toISOString(), de };
+  registrarHistoricoLead(l, `Estágio: ${de} → ${alvo.label} (movido pela IA ao ler a conversa)`);
+  if (l.ultimaLeitura) l.ultimaLeitura.estagio_sugerido = '';
+  j.estagio_sugerido = '';
+  return true;
 }
 
 function renderLeituraIA(l, j) {
@@ -13091,6 +13133,7 @@ function salvarContatosSites() {
     }
     if (it.email && it.email !== l.email) { l.email = it.email; mud.push('e-mail ' + it.email); }
     if (it.ig && !l.instagram) { l.instagram = it.ig; mud.push('Instagram ' + it.ig); }
+    if (it.r && it.r.logo && !l.logoUrl) { l.logoUrl = it.r.logo; l.logoTentadoEm = new Date().toISOString(); }
     if (mud.length) { registrarHistoricoLead(l, 'Do site: ' + mud.join(', ')); n++; }
   });
   sitesRodando = false;
@@ -14884,6 +14927,242 @@ async function gerarPropostaPDF(id) {
   saveDB();
   showToast(`📄 ${nomeArq} baixado.${p.status === 'rascunho' ? ' Depois de mandar para a loja, clique em "📤 Enviada".' : ''}`);
   return nomeArq;
+}
+
+// ════════════════════════════════════════════════════
+// QUADRO DE LEADS (funil em colunas)
+// Qualificado → Contatado → Em conversa → Proposta. Cada card diz de quem é a
+// vez; arrastar (ou o menu do card) muda o estágio com as mesmas regras da ficha.
+// ════════════════════════════════════════════════════
+const COLUNAS_QUADRO = ['qualificado', 'contatado', 'conversa', 'proposta'];
+const QUADRO_POR_COLUNA = 40;
+let visaoLeads = (() => { try { return localStorage.getItem('vangardis_visao_leads') || 'lista'; } catch (e) { return 'lista'; } })();
+let quadroLimite = {};
+let quadroArrastando = null;
+
+function mudarVisaoLeads(v) {
+  visaoLeads = v === 'quadro' ? 'quadro' : 'lista';
+  try { localStorage.setItem('vangardis_visao_leads', visaoLeads); } catch (e) { /* só conveniência */ }
+  limparSelecaoLeads();
+  renderLeads();
+}
+
+function aplicarVisaoLeads() {
+  const quadro = visaoLeads === 'quadro';
+  const tabela = document.querySelector('#cardLeads .table-wrap');
+  const q = document.getElementById('leadsQuadro');
+  if (tabela) tabela.style.display = quadro ? 'none' : '';
+  if (q) q.style.display = quadro ? 'block' : 'none';
+  const fe = document.getElementById('leadFiltroEstagio');
+  if (fe) fe.style.display = quadro ? 'none' : '';
+  document.querySelectorAll('#visaoLeadsBtns button').forEach(b => {
+    const ativo = b.dataset.v === visaoLeads;
+    b.className = 'btn btn-sm ' + (ativo ? 'btn-gold' : 'btn-ghost');
+  });
+}
+
+// Cor e iniciais do avatar (quando não há logo)
+function corDoTexto(t) {
+  const paleta = ['#3D6E9C', '#A8651A', '#2E7D52', '#7A5B12', '#8A3B6B', '#2B7A7A', '#5B4A9C', '#9C4A3D'];
+  let h = 0; String(t || '').split('').forEach(c => { h = (h * 31 + c.charCodeAt(0)) >>> 0; });
+  return paleta[h % paleta.length];
+}
+function iniciaisDe(nome) {
+  const p = String(nome || '?').replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(w => w.length > 1 || /\d/.test(w));
+  return ((p[0] || '?')[0] + (p[1] ? p[1][0] : (p[0] || '')[1] || '')).toUpperCase();
+}
+function avatarLead(l, tam) {
+  tam = tam || 34;
+  const ini = escaparHtml(iniciaisDe(l.nome));
+  const cor = corDoTexto(l.segmento || l.nome);
+  const base = `width:${tam}px;height:${tam}px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:${Math.round(tam * 0.38)}px;font-weight:700;color:#fff;background:${cor};overflow:hidden`;
+  if (l.logoUrl) {
+    return `<div style="${base};background:#fff;border:1px solid var(--gray-200)"><img src="${escaparHtml(l.logoUrl)}" alt="" referrerpolicy="no-referrer" loading="lazy"
+      style="width:100%;height:100%;object-fit:contain" onerror="this.parentNode.style.background='${cor}';this.parentNode.style.border='0';this.parentNode.innerHTML='${ini}'"></div>`;
+  }
+  return `<div style="${base}">${ini}</div>`;
+}
+
+// Situação do lead em uma etiqueta: de quem é a vez
+function situacaoCardLead(l) {
+  const c = waCfg();
+  if (l.alertaVenda && !l.alertaVenda.visto && !l.alertaVenda.devolvido) return { t: '🔥 venda perto', cor: '#A33B3B', fundo: '#FBE7E4' };
+  const respondeu = l.ultimaEntradaEm && !(l.ultimaSaidaEm && l.ultimaSaidaEm >= l.ultimaEntradaEm);
+  if (waAtivo() && c.modo === 'conversa' && leadComIA(l, c)) return respondeu
+    ? { t: '🤖 IA respondendo', cor: '#2B5F87', fundo: '#E8F1F8' } : { t: '🤖 com a IA', cor: '#2B5F87', fundo: '#E8F1F8' };
+  if (respondeu) return { t: '💬 loja respondeu', cor: '#8A6508', fundo: '#FBF1D6' };
+  if (l.iaPassado || l.iaAssumido || (l.alertaVenda && !l.alertaVenda.devolvido)) return { t: '✋ com você', cor: '#7A5B12', fundo: '#F6EEDB' };
+  if (l.ultimaSaidaEm) return { t: '⏳ esperando a loja', cor: '#6B6B6B', fundo: '#F0F0F0' };
+  return null;
+}
+
+function propostaAbertaDoLead(l) {
+  return (DB.propostas || []).filter(p => (p.destinatario || {}).tipo === 'lead' && (p.destinatario || {}).id === l.id &&
+    ['rascunho', 'enviada'].indexOf(situacaoProposta(p)) !== -1);
+}
+
+function cardQuadroLead(l) {
+  const sit = situacaoCardLead(l);
+  const ult = [l.ultimaEntradaEm, l.ultimaSaidaEm].filter(Boolean).sort().pop() || l.dataDescoberta;
+  const dias = diasDesde(ult);
+  const props = propostaAbertaDoLead(l);
+  const valor = props.reduce((s, p) => s + totaisProposta(p).total, 0);
+  const chips = [
+    sit && `<span style="background:${sit.fundo};color:${sit.cor};border-radius:10px;padding:1px 7px;font-weight:700">${sit.t}</span>`,
+    valor > 0 && `<span style="background:#E5F2EA;color:#2E7D52;border-radius:10px;padding:1px 7px;font-weight:700" title="${props.length} proposta(s) em aberto">📝 ${brlProposta(valor)}</span>`,
+    (l.catalogoEnviadoEm || l.catalogoEspecialEm) && `<span title="Catálogo enviado">📄</span>`,
+    l.estagioPelaIA && diasDesde(l.estagioPelaIA.em) <= 3 && `<span title="A IA moveu para esta coluna (${escaparHtml(l.estagioPelaIA.de || '')} → ${escaparHtml((ESTAGIOS_LEAD[l.estagio] || {}).label || '')})">🤖↗</span>`,
+    fixoSemZap(l) && `<span title="Telefone fixo: confira se tem WhatsApp">☎️</span>`,
+    !l.whatsapp && `<span title="Sem WhatsApp">📵</span>`
+  ].filter(Boolean).join(' ');
+  const opcoes = COLUNAS_QUADRO.concat(['cliente', 'perdido']).map(k =>
+    `<option value="${k}" ${k === l.estagio ? 'selected' : ''}>${k === l.estagio ? '● ' : ''}${ESTAGIOS_LEAD[k].label}</option>`).join('');
+  return `<div class="quadro-card" draggable="true" data-id="${l.id}" ondragstart="quadroInicioArraste(event,${l.id})" ondragend="quadroFimArraste()"
+      onclick="if(!event.target.closest('select,button'))abrirConversa(${l.id})"
+      style="background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:9px 10px;margin-bottom:8px;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+    <div style="display:flex;gap:9px;align-items:center">
+      ${avatarLead(l)}
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escaparHtml(l.nome)}">${escaparHtml(l.nome)}</div>
+        <div class="text-muted" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escaparHtml([l.segmento, l.cidade].filter(Boolean).join(' · ') || '—')}</div>
+      </div>
+    </div>
+    ${chips ? `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:7px;font-size:10.5px">${chips}</div>` : ''}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:6px">
+      <span class="text-muted" style="font-size:10.5px">${dias === null ? '' : dias === 0 ? 'hoje' : 'há ' + dias + ' dia' + (dias > 1 ? 's' : '')}</span>
+      <select onchange="moverLeadQuadro(${l.id}, this.value, 'menu')" title="Mover para outro estágio" style="font-size:10.5px;padding:1px 3px;border:1px solid var(--gray-200);border-radius:5px;max-width:110px;color:var(--gray-600)">${opcoes}</select>
+    </div>
+  </div>`;
+}
+
+// Prioridade dentro da coluna: o que pede ação primeiro
+function pesoQuadro(l) {
+  const sit = situacaoCardLead(l);
+  let p = 0;
+  if (sit && /venda perto/.test(sit.t)) p += 1000;
+  if (sit && /loja respondeu/.test(sit.t)) p += 500;
+  if (propostaAbertaDoLead(l).length) p += 200;
+  if (l.whatsapp && !fixoSemZap(l)) p += 50;
+  return p;
+}
+
+function renderQuadroLeads(lista) {
+  const el = document.getElementById('leadsQuadro');
+  if (!el) return;
+  const porCol = {};
+  COLUNAS_QUADRO.forEach(k => { porCol[k] = []; });
+  lista.forEach(l => { if (porCol[l.estagio]) porCol[l.estagio].push(l); });
+  const ult = l => [l.ultimaEntradaEm, l.ultimaSaidaEm].filter(Boolean).sort().pop() || l.dataDescoberta || '';
+  const semLogo = lista.filter(l => porCol[l.estagio] && l.site && !l.logoUrl && !l.logoTentadoEm).length;
+  el.innerHTML = `
+    <div class="flex-between" style="margin-bottom:8px;gap:8px;flex-wrap:wrap">
+      <div class="text-muted" style="font-size:11.5px">Arraste o card para mudar o estágio (ou use o menu dele). Clique no card para abrir a conversa. 🤖↗ = a IA moveu.</div>
+      ${semLogo && waAtivo() ? `<button class="btn btn-sm btn-ghost" onclick="buscarLogosQuadro()" title="O porteiro lê o site de cada loja e traz o ícone">🖼️ Buscar logos nos sites (${semLogo})</button>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(${COLUNAS_QUADRO.length},minmax(230px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px">
+      ${COLUNAS_QUADRO.map(k => {
+        const est = ESTAGIOS_LEAD[k];
+        const itens = porCol[k].slice().sort((a, b) => pesoQuadro(b) - pesoQuadro(a) || (ult(a) < ult(b) ? 1 : -1));
+        const lim = quadroLimite[k] || QUADRO_POR_COLUNA;
+        const soma = itens.reduce((s, l) => s + propostaAbertaDoLead(l).reduce((x, p) => x + totaisProposta(p).total, 0), 0);
+        return `<div class="quadro-coluna" data-estagio="${k}" ondragover="quadroSobre(event)" ondragleave="this.style.background='var(--gray-100)'" ondrop="quadroSoltar(event,'${k}')"
+            style="background:var(--gray-100);border-radius:10px;padding:8px;min-height:120px;border-top:3px solid ${est.cor}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 2px 8px">
+            <span style="font-size:12px;font-weight:700;color:var(--navy)">${est.label} <span class="text-muted" style="font-weight:400">· ${itens.length}</span></span>
+            ${soma > 0 ? `<span style="font-size:11px;color:#2E7D52;font-weight:700">${brlProposta(soma)}</span>` : ''}
+          </div>
+          ${itens.slice(0, lim).map(cardQuadroLead).join('') || '<div class="text-muted" style="font-size:11.5px;text-align:center;padding:16px 4px">Nenhum lead aqui.</div>'}
+          ${itens.length > lim ? `<button class="btn btn-sm btn-ghost" style="width:100%" onclick="quadroLimite['${k}']=${lim + QUADRO_POR_COLUNA};renderLeads()">Mostrar mais ${Math.min(QUADRO_POR_COLUNA, itens.length - lim)} de ${itens.length - lim}</button>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function quadroInicioArraste(ev, id) {
+  quadroArrastando = id;
+  try { ev.dataTransfer.setData('text/plain', String(id)); ev.dataTransfer.effectAllowed = 'move'; } catch (e) { /* ok */ }
+  const card = ev.target.closest('.quadro-card');
+  if (card) setTimeout(() => { card.style.opacity = '0.45'; }, 0);
+}
+function quadroFimArraste() {
+  quadroArrastando = null;
+  document.querySelectorAll('.quadro-card').forEach(c => { c.style.opacity = ''; });
+  document.querySelectorAll('.quadro-coluna').forEach(c => { c.style.background = 'var(--gray-100)'; });
+}
+function quadroSobre(ev) {
+  ev.preventDefault();
+  try { ev.dataTransfer.dropEffect = 'move'; } catch (e) { /* ok */ }
+  ev.currentTarget.style.background = '#FFF7E0';
+}
+function quadroSoltar(ev, estagio) {
+  ev.preventDefault();
+  let id = quadroArrastando;
+  try { id = parseInt(ev.dataTransfer.getData('text/plain'), 10) || id; } catch (e) { /* ok */ }
+  quadroFimArraste();
+  if (id) moverLeadQuadro(id, estagio, 'arraste');
+}
+
+// Mudança de estágio pelo quadro: mesmas regras da ficha
+async function moverLeadQuadro(id, novo, como) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l || !ESTAGIOS_LEAD[novo] || l.estagio === novo) { renderLeads(); return; }
+  const de = ESTAGIOS_LEAD[l.estagio] || {}, para = ESTAGIOS_LEAD[novo];
+  if (novo === 'cliente') {
+    if (!confirm(`Converter "${l.nome}" em cliente? O cadastro dele será criado na base de Clientes.`)) { renderLeads(); return; }
+    const cli = efetivarConversao(l);
+    renderAll();
+    showToast(`🤝 ${l.nome} agora é cliente!`);
+    oferecerPrimeiroPedido(cli);
+    return;
+  }
+  if (novo === 'perdido') {
+    const motivo = prompt(`Por que "${l.nome}" foi perdido? (fica guardado para reciclar depois)`, l.motivo || '');
+    if (motivo === null) { renderLeads(); return; }
+    l.motivo = String(motivo).trim();
+  }
+  // Voltar para Qualificado uma loja que já recebeu mensagem: a fila trataria como lembrete, não como 1º contato
+  if (novo === 'qualificado' && (l.saidas || l.ultimaSaidaEm) &&
+      !confirm(`"${l.nome}" já recebeu mensagem. Voltar para Qualificado mesmo assim?`)) { renderLeads(); return; }
+  const anterior = l.estagio;
+  l.estagio = novo;
+  if (novo !== 'perdido') l.motivo = '';
+  delete l.estagioPelaIA;
+  registrarHistoricoLead(l, `Estágio: ${de.label || anterior} → ${para.label} (${como === 'arraste' ? 'arrastado no quadro' : 'pelo quadro'})`);
+  saveLeads();
+  renderProspeccao();
+  // Saiu de Contatado/Em conversa com a IA ligada: a IA para de responder esta loja
+  const aviso = waAtivo() && waCfg().modo === 'conversa' && ['contatado', 'conversa'].indexOf(anterior) !== -1 && ['contatado', 'conversa'].indexOf(novo) === -1 && !l.iaPassado && !l.iaAssumido
+    ? ' A IA deixa de responder esta loja (ela só conversa em Contatado e Em conversa).' : '';
+  showToast(`↔ ${l.nome}: ${de.label || anterior} → ${para.label}.${aviso}`, aviso ? 'warning' : undefined);
+}
+
+// Logos: o porteiro lê só a página inicial de cada site
+let logosRodando = false;
+async function buscarLogosQuadro() {
+  if (logosRodando || !waAtivo()) return;
+  const alvo = LEADS.filter(l => COLUNAS_QUADRO.indexOf(l.estagio) !== -1 && !l.congelado && l.site && !l.logoUrl && !l.logoTentadoEm);
+  if (!alvo.length) return;
+  logosRodando = true;
+  let achou = 0, feitos = 0;
+  showToast(`🖼️ Buscando logos em ${alvo.length} site(s)… pode continuar usando o dashboard.`);
+  const base = String(waCfg().url || '').trim().replace(/\/+$/, '');
+  for (const l of alvo) {
+    try {
+      const r = await fetch(base + '/ler-site', { method: 'POST', body: JSON.stringify({ url: l.site, soLogo: true }),
+        headers: { 'Authorization': 'Bearer ' + authToken(), 'Content-Type': 'application/json' } });
+      if (r.status === 404) { showToast('⚠️ Atualize o porteiro para a versão 2.9 para buscar logos.', 'warning'); break; }
+      const j = await r.json();
+      if (j.authError) { showToast('⚠️ Login recusado pelo porteiro.', 'warning'); break; }
+      if (j.logo) { l.logoUrl = j.logo; achou++; }
+    } catch (e) { /* site fora do ar: fica com as iniciais */ }
+    l.logoTentadoEm = new Date().toISOString();
+    feitos++;
+    if (feitos % 5 === 0 && visaoLeads === 'quadro') renderLeads();
+  }
+  logosRodando = false;
+  saveLeads();
+  renderLeads();
+  showToast(`🖼️ ${achou} logo(s) encontrada(s) em ${feitos} site(s). Quem não tem fica com as iniciais.`);
 }
 
 function renderAll(){
