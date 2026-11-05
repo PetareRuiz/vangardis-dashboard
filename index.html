@@ -15410,7 +15410,8 @@ function cardIdeia(seg, i) {
     </div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">
       <button class="btn btn-sm btn-ghost" onclick="verTendenciaIdeia('${i.id}')">📈 Tendência</button>
-      ${i.status !== 'desenvolver' ? `<button class="btn btn-sm btn-ghost" onclick="statusIdeia('${seg}','${i.id}','desenvolver')">🛠️ Vou desenvolver</button>` : ''}
+      ${i.status !== 'desenvolver' ? `<button class="btn btn-sm btn-ghost" onclick="statusIdeia('${seg}','${i.id}','desenvolver')">🛠️ Vou desenvolver</button>`
+        : `<button class="btn btn-sm btn-ghost" onclick="statusIdeia('${seg}','${i.id}','nova')" title="Volta a ser só uma ideia">↩ Desmarcar</button>`}
       <button class="btn btn-sm btn-ghost" onclick="cadastrarIdeiaNoCatalogo('${seg}','${i.id}')" title="Abre o cadastro do catálogo já com o nome">➕ Catálogo</button>
       ${i.status !== 'descartada' ? `<button class="btn btn-sm btn-ghost" onclick="statusIdeia('${seg}','${i.id}','descartada')" title="Descartar">✕</button>`
         : `<button class="btn btn-sm btn-ghost" onclick="statusIdeia('${seg}','${i.id}','nova')">↩ Recuperar</button>`}
