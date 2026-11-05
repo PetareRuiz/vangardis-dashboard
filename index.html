@@ -12626,26 +12626,27 @@ Responda APENAS com o texto final da mensagem, sem aspas e sem explicações.`;
 
 let agentePreparando = false;
 
-async function prepararFilaHoje(forcar) {
-  if (agentePreparando) return;
-  if (agentePausado()) { showToast('⏸ O agente está pausado. Retome antes de preparar a fila.', 'warning'); return; }
+async function prepararFilaHoje(forcar, listaManual) {
+  if (agentePreparando) return false;
+  if (agentePausado()) { showToast('⏸ O agente está pausado. Retome antes de preparar a fila.', 'warning'); return false; }
   const a = agente(), chave = hojeChave();
-  if (a.filas[chave] && !forcar) { abrirFilaAgente(); return; }
+  if (a.filas[chave] && !forcar) { abrirFilaAgente(); return false; }
   if (a.filas[chave] && forcar && a.filas[chave].itens.some(x => x.status === 'pendente') &&
-      !confirm('Montar a fila de novo? As mensagens ainda não enviadas serão descartadas e reescritas.')) return;
+      !confirm('Montar a fila de novo? As mensagens ainda não enviadas serão descartadas e reescritas.')) return false;
 
   const cfg = cfgAgente();
   const sel = selecionarLeadsAgente();
   // Em uma fila refeita no mesmo dia, quem já recebeu hoje não entra de novo
   const jaHoje = new Set(((a.filas[chave] || {}).itens || []).filter(x => x.status === 'enviado').map(x => x.leadId));
-  const escolhidos = sel.escolhidos.filter(c => !jaHoje.has(c.l.id));
+  // Escolhida à mão (cesta): vale a sua ordem; senão, a seleção automática
+  const escolhidos = (Array.isArray(listaManual) ? listaManual.slice(0, cfg.limiteDia) : sel.escolhidos).filter(c => !jaHoje.has(c.l.id));
   if (!escolhidos.length) {
     showToast('Nenhum lead pronto para o agente hoje. Veja no cartão quem ficou de fora e por quê.', 'warning');
     renderCardAgente();
-    return;
+    return false;
   }
   const usarIA = cfg.personalizarIA;
-  if (usarIA && !iaPermitida(escolhidos.length)) return;
+  if (usarIA && !iaPermitida(escolhidos.length)) return false;
 
   agentePreparando = true;
   openModal('modalAgente');
@@ -12688,7 +12689,8 @@ async function prepararFilaHoje(forcar) {
   }
 
   a.filas[chave] = { criadaEm: new Date().toISOString(), itens: anteriores.concat(itens),
-    fora: { ...sel.fora, paraCongelar: sel.fora.paraCongelar.length }, total: sel.total };
+    fora: { ...sel.fora, paraCongelar: sel.fora.paraCongelar.length, fixos: (sel.fora.fixos || []).length, semZapComSite: undefined }, total: sel.total,
+    origem: Array.isArray(listaManual) ? 'manual' : 'auto' };
   // Guarda só as filas dos últimos 14 dias
   Object.keys(a.filas).sort().slice(0, -14).forEach(k => { delete a.filas[k]; });
   if (parouPor) pausarAgente(parouPor, true);
@@ -12698,6 +12700,7 @@ async function prepararFilaHoje(forcar) {
   renderFilaAgente();
   renderCardAgente();
   if (parouPor) showToast(`⏸ A fila ficou com ${itens.length} mensagem(ns): ${parouPor}. O agente pausou até amanhã.`, 'warning');
+  return true;
 }
 
 // ── G) Fila do dia ──
@@ -12790,7 +12793,7 @@ function renderFilaAgente() {
     </div>`}
     <div class="flex-between" style="margin-top:10px">
       <button class="btn btn-ghost btn-sm" onclick="irItemAgente(${agenteIndice - 1})" ${agenteIndice <= 0 ? 'disabled' : ''}>‹ Anterior</button>
-      <button class="btn btn-ghost btn-sm" onclick="prepararFilaHoje(true)" title="Refaz a seleção e reescreve o que ainda não foi enviado">Montar de novo</button>
+      <button class="btn btn-ghost btn-sm" onclick="montarDeNovoFila()" title="Refaz a seleção e reescreve o que ainda não foi enviado">Montar de novo</button>
       <button class="btn btn-ghost btn-sm" onclick="irItemAgente(${agenteIndice + 1})" ${agenteIndice >= f.itens.length - 1 ? 'disabled' : ''}>Próximo ›</button>
     </div>
     ${!pend ? `<div style="text-align:center;background:#E5F2EA;border-radius:8px;padding:12px;margin-top:12px;font-size:13px;color:#1E5A3A">✅ Fila de hoje concluída: ${env} mensagem(ns) enviada(s). ${waAtivo() && waCfg().modo === 'conversa' ? 'As respostas pelo número novo entram sozinhas e a IA conversa até a negociação.' : 'As respostas que chegarem você registra na conversa do lead, e a IA avisa se houver sinal de compra.'}</div>` : ''}`;
@@ -12971,6 +12974,13 @@ function renderCardAgente() {
       ? `<b>${sel.total}</b> lead(s) prontos: ${[pt.primeiro && `<b>${pt.primeiro}</b> primeiro(s) contato(s)`, pt.recomeco && `<b>${pt.recomeco}</b> recomeço(s) pelo número novo`, pt.lembrete && `<b>${pt.lembrete}</b> lembrete(s)`].filter(Boolean).join(' · ')}. A fila de hoje terá ${Math.min(sel.total, cfg.limiteDia)}.`
       : 'Nenhum lead pronto para o agente agora.';
     botao = sel.total ? `<button class="btn btn-gold btn-sm" onclick="prepararFilaHoje()">Preparar a fila de hoje</button>` : '';
+    if (cfg.montagem === 'manual') {
+      const nCesta = cestaFila().ids.length;
+      status = montagemFila
+        ? `🧺 <b>Montando a fila à mão:</b> ${nCesta} loja(s) na cesta, ao lado do quadro em Leads.`
+        : `🧺 Fila escolhida à mão${nCesta ? `: <b>${nCesta}</b> loja(s) já na cesta` : ''}. ${sel.total ? `${sel.total} lead(s) podem entrar.` : ''}`;
+      botao = `<button class="btn btn-gold btn-sm" onclick="abrirMontagemFila()">🧺 ${montagemFila ? 'Ir para a cesta' : nCesta ? 'Continuar escolhendo' : 'Escolher as lojas'}</button>`;
+    }
   }
 
   const foraTxt = [
@@ -13002,7 +13012,13 @@ function renderCardAgente() {
     </div>
     <div class="card-body" style="font-size:12.5px;line-height:1.55">
       <div>${status}</div>
-      ${pbsComModelo.length && !pausa ? `<div style="font-size:12px;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">Ordem da fila:
+      ${pbsComModelo.length && !pausa ? `<div style="font-size:12px;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">Montar a fila:
+        <select onchange="mudarMontagemFila(this.value)" style="padding:3px 6px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
+          <option value="auto" ${cfg.montagem !== 'manual' ? 'selected' : ''}>Automática</option>
+          <option value="manual" ${cfg.montagem === 'manual' ? 'selected' : ''}>Escolher à mão</option>
+        </select>
+        ${cfg.montagem === 'manual' ? '<span class="text-muted" style="font-size:11.5px">— a ordem e o segmento abaixo valem para “Completar com a automática”</span><span style="flex-basis:100%"></span>' : ''}
+        Ordem da fila:
         <select onchange="mudarOrdemFila(this.value)" style="padding:3px 6px;border:1.5px solid var(--gray-200);border-radius:6px;font-size:12px">
           ${Object.entries(ORDENS_FILA).map(([k, v]) => `<option value="${k}" ${(cfg.ordemFila || 'primeiros') === k ? 'selected' : ''}>${v}</option>`).join('')}
         </select>
@@ -15032,7 +15048,7 @@ function propostaAbertaDoLead(l) {
     ['rascunho', 'enviada'].indexOf(situacaoProposta(p)) !== -1);
 }
 
-function cardQuadroLead(l) {
+function cardQuadroLead(l, mont) {
   const sit = situacaoCardLead(l);
   const ult = [l.ultimaEntradaEm, l.ultimaSaidaEm].filter(Boolean).sort().pop() || l.dataDescoberta;
   const dias = diasDesde(ult);
@@ -15048,9 +15064,9 @@ function cardQuadroLead(l) {
   ].filter(Boolean).join(' ');
   const opcoes = COLUNAS_QUADRO.concat(['cliente', 'perdido']).map(k =>
     `<option value="${k}" ${k === l.estagio ? 'selected' : ''}>${k === l.estagio ? '● ' : ''}${ESTAGIOS_LEAD[k].label}</option>`).join('');
-  return `<div class="quadro-card" draggable="true" data-id="${l.id}" ondragstart="quadroInicioArraste(event,${l.id})" ondragend="quadroFimArraste()"
+  return `<div class="quadro-card" draggable="${mont && !(mont.av && mont.av.ok) ? 'false' : 'true'}" data-id="${l.id}" ondragstart="quadroInicioArraste(event,${l.id})" ondragend="quadroFimArraste()"
       onclick="if(!event.target.closest('select,button'))abrirConversa(${l.id})"
-      style="background:#fff;border:1px solid var(--gray-200);border-radius:8px;padding:9px 10px;margin-bottom:8px;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+      style="background:#fff;border:1px solid ${mont && mont.naCesta ? '#BFDCCB' : 'var(--gray-200)'};border-radius:8px;padding:9px 10px;margin-bottom:8px;cursor:${mont && !(mont.av && mont.av.ok) ? 'default' : 'grab'};box-shadow:0 1px 2px rgba(0,0,0,.04);${mont && !(mont.av && mont.av.ok) ? 'opacity:.6;' : ''}${mont && mont.naCesta ? 'background:#F3FAF5;' : ''}">
     <div style="display:flex;gap:9px;align-items:center">
       ${avatarLead(l)}
       <div style="min-width:0;flex:1">
@@ -15061,7 +15077,10 @@ function cardQuadroLead(l) {
     ${chips ? `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:7px;font-size:10.5px">${chips}</div>` : ''}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:6px">
       <span class="text-muted" style="font-size:10.5px">${dias === null ? '' : dias === 0 ? 'hoje' : 'há ' + dias + ' dia' + (dias > 1 ? 's' : '')}</span>
-      <select onchange="moverLeadQuadro(${l.id}, this.value, 'menu')" title="Mover para outro estágio" style="font-size:10.5px;padding:1px 3px;border:1px solid var(--gray-200);border-radius:5px;max-width:110px;color:var(--gray-600)">${opcoes}</select>
+      ${!mont ? `<select onchange="moverLeadQuadro(${l.id}, this.value, 'menu')" title="Mover para outro estágio" style="font-size:10.5px;padding:1px 3px;border:1px solid var(--gray-200);border-radius:5px;max-width:110px;color:var(--gray-600)">${opcoes}</select>`
+        : mont.naCesta ? `<button class="btn btn-sm btn-ghost" onclick="tirarDaCesta(${l.id})" style="font-size:10.5px;padding:1px 7px;color:#2E7D52;border-color:#BFDCCB" title="Clique para tirar da cesta">✓ na fila</button>`
+        : mont.av && mont.av.ok ? `<button class="btn btn-sm btn-gold" onclick="adicionarNaCesta(${l.id})" style="font-size:10.5px;padding:1px 8px">＋ fila · ${TIPO_FILA_ROTULO[mont.av.tipo]}</button>`
+        : `<span title="${escaparHtml((mont.av && mont.av.motivo) || '')}" style="font-size:10.5px;color:#A33B3B;cursor:help">🔒 ${escaparHtml(((mont.av && mont.av.motivo) || '').slice(0, 28))}${((mont.av && mont.av.motivo) || '').length > 28 ? '…' : ''}</span>`}
     </div>
   </div>`;
 }
@@ -15080,32 +15099,42 @@ function pesoQuadro(l) {
 function renderQuadroLeads(lista) {
   const el = document.getElementById('leadsQuadro');
   if (!el) return;
+  // Na montagem da fila, só as colunas de quem pode receber mensagem
+  const colunas = montagemFila ? (cfgAgente().incluirDescobertos ? ['descoberto', 'qualificado', 'contatado'] : ['qualificado', 'contatado']) : COLUNAS_QUADRO;
+  const naCesta = new Set(montagemFila ? cestaFila().ids : []);
+  const elegivel = {};
+  if (montagemFila) lista.forEach(l => { if (colunas.indexOf(l.estagio) !== -1) elegivel[l.id] = avaliarLeadParaFila(l); });
   const porCol = {};
-  COLUNAS_QUADRO.forEach(k => { porCol[k] = []; });
+  colunas.forEach(k => { porCol[k] = []; });
   lista.forEach(l => { if (porCol[l.estagio]) porCol[l.estagio].push(l); });
   const ult = l => [l.ultimaEntradaEm, l.ultimaSaidaEm].filter(Boolean).sort().pop() || l.dataDescoberta || '';
   const semLogo = lista.filter(l => porCol[l.estagio] && l.site && !l.logoUrl && !l.logoTentadoEm).length;
   el.innerHTML = `
+    ${montagemFila ? `<div style="background:#1B2A4A;color:#fff;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12.5px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+      <span>🧺 <b>Montando a fila de hoje à mão.</b> Arraste os cards para a cesta. 🔒 = não pode receber mensagem agora (passe o mouse para ver por quê).</span>
+      <button class="btn btn-sm btn-ghost" style="color:#fff;border-color:rgba(255,255,255,.35)" onclick="sairMontagemFila()">Sair da montagem</button></div>` : ''}
     <div class="flex-between" style="margin-bottom:8px;gap:8px;flex-wrap:wrap">
-      <div class="text-muted" style="font-size:11.5px">Arraste o card para mudar o estágio (ou use o menu dele). Clique no card para abrir a conversa. 🤖↗ = a IA moveu.</div>
+      <div class="text-muted" style="font-size:11.5px">${montagemFila ? 'Use a busca e o filtro de cidade acima para achar as lojas. Clique no card para abrir a conversa.' : 'Arraste o card para mudar o estágio (ou use o menu dele). Clique no card para abrir a conversa. 🤖↗ = a IA moveu.'}</div>
       ${semLogo && waAtivo() ? `<button class="btn btn-sm btn-ghost" onclick="buscarLogosQuadro()" title="O porteiro lê o site de cada loja e traz o ícone">🖼️ Buscar logos nos sites (${semLogo})</button>` : ''}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(${COLUNAS_QUADRO.length},minmax(230px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px">
-      ${COLUNAS_QUADRO.map(k => {
+    <div style="display:grid;grid-template-columns:${montagemFila ? `repeat(${colunas.length},minmax(220px,1fr)) minmax(260px,300px)` : `repeat(${colunas.length},minmax(230px,1fr))`};gap:10px;overflow-x:auto;padding-bottom:6px;align-items:start">
+      ${colunas.map(k => {
         const est = ESTAGIOS_LEAD[k];
-        const itens = porCol[k].slice().sort((a, b) => pesoQuadro(b) - pesoQuadro(a) || (ult(a) < ult(b) ? 1 : -1));
+        const ordemMont = l => (montagemFila ? ((elegivel[l.id] || {}).ok ? 0 : 1) * 10000 : 0);
+        const itens = porCol[k].slice().sort((a, b) => ordemMont(a) - ordemMont(b) || pesoQuadro(b) - pesoQuadro(a) || (ult(a) < ult(b) ? 1 : -1));
         const lim = quadroLimite[k] || QUADRO_POR_COLUNA;
         const soma = itens.reduce((s, l) => s + propostaAbertaDoLead(l).reduce((x, p) => x + totaisProposta(p).total, 0), 0);
-        return `<div class="quadro-coluna" data-estagio="${k}" ondragover="quadroSobre(event)" ondragleave="this.style.background='var(--gray-100)'" ondrop="quadroSoltar(event,'${k}')"
+        return `<div class="quadro-coluna" data-estagio="${k}" ${montagemFila ? '' : `ondragover="quadroSobre(event)" ondragleave="this.style.background='var(--gray-100)'" ondrop="quadroSoltar(event,'${k}')"`}
             style="background:var(--gray-100);border-radius:10px;padding:8px;min-height:120px;border-top:3px solid ${est.cor}">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2px 2px 8px">
             <span style="font-size:12px;font-weight:700;color:var(--navy)">${est.label} <span class="text-muted" style="font-weight:400">· ${itens.length}</span></span>
             ${soma > 0 ? `<span style="font-size:11px;color:#2E7D52;font-weight:700">${brlProposta(soma)}</span>` : ''}
           </div>
-          ${itens.slice(0, lim).map(cardQuadroLead).join('') || '<div class="text-muted" style="font-size:11.5px;text-align:center;padding:16px 4px">Nenhum lead aqui.</div>'}
+          ${itens.slice(0, lim).map(l => cardQuadroLead(l, montagemFila ? { av: elegivel[l.id], naCesta: naCesta.has(l.id) } : null)).join('') || '<div class="text-muted" style="font-size:11.5px;text-align:center;padding:16px 4px">Nenhum lead aqui.</div>'}
           ${itens.length > lim ? `<button class="btn btn-sm btn-ghost" style="width:100%" onclick="quadroLimite['${k}']=${lim + QUADRO_POR_COLUNA};renderLeads()">Mostrar mais ${Math.min(QUADRO_POR_COLUNA, itens.length - lim)} de ${itens.length - lim}</button>` : ''}
         </div>`;
       }).join('')}
+      ${montagemFila ? htmlCestaFila() : ''}
     </div>`;
 }
 
@@ -15489,6 +15518,222 @@ function renderCompararIdeias(abrir) {
     </div>
     ${abrir ? htmlTrends(unicos, 360) : ''}
   </div>`;
+}
+
+// ════════════════════════════════════════════════════
+// FILA ESCOLHIDA À MÃO (cesta)
+// No modo "Escolher à mão", o Quadro mostra só quem pode receber mensagem
+// (Qualificado e Contatado) e uma cesta ao lado. Você arrasta os cards para a
+// cesta, ordena, e o agente escreve as mensagens na ordem da cesta.
+// ════════════════════════════════════════════════════
+let montagemFila = false;
+let cestaArrastandoIdx = null;
+
+function atualizarCesta() { saveDB(); renderLeads(); renderCardAgente(); }
+
+function cestaFila() {
+  const a = agente();
+  if (!a.cesta || a.cesta.dia !== hojeChave()) a.cesta = { dia: hojeChave(), ids: [] };
+  a.cesta.ids = a.cesta.ids.filter(id => LEADS.some(l => l.id === id));
+  return a.cesta;
+}
+
+// Pode receber mensagem do agente hoje? Mesmas regras da fila automática,
+// sem o filtro de segmento e sem a ordem (quem escolhe é você).
+function avaliarLeadParaFila(l) {
+  const cfg = cfgAgente();
+  const est = l.estagio;
+  const podePrimeiro = est === 'qualificado' || (cfg.incluirDescobertos && est === 'descoberto');
+  if (l.congelado) return { motivo: 'lead congelado' };
+  if (!podePrimeiro && est !== 'contatado') return { motivo: est === 'descoberto' ? 'ainda em Descoberto (qualifique antes)' : 'só Qualificado ou Contatado recebem mensagem do agente' };
+  if ((l.entradas || 0) > 0 || l.alertaVenda) return { motivo: 'a loja já respondeu: a conversa é sua (ou da IA)' };
+  if (!l.whatsapp) return { motivo: 'sem WhatsApp' };
+  if (registroOptout(l)) return { motivo: 'pediu para não receber mensagens' };
+  if (fixoSemZap(l)) return { motivo: 'telefone fixo (confira se tem WhatsApp)' };
+  const saidas = l.saidas || 0, dSaida = diasDesde(l.ultimaSaidaEm);
+  let tipo = null;
+  if (podePrimeiro && !saidas && !l.ultimaSaidaEm) tipo = 'primeiro';
+  else if (est === 'contatado') {
+    if (!l.ultimaSaidaEm) return { motivo: 'contatado sem mensagem registrada' };
+    if (dSaida < cfg.lembreteDias) return { motivo: `recebeu mensagem há ${dSaida} dia(s); o lembrete é depois de ${cfg.lembreteDias}` };
+    if (saidas <= 1 && !(l.agente && l.agente.lembreteEm)) tipo = (cfg.recomecarNoNovo !== false && leadNoNumeroAntigo(l)) ? 'recomeco' : 'lembrete';
+    else return { motivo: 'já recebeu o primeiro contato e o lembrete' };
+  }
+  if (!tipo) return { motivo: 'já recebeu mensagem' };
+  if (dSaida !== null && dSaida < cfg.intervaloMin) return { motivo: `recebeu mensagem há ${dSaida} dia(s)` };
+  const pb = playbookDoLead(l);
+  if (!pb) return { motivo: 'sem playbook (defina o tipo de comprador)' };
+  if (!pb.agente) return { motivo: `o playbook "${pb.segmento}" não está ligado ao agente` };
+  if (tipo === 'lembrete' ? !lembreteAprovado(pb) : !modelosAprovados(pb).length) return { motivo: `o playbook "${pb.segmento}" não tem modelo aprovado` };
+  const f = agente().filas[hojeChave()];
+  if (f && f.itens.some(x => x.leadId === l.id && x.status === 'enviado')) return { motivo: 'já recebeu mensagem hoje' };
+  return { ok: true, tipo, pb };
+}
+
+const TIPO_FILA_ROTULO = { primeiro: '1º contato', lembrete: 'lembrete', recomeco: 'recomeço' };
+
+function mudarMontagemFila(v) {
+  const a = agente();
+  a.config = Object.assign({}, a.config || {}, { montagem: v === 'manual' ? 'manual' : 'auto' });
+  saveDB();
+  if (v !== 'manual' && montagemFila) sairMontagemFila();
+  renderCardAgente();
+}
+
+function abrirMontagemFila(idsIniciais) {
+  if (agentePausado()) { showToast('⏸ O agente está pausado. Retome antes de montar a fila.', 'warning'); return; }
+  const c = cestaFila();
+  if (Array.isArray(idsIniciais)) c.ids = idsIniciais.slice();
+  montagemFila = true;
+  if (typeof alternarSecao === 'function') alternarSecao('cardLeads', true);
+  visaoLeads = 'quadro';
+  renderLeads();
+  const card = document.getElementById('cardLeads');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  renderCardAgente();
+}
+
+function sairMontagemFila() {
+  montagemFila = false;
+  try { visaoLeads = localStorage.getItem('vangardis_visao_leads') || 'lista'; } catch (e) { visaoLeads = 'lista'; }
+  atualizarCesta();
+  renderCardAgente();
+}
+
+function adicionarNaCesta(id, posicao) {
+  const l = LEADS.find(x => x.id === id);
+  if (!l) return;
+  const av = avaliarLeadParaFila(l);
+  if (!av.ok) { showToast(`🔒 ${l.nome}: ${av.motivo}.`, 'warning'); return; }
+  const c = cestaFila(), lim = cfgAgente().limiteDia;
+  if (c.ids.indexOf(id) !== -1) {
+    if (posicao === undefined) return;
+    c.ids.splice(c.ids.indexOf(id), 1);
+  } else if (c.ids.length >= lim) { showToast(`🧺 A cesta já tem ${lim} lojas, o seu limite por dia (dá para mudar em ⚙️ Ajustes).`, 'warning'); return; }
+  if (posicao === undefined || posicao > c.ids.length) c.ids.push(id); else c.ids.splice(posicao, 0, id);
+  atualizarCesta();
+}
+
+function tirarDaCesta(id) {
+  const c = cestaFila();
+  c.ids = c.ids.filter(x => x !== id);
+  atualizarCesta();
+}
+
+function limparCesta() {
+  if (cestaFila().ids.length && !confirm('Tirar todas as lojas da cesta?')) return;
+  cestaFila().ids = [];
+  atualizarCesta();
+}
+
+function completarCestaAutomatica() {
+  const c = cestaFila(), lim = cfgAgente().limiteDia;
+  const sel = selecionarLeadsAgente();
+  let n = 0;
+  sel.candidatos.forEach(x => {
+    if (c.ids.length >= lim || c.ids.indexOf(x.l.id) !== -1) return;
+    if (!avaliarLeadParaFila(x.l).ok) return;
+    c.ids.push(x.l.id); n++;
+  });
+  atualizarCesta();
+  showToast(n ? `🧺 ${n} loja(s) entraram pela ordem automática.` : 'Não há mais lojas prontas pela ordem automática.', n ? undefined : 'warning');
+}
+
+async function prepararFilaDaCesta() {
+  const c = cestaFila();
+  const lista = c.ids.map(id => LEADS.find(l => l.id === id)).filter(Boolean)
+    .map(l => ({ l, av: avaliarLeadParaFila(l) })).filter(x => x.av.ok)
+    .map((x, i) => ({ l: x.l, pb: x.av.pb, tipo: x.av.tipo, p: 1000 - i, dDesc: 0 }));
+  if (!lista.length) { showToast('🧺 A cesta está vazia. Arraste lojas do quadro para cá.', 'warning'); return; }
+  const ok = await prepararFilaHoje(true, lista);
+  if (ok) { c.ids = []; montagemFila = false; saveDB(); renderLeads(); renderCardAgente(); }
+}
+
+// "Montar de novo" no modo à mão: a cesta volta com quem ainda não recebeu
+function montarDeNovoFila() {
+  if (cfgAgente().montagem === 'manual') {
+    const f = agente().filas[hojeChave()];
+    const ids = f ? f.itens.filter(x => x.status === 'pendente').map(x => x.leadId) : [];
+    closeModal('modalAgente');
+    abrirMontagemFila(ids.length ? ids : cestaFila().ids);
+    showToast('🧺 A cesta voltou com as lojas que ainda não receberam. Ajuste e clique em "Preparar".');
+    return;
+  }
+  prepararFilaHoje(true);
+}
+
+function htmlCestaFila() {
+  const c = cestaFila(), lim = cfgAgente().limiteDia;
+  const itens = c.ids.map(id => LEADS.find(l => l.id === id)).filter(Boolean);
+  const linhas = itens.map((l, i) => {
+    const av = avaliarLeadParaFila(l);
+    return `<div class="cesta-item" draggable="true" ondragstart="cestaInicio(event,${i})" ondragover="event.preventDefault()" ondrop="cestaSoltarItem(event,${i})"
+        style="display:flex;align-items:center;gap:7px;background:#fff;border:1px solid ${av.ok ? 'var(--gray-200)' : '#E8B4AE'};border-radius:7px;padding:6px 7px;margin-bottom:5px;cursor:grab">
+      <span class="text-muted" style="font-size:10.5px;width:16px;text-align:right">${i + 1}</span>
+      ${avatarLead(l, 24)}
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escaparHtml(l.nome)}</div>
+        <div style="font-size:10.5px;color:${av.ok ? 'var(--gray-500)' : '#A33B3B'}">${av.ok ? TIPO_FILA_ROTULO[av.tipo] + ' · ' + escaparHtml(av.pb.segmento) : '🔒 ' + escaparHtml(av.motivo)}</div>
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="tirarDaCesta(${l.id})" title="Tirar da cesta" style="padding:1px 6px">✕</button>
+    </div>`;
+  }).join('');
+  return `<div id="cestaFila" ondragover="event.preventDefault();this.style.borderColor='var(--gold)'" ondragleave="this.style.borderColor='#E8C872'" ondrop="cestaSoltar(event)"
+      style="position:sticky;top:12px;background:#FFFBEF;border:2px dashed #E8C872;border-radius:10px;padding:10px;max-height:calc(100vh - 40px);overflow:auto">
+    <div class="flex-between" style="margin-bottom:6px">
+      <b style="font-size:13px;color:var(--navy)">🧺 Fila de hoje</b>
+      <span style="font-size:12px;font-weight:700;color:${itens.length >= lim ? '#A33B3B' : 'var(--gold)'}">${itens.length} de ${lim}</span>
+    </div>
+    <div class="text-muted" style="font-size:11px;margin-bottom:8px;line-height:1.4">Arraste os cards para cá (ou use ＋ fila). Arraste aqui dentro para mudar a ordem: é a ordem de envio.</div>
+    ${linhas || '<div class="text-muted" style="font-size:12px;text-align:center;padding:22px 6px;border:1px dashed var(--gray-200);border-radius:7px;background:#fff">Solte os cards aqui</div>'}
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+      <button class="btn btn-gold btn-sm" onclick="prepararFilaDaCesta()" ${itens.length ? '' : 'disabled'}>✍️ Preparar ${itens.length || ''} mensagem(ns)</button>
+      ${itens.length < lim ? `<button class="btn btn-ghost btn-sm" onclick="completarCestaAutomatica()" title="Preenche as vagas pela ordem e pelo segmento do cartão do agente">Completar com a automática</button>` : ''}
+      <div style="display:flex;gap:6px">
+        ${itens.length ? '<button class="btn btn-ghost btn-sm" style="flex:1" onclick="limparCesta()">Limpar</button>' : ''}
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="sairMontagemFila()" title="A cesta fica guardada até o fim do dia">Sair</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function cestaInicio(ev, idx) {
+  cestaArrastandoIdx = idx;
+  quadroArrastando = null;
+  try { ev.dataTransfer.setData('text/plain', 'cesta:' + idx); ev.dataTransfer.effectAllowed = 'move'; } catch (e) { /* ok */ }
+  ev.stopPropagation();
+}
+
+// Soltar em cima de um item da cesta: reordena (ou insere ali um card do quadro)
+function cestaSoltarItem(ev, idx) {
+  ev.preventDefault(); ev.stopPropagation();
+  const c = cestaFila();
+  if (cestaArrastandoIdx !== null) {
+    const [id] = c.ids.splice(cestaArrastandoIdx, 1);
+    c.ids.splice(idx, 0, id);
+    cestaArrastandoIdx = null;
+    atualizarCesta();
+    return;
+  }
+  const id = quadroArrastando;
+  quadroFimArraste();
+  if (id) adicionarNaCesta(id, idx);
+}
+
+function cestaSoltar(ev) {
+  ev.preventDefault();
+  if (cestaArrastandoIdx !== null) {   // item da cesta solto no fundo: vai para o fim
+    const c = cestaFila();
+    const [id] = c.ids.splice(cestaArrastandoIdx, 1);
+    c.ids.push(id);
+    cestaArrastandoIdx = null;
+    atualizarCesta();
+    return;
+  }
+  let id = quadroArrastando;
+  try { const d = ev.dataTransfer.getData('text/plain'); if (/^\d+$/.test(d)) id = parseInt(d, 10); } catch (e) { /* ok */ }
+  quadroFimArraste();
+  if (id) adicionarNaCesta(id);
 }
 
 function renderAll(){
