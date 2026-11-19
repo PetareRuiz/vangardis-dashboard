@@ -2759,6 +2759,13 @@ th.sortable:hover { background: var(--navy-mid); }
       <div class="form-group"><label>Número anterior</label><input type="text" id="agc_numeroAnterior" placeholder="(41) 99613-9000">
         <div class="text-muted" style="font-size:11px;margin-top:3px">quem já conversou por ele continua nele</div></div>
     </div>
+    <div class="form-group">
+      <label>Abrir as conversas da prospecção no</label>
+      <select id="agc_abrirZap">
+        <option value="web">WhatsApp Web, sempre na mesma guia (recomendado: é onde está o Business)</option>
+        <option value="app">Aplicativo do WhatsApp instalado no computador</option>
+      </select>
+    </div>
     <label style="display:block;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;font-size:12.5px;color:var(--navy);margin:-4px 0 12px"><input type="checkbox" id="agc_recomecar"> Quem recebeu o 1º contato pelo número anterior e não respondeu <b>recomeça pelo número de prospecção</b> (no lugar do lembrete) — assim a resposta já cai na IA</label>
     <div class="form-row">
       <div class="form-group"><label>Lembrete depois de</label><input type="number" id="agc_lembreteDias" min="2" max="30">
@@ -8326,13 +8333,27 @@ function avancarEstagioLead(id) {
   showToast(`→ ${proximo[1].label}`);
 }
 
+// Conversas com leads abrem no WhatsApp Web (onde está o Business), sempre na
+// mesma guia. O link wa.me mostrava a página "Abrir WhatsApp", que chamava o
+// aplicativo do computador — e ali estava o WhatsApp pessoal.
+function abrirWhatsAppLead(numeroComDDI, texto) {
+  const n = String(numeroComDDI || '').replace(/\D/g, '');
+  const t = texto ? encodeURIComponent(texto) : '';
+  if (cfgAgente().abrirZap === 'app') {
+    window.open(`https://wa.me/${n}${t ? '?text=' + t : ''}`, '_blank');
+    return;
+  }
+  const w = window.open(`https://web.whatsapp.com/send?phone=${n}${t ? '&text=' + t : ''}`, 'vangardis_whatsapp_web');
+  try { if (w) w.focus(); } catch (e) { /* o navegador decide */ }
+}
+
 function whatsappLead(id) {
   const l = LEADS.find(x => x.id === id);
   if (!l) return;
   const num = (l.whatsapp||'').replace(/\D/g,'');
   if (!num) { showToast('⚠️ Este lead não tem WhatsApp cadastrado.', 'warning'); return; }
   const full = num.startsWith('55') ? num : '55' + num;
-  window.open(`https://wa.me/${full}`, '_blank');
+  abrirWhatsAppLead(full);
   if (l.estagio === 'descoberto' || l.estagio === 'qualificado') {
     l.estagio = 'contatado';
     registrarHistoricoLead(l, 'WhatsApp aberto — marcado como Contatado');
@@ -8611,19 +8632,36 @@ function renderProspeccao() {
   verificarDiagnosticoMensal();
 }
 
+// ── Número de demonstração (provisório) ──
+// Duplo clique no indicador "Viraram cliente" troca o número só NA TELA: não
+// grava nada na planilha e some ao fechar a guia (ou deixando o campo vazio).
+let demoClientes = (() => { try { const v = sessionStorage.getItem('vangardis_demo_clientes'); return v === null ? null : parseInt(v, 10); } catch (e) { return null; } })();
+function clientesNaTela(real) { return demoClientes === null || isNaN(demoClientes) ? real : demoClientes; }
+function ajustarDemoClientes() {
+  const atual = demoClientes === null ? '' : String(demoClientes);
+  const v = prompt('Quantos leads viraram cliente? (deixe vazio para voltar ao número real)', atual);
+  if (v === null) return;
+  const n = parseInt(String(v).replace(/\D/g, ''), 10);
+  demoClientes = String(v).trim() === '' || isNaN(n) ? null : n;
+  try { demoClientes === null ? sessionStorage.removeItem('vangardis_demo_clientes') : sessionStorage.setItem('vangardis_demo_clientes', String(demoClientes)); } catch (e) { /* só nesta guia */ }
+  renderKpiLeads();
+  renderFunilTrilha();
+}
+
 // Indicadores sempre ignoram os congelados
 function renderKpiLeads() {
   const el = document.getElementById('kpiLeads');
   if (!el) return;
   const base = leadsAtivosNaoCongelados();
   const ativos = base.filter(l => !['cliente','perdido','bloqueado'].includes(l.estagio));
-  const convertidos = base.filter(l => l.estagio === 'cliente').length;
-  const contatados = base.filter(l => ESTAGIOS_LEAD[l.estagio]?.ordem >= 3).length;
+  const convReal = base.filter(l => l.estagio === 'cliente').length;
+  const convertidos = clientesNaTela(convReal);
+  const contatados = Math.max(convertidos, base.filter(l => ESTAGIOS_LEAD[l.estagio]?.ordem >= 3).length + (convertidos - convReal));
   const taxa = contatados ? (convertidos / contatados * 100) : 0;
   el.innerHTML = `
     <div class="kpi-card"><div class="kpi-label">Leads ativos</div><div class="kpi-value">${ativos.length}</div></div>
     <div class="kpi-card"><div class="kpi-label">Contatados</div><div class="kpi-value">${contatados}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Viraram cliente</div><div class="kpi-value" style="color:#2E7D52">${convertidos}</div></div>
+    <div class="kpi-card" ondblclick="ajustarDemoClientes()" style="user-select:none"><div class="kpi-label">Viraram cliente</div><div class="kpi-value" style="color:#2E7D52">${convertidos}</div></div>
     <div class="kpi-card"><div class="kpi-label">Conversão</div><div class="kpi-value">${taxa.toFixed(0)}%</div></div>
     ${kpiAmostras()}
     ${kpiCardIA()}
@@ -8650,7 +8688,8 @@ function renderFunilTrilha() {
   el.innerHTML = Object.entries(ESTAGIOS_LEAD)
     .sort((a,b) => a[1].ordem - b[1].ordem)
     .map(([k,v]) => {
-      const n = base.filter(l => l.estagio === k).length;
+      const nReal = base.filter(l => l.estagio === k).length;
+      const n = k === 'cliente' ? clientesNaTela(nReal) : nReal;
       const ativo = document.getElementById('leadFiltroEstagio').value === k;
       return `<div onclick="filtrarPorEstagio('${k}')" title="${v.desc}"
         style="cursor:pointer;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:600;
@@ -9202,7 +9241,7 @@ function enviarAbordagem() {
   if (canal === 'whatsapp') {
     const num = (l.whatsapp||'').replace(/\D/g,'');
     const full = num.startsWith('55') ? num : '55' + num;
-    window.open(`https://wa.me/${full}?text=${encodeURIComponent(txt)}`, '_blank');
+    abrirWhatsAppLead(full, txt);
   } else {
     // No e-mail a 1ª linha costuma ser "Assunto: ..."
     const linhas = txt.split('\n');
@@ -9432,7 +9471,7 @@ function enviarItemFila() {
 
   const num = (l.whatsapp || '').replace(/\D/g, '');
   const full = num.startsWith('55') ? num : '55' + num;
-  window.open(`https://wa.me/${full}?text=${encodeURIComponent(txt)}`, '_blank');
+  abrirWhatsAppLead(full, txt);
 
   // Registra no lead e na linha do tempo da conversa
   if (['descoberto','qualificado'].includes(l.estagio)) l.estagio = 'contatado';
@@ -12858,7 +12897,7 @@ function enviarItemAgente() {
   }
 
   const num = telNorm(l.whatsapp);
-  window.open(`https://wa.me/55${num}?text=${encodeURIComponent(txt)}`, '_blank');
+  abrirWhatsAppLead('55' + num, txt);
 
   const agora = new Date().toISOString();
   const variante = it.tipo === 'lembrete' ? 'lembrete' : it.tipo === 'recomeco' ? 'recomeco' : 'modelo-' + it.modelo;
@@ -13228,7 +13267,7 @@ function renderConferirFixos() {
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="btn btn-sm btn-ghost" onclick="window.open('https://wa.me/55${telNorm(l.whatsapp)}','_blank')" title="Abre o WhatsApp com este número, sem mensagem">📱 Testar</button>
+        <button class="btn btn-sm btn-ghost" onclick="abrirWhatsAppLead('55${telNorm(l.whatsapp)}')" title="Abre o WhatsApp com este número, sem mensagem">📱 Testar</button>
         <button class="btn btn-sm btn-ghost" onclick="window.open('https://www.google.com/search?q=' + encodeURIComponent('${escaparHtml(String(l.nome).replace(/'/g, ' '))} ${escaparHtml(String(l.cidade || '').replace(/'/g, ' '))} whatsapp'),'_blank')">🔍 Procurar</button>
         <button class="btn btn-sm btn-gold" onclick="marcarFixo(${l.id}, true)">✅ Tem WhatsApp</button>
         <button class="btn btn-sm btn-ghost" onclick="marcarFixo(${l.id}, false)">❌ Não tem</button>
@@ -13290,6 +13329,7 @@ function abrirAjustesAgente() {
   document.getElementById('agc_incluirDescobertos').checked = !!cfg.incluirDescobertos;
   document.getElementById('agc_personalizarIA').checked = !!cfg.personalizarIA;
   document.getElementById('agc_recomecar').checked = cfg.recomecarNoNovo !== false;
+  document.getElementById('agc_abrirZap').value = cfg.abrirZap === 'app' ? 'app' : 'web';
   document.getElementById('agc_nuncaDizer').value = agente().nuncaDizer.join('\n');
   carregarAjustesWA();
   renderAjustesAgente();
@@ -13334,6 +13374,7 @@ function salvarAjustesAgente() {
     incluirDescobertos: document.getElementById('agc_incluirDescobertos').checked,
     personalizarIA: document.getElementById('agc_personalizarIA').checked,
     recomecarNoNovo: document.getElementById('agc_recomecar').checked,
+    abrirZap: document.getElementById('agc_abrirZap').value,
     ordemFila: cfgAgente().ordemFila || p.ordemFila,
     filtroPlaybook: cfgAgente().filtroPlaybook || ''
   };
@@ -13470,7 +13511,7 @@ async function gerarCatalogoDoLead() {
     1. Anexe o <b>${escaparHtml(r.nomeArq)}</b> na conversa com a loja, pelo celular ou pelo WhatsApp Web do ${escaparHtml(num)}. Pode escrever na legenda do arquivo.<br>
     ${podeDevolver ? '2. Depois de enviar, devolva a conversa: a IA pergunta o que a loja achou e passa para você de novo quando chegar em preço ou quantidade.' : '2. A conversa segue com você.'}
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-      ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="window.open('https://wa.me/55${telNorm(l.whatsapp)}','_blank')">📱 Abrir a conversa</button>` : ''}
+      ${l.whatsapp ? `<button class="btn btn-sm btn-ghost" onclick="abrirWhatsAppLead('55${telNorm(l.whatsapp)}')">📱 Abrir a conversa</button>` : ''}
       ${podeDevolver ? `<button class="btn btn-sm btn-gold" onclick="devolverDoCatalogo()">🤖 Já enviei — devolver para a IA</button>` : ''}
     </div>`;
 }
