@@ -913,6 +913,7 @@ th.sortable:hover { background: var(--navy-mid); }
             <div class="card-title">💡 Ideias sugeridas</div>
             <div class="text-muted" style="font-size:12px">Busca pronta nos sites de STL: ✅ STLFLIX com uso comercial pela sua assinatura; os demais só como inspiração. 📈 mostra a busca no Google (Brasil, 12 meses).</div>
           </div>
+          <button class="btn btn-ghost btn-sm" id="ideiasApagarBtn" onclick="apagarTodasIdeias()" style="color:var(--danger)">🗑️ Apagar todas as ideias</button>
         </div>
         <div class="card-body"><div id="ideiasLista"></div></div>
       </div>
@@ -15488,6 +15489,23 @@ function cardIdeia(seg, i) {
     </div>
     <div id="trend_${i.id}"></div>
   </div>`;
+}
+
+function apagarTodasIdeias() {
+  const segs = dadosIdeias().segmentos;
+  const todas = Object.values(segs).flatMap(s => s.ideias || []);
+  if (!todas.length) { showToast('Não há ideias para apagar.'); return; }
+  const dev = todas.filter(i => i.status === 'desenvolver').length;
+  if (!confirm(`Apagar as ${todas.length} ideia(s) guardadas? Isso não dá para desfazer.`)) return;
+  const manter = dev > 0 && confirm(`Você marcou ${dev} ideia(s) como "a desenvolver".\n\nOK = manter essas e apagar o resto\nCancelar = apagar todas, inclusive essas`);
+  Object.keys(segs).forEach(k => {
+    segs[k].ideias = manter ? (segs[k].ideias || []).filter(i => i.status === 'desenvolver') : [];
+    if (!segs[k].ideias.length) delete segs[k];
+  });
+  ideiasComparar.clear();
+  saveDB();
+  renderIdeias();
+  showToast(manter ? `🗑️ Ideias apagadas. Ficaram as ${dev} marcadas como "a desenvolver".` : '🗑️ Todas as ideias foram apagadas.');
 }
 
 function acharIdeia(id) {
